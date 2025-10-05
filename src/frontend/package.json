@@ -11,10 +11,13 @@
     "dev": "react-scripts start"
   },
   "dependencies": {
+    "@playwright/test": "^1.55.1",
+    "@types/react-router-dom": "^5.3.3",
+    "axios": "^1.7.9",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-scripts": "5.0.1",
-    "axios": "^1.7.9"
+    "react-router-dom": "^7.9.3",
+    "react-scripts": "5.0.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
