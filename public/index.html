@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="GUI-LOP - Generative UI & Human-in-the-Loop Orchestration Platform" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+
+    <!-- Preconnect to API for performance -->
+    <link rel="preconnect" href="https://api.gui-lop.example.com" />
+
+    <!-- CSS Reset and base styles -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f8f9fa;
+            line-height: 1.6;
+        }
+
+        code {
+            font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+                monospace;
+        }
+
+        /* Loading skeleton */
+        .loading-skeleton {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .loading-skeleton.hidden {
+            display: none;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 24px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        .loading-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        /* Error fallback */
+        .error-fallback {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #f8f9fa;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+        }
+
+        .error-fallback.visible {
+            display: flex;
+        }
+
+        .error-content {
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .error-content h1 {
+            color: #dc3545;
+            margin-bottom: 16px;
+        }
+
+        .error-content p {
+            color: #6c757d;
+            margin-bottom: 24px;
+        }
+
+        .error-content button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .error-content button:hover {
+            background: #0056b3;
+        }
+
+        /* Accessibility improvements */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus indicators */
+        *:focus {
+            outline: 2px solid #007bff;
+            outline-offset: 2px;
+        }
+
+        /* Reduced motion support */
+        @media (prefers-reduced-motion: reduce) {
+            .loading-spinner {
+                animation: none;
+            }
+
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+            .loading-skeleton {
+                background: #000;
+            }
+
+            .loading-content {
+                color: #fff;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1a1a1a;
+                color: #e9ecef;
+            }
+
+            .error-fallback {
+                background: #1a1a1a;
+            }
+
+            .error-content p {
+                color: #adb5bd;
+            }
+        }
+    </style>
+
+    <title>GUI-LOP - Generative UI Platform</title>
+</head>
+<body>
+    <noscript>
+        <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+            <h1>JavaScript Required</h1>
+            <p>GUI-LOP requires JavaScript to function. Please enable JavaScript in your browser settings.</p>
+        </div>
+    </noscript>
+
+    <!-- Loading screen -->
+    <div id="loading-skeleton" class="loading-skeleton">
+        <div class="loading-content">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <h1 class="loading-title">GUI-LOP</h1>
+            <p class="loading-subtitle">Initializing Generative UI Environment...</p>
+        </div>
+    </div>
+
+    <!-- Error fallback -->
+    <div id="error-fallback" class="error-fallback">
+        <div class="error-content">
+            <h1>Application Error</h1>
+            <p id="error-message">Something went wrong while loading GUI-LOP.</p>
+            <button onclick="window.location.reload()">Reload Application</button>
+        </div>
+    </div>
+
+    <!-- Main application root -->
+    <div id="root" role="main" aria-label="GUI-LOP Application"></div>
+
+    <!-- Development mode warning -->
+    <script>
+        // Hide loading screen when React app mounts
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const loadingSkeleton = document.getElementById('loading-skeleton');
+                if (loadingSkeleton && document.getElementById('root').children.length > 0) {
+                    loadingSkeleton.classList.add('hidden');
+                }
+            }, 1000);
+        });
+
+        // Global error handling
+        window.addEventListener('error', function(event) {
+            console.error('Global error:', event.error);
+
+            const loadingSkeleton = document.getElementById('loading-skeleton');
+            const errorFallback = document.getElementById('error-fallback');
+            const errorMessage = document.getElementById('error-message');
+
+            if (loadingSkeleton) loadingSkeleton.classList.add('hidden');
+            if (errorFallback) {
+                errorFallback.classList.add('visible');
+                if (errorMessage && event.error) {
+                    errorMessage.textContent = event.error.message || 'Unknown error occurred';
+                }
+            }
+        });
+
+        // Unhandled promise rejection handling
+        window.addEventListener('unhandledrejection', function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+
+            const loadingSkeleton = document.getElementById('loading-skeleton');
+            const errorFallback = document.getElementById('error-fallback');
+            const errorMessage = document.getElementById('error-message');
+
+            if (loadingSkeleton) loadingSkeleton.classList.add('hidden');
+            if (errorFallback) {
+                errorFallback.classList.add('visible');
+                if (errorMessage) {
+                    errorMessage.textContent = event.reason?.message || 'Promise rejected';
+                }
+            }
+        });
+
+        // Performance monitoring
+        if (window.performance && window.performance.mark) {
+            window.performance.mark('app-start');
+
+            window.addEventListener('load', function() {
+                window.performance.mark('app-loaded');
+                window.performance.measure('app-load-time', 'app-start', 'app-loaded');
+
+                const measure = window.performance.getEntriesByName('app-load-time')[0];
+                if (measure && measure.duration > 5000) {
+                    console.warn('Slow load time detected:', measure.duration + 'ms');
+                }
+            });
+        }
+
+        // Service worker registration for PWA support
+        if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(function(registration) {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(function(registrationError) {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+
+        // Accessibility announcements
+        function announceToScreenReader(message, priority = 'polite') {
+            const announcement = document.createElement('div');
+            announcement.setAttribute('aria-live', priority);
+            announcement.setAttribute('aria-atomic', 'true');
+            announcement.style.position = 'absolute';
+            announcement.style.left = '-10000px';
+            announcement.style.width = '1px';
+            announcement.style.height = '1px';
+            announcement.style.overflow = 'hidden';
+            announcement.textContent = message;
+
+            document.body.appendChild(announcement);
+
+            setTimeout(function() {
+                document.body.removeChild(announcement);
+            }, 1000);
+        }
+
+        // Make announcement function globally available
+        window.announceToScreenReader = announceToScreenReader;
+    </script>
+</body>
+</html>
