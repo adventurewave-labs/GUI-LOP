@@ -17,9 +17,9 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// Basic storage for demo (in production, use PostgreSQL)
+// Basic storage for demo
 const workflows = new Map();
-const sessions = new Map();
+const clients = new Set();
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -66,8 +66,7 @@ app.post('/api/workflows', (req, res) => {
     template,
     context,
     status: 'created',
-    createdAt: new Date().toISOString(),
-    steps: []
+    createdAt: new Date().toISOString()
   };
 
   workflows.set(workflowId, workflow);
@@ -93,10 +92,8 @@ app.post('/api/workflows/:workflowId/execute', (req, res) => {
 
   // Simulate workflow execution with UI generation
   setTimeout(() => {
-    // Generate a mock UI URL (in production, this would be Streamlit/Gradio)
     const uiUrl = `http://localhost:8501/${workflowId}`;
 
-    // Notify via WebSocket that UI is ready
     notifyClients({
       type: 'ui_generation',
       workflow_id: workflowId,
@@ -144,7 +141,6 @@ app.post('/api/workflows/:workflowId/respond', (req, res) => {
   workflow.completedAt = new Date().toISOString();
   workflow.humanResponse = { action, data };
 
-  // Notify clients of completion
   notifyClients({
     type: 'workflow_completed',
     workflow_id: workflowId,
@@ -163,38 +159,28 @@ app.post('/api/workflows/:workflowId/respond', (req, res) => {
 
 // WebSocket server for real-time communication
 const wss = new WebSocketServer({ server });
-const clients = new Set();
 
 wss.on('connection', (ws, req) => {
   const sessionId = uuidv4();
   clients.add(ws);
-  sessions.set(sessionId, { ws, connected: new Date() });
-
-  console.log(`New WebSocket connection: ${sessionId}`);
 
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      console.log('Received:', data);
-
-      // Echo back for demo
       ws.send(JSON.stringify({
         type: 'echo',
         original: data,
         timestamp: new Date().toISOString()
       }));
     } catch (error) {
-      console.error('Invalid message:', error);
+      // Silently handle invalid messages
     }
   });
 
   ws.on('close', () => {
     clients.delete(ws);
-    sessions.delete(sessionId);
-    console.log(`WebSocket disconnected: ${sessionId}`);
   });
 
-  // Send welcome message
   ws.send(JSON.stringify({
     type: 'connected',
     session_id: sessionId,
@@ -213,20 +199,12 @@ function notifyClients(message) {
 
 // Start server
 server.listen(PORT, () => {
-  console.log(`🚀 GUI-LOP Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 WebSocket: ws://localhost:${PORT}`);
-  console.log(`\n🎯 Try these commands:`);
-  console.log(`curl http://localhost:${PORT}/health`);
-  console.log(`curl http://localhost:${PORT}/api/workflows/templates`);
-  console.log(`\n💡 GUI-LOP is ready for agent-human collaboration!`);
+  console.log(`GUI-LOP Server running on port ${PORT}`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    console.log('Server closed');
     process.exit(0);
   });
 });

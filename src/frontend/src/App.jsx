@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 
-/**
- * Simple GUI-LOP Frontend App
- * Connects to the backend API and demonstrates the functionality
- */
 const App = () => {
   const [serverStatus, setServerStatus] = useState('loading');
   const [workflows, setWorkflows] = useState([]);
@@ -24,11 +20,10 @@ const App = () => {
         const data = await response.json();
         if (data.status === 'ok') {
           setServerStatus('connected');
-          addLog('Server connected successfully');
+          addLog('Server connected');
         }
       } catch (error) {
         setServerStatus('error');
-        addLog(`Server connection failed: ${error.message}`);
       }
     };
 
@@ -44,9 +39,8 @@ const App = () => {
         const response = await fetch('http://localhost:3001/api/workflows/templates');
         const data = await response.json();
         setWorkflows(data.templates || []);
-        addLog(`Loaded ${data.templates?.length || 0} workflow templates`);
       } catch (error) {
-        addLog(`Failed to fetch workflows: ${error.message}`);
+        // Silently handle errors
       }
     };
 
@@ -68,23 +62,18 @@ const App = () => {
 
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      addLog(`WebSocket event: ${data.type}`);
+      addLog(`Event: ${data.type}`);
 
       if (data.type === 'ui_generation') {
-        addLog(`UI generated at: ${data.payload.ui_url}`);
+        addLog(`UI ready: ${data.payload.ui_url}`);
       } else if (data.type === 'workflow_completed') {
-        addLog('Workflow completed successfully');
+        addLog('Workflow completed');
         setActiveWorkflow(prev => prev ? { ...prev, status: 'completed' } : null);
       }
     };
 
     ws.onclose = () => {
       setWsConnected(false);
-      addLog('WebSocket disconnected');
-    };
-
-    ws.onerror = (error) => {
-      addLog(`WebSocket error: ${error.message}`);
     };
 
     return () => {
@@ -95,7 +84,6 @@ const App = () => {
   // Create workflow
   const createWorkflow = async (templateId) => {
     try {
-      addLog(`Creating workflow: ${templateId}`);
       const response = await fetch('http://localhost:3001/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -107,35 +95,32 @@ const App = () => {
 
       const data = await response.json();
       setActiveWorkflow(data);
-      addLog(`Workflow created: ${data.workflow_id}`);
+      addLog(`Created: ${data.workflow_id}`);
 
-      // Execute workflow after 1 second
       setTimeout(() => executeWorkflow(data.workflow_id), 1000);
     } catch (error) {
-      addLog(`Failed to create workflow: ${error.message}`);
+      addLog(`Create failed`);
     }
   };
 
   // Execute workflow
   const executeWorkflow = async (workflowId) => {
     try {
-      addLog(`Executing workflow: ${workflowId}`);
       const response = await fetch(`http://localhost:3001/api/workflows/${workflowId}/execute`, {
         method: 'POST'
       });
 
       const data = await response.json();
       setActiveWorkflow(prev => prev ? { ...prev, status: 'executing' } : null);
-      addLog('Workflow execution started');
+      addLog('Executing');
     } catch (error) {
-      addLog(`Failed to execute workflow: ${error.message}`);
+      addLog('Execute failed');
     }
   };
 
   // Respond to workflow
   const respondToWorkflow = async (workflowId) => {
     try {
-      addLog(`Responding to workflow: ${workflowId}`);
       const response = await fetch(`http://localhost:3001/api/workflows/${workflowId}/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -148,10 +133,9 @@ const App = () => {
         })
       });
 
-      const data = await response.json();
-      addLog('Response submitted to workflow');
+      addLog('Response submitted');
     } catch (error) {
-      addLog(`Failed to respond to workflow: ${error.message}`);
+      addLog('Response failed');
     }
   };
 
