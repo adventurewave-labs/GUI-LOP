@@ -25,4 +25,96 @@ coordination/orchestration/*
 claude-flow
 # Removed Windows wrapper files per user request
 hive-mind-prompt-*.txt
-node_modules
+
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs and distributions
+dist/
+build/
+out/
+.next/
+.nuxt/
+.output/
+.cache/
+.parcel-cache/
+
+# Environment and secret files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.secret
+*.key
+*.pem
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.#*
+#*#
+*.orig
+*.rej
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Logs and runtime files
+*.log
+*.pid
+*.seed
+*.pid.lock
+.lock-wscript
+
+# Test coverage and results
+coverage/
+.nyc_output/
+.coverage/
+junit.xml
+test-results/
+playwright-report/
+.blob-storage/
+test-results/
+*.lcov
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.bak
+*.backup
+*.tgz
+*.tar.gz
+*.zip
+*.rar
+
+# Package manager lock files (keep one based on preference)
+# yarn.lock
+package-lock.json
+
+# Misc
+*.tgz
+*.tar.gz
+.npm
+.eslintcache
+.node_repl_history
+*.tsbuildinfo
+
+# Local development
+.local
