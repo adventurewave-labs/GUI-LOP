@@ -1,0 +1,16 @@
+# ==========================================
+# Grafana Dashboard Provisioning Configuration
+# ==========================================
+
+apiVersion: 1
+
+providers:
+  - name: 'GUI-LOP Dashboards'
+    orgId: 1
+    folder: 'GUI-LOP'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

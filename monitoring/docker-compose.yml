@@ -1,0 +1,541 @@
+version: '3.8'
+
+services:
+  # Elasticsearch Cluster
+  elasticsearch-node-1:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch-node-1
+    environment:
+      - node.name=elasticsearch-node-1
+      - cluster.name=gui-lop-logs
+      - discovery.seed_hosts=elasticsearch-node-2,elasticsearch-node-3
+      - cluster.initial_master_nodes=elasticsearch-node-1,elasticsearch-node-2,elasticsearch-node-3
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g -XX:+UseG1GC"
+      - xpack.security.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification=certificate
+      - xpack.security.transport.ssl.certificate=certificates/elasticsearch-node-1/elasticsearch-node-1.crt
+      - xpack.security.transport.ssl.key=certificates/elasticsearch-node-1/elasticsearch-node-1.key
+      - xpack.security.transport.ssl.certificate_authorities=certificates/ca/ca.crt
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.certificate=certificates/elasticsearch-node-1/elasticsearch-node-1.crt
+      - xpack.security.http.ssl.key=certificates/elasticsearch-node-1/elasticsearch-node-1.key
+      - xpack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data-1:/usr/share/elasticsearch/data
+      - ./elasticsearch/certificates:/usr/share/elasticsearch/config/certificates
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  elasticsearch-node-2:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch-node-2
+    environment:
+      - node.name=elasticsearch-node-2
+      - cluster.name=gui-lop-logs
+      - discovery.seed_hosts=elasticsearch-node-1,elasticsearch-node-3
+      - cluster.initial_master_nodes=elasticsearch-node-1,elasticsearch-node-2,elasticsearch-node-3
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g -XX:+UseG1GC"
+      - xpack.security.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification=certificate
+      - xpack.security.transport.ssl.certificate=certificates/elasticsearch-node-2/elasticsearch-node-2.crt
+      - xpack.security.transport.ssl.key=certificates/elasticsearch-node-2/elasticsearch-node-2.key
+      - xpack.security.transport.ssl.certificate_authorities=certificates/ca/ca.crt
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.certificate=certificates/elasticsearch-node-2/elasticsearch-node-2.crt
+      - xpack.security.http.ssl.key=certificates/elasticsearch-node-2/elasticsearch-node-2.key
+      - xpack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data-2:/usr/share/elasticsearch/data
+      - ./elasticsearch/certificates:/usr/share/elasticsearch/config/certificates
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    ports:
+      - "9201:9200"
+      - "9301:9300"
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  elasticsearch-node-3:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: elasticsearch-node-3
+    environment:
+      - node.name=elasticsearch-node-3
+      - cluster.name=gui-lop-logs
+      - discovery.seed_hosts=elasticsearch-node-1,elasticsearch-node-2
+      - cluster.initial_master_nodes=elasticsearch-node-1,elasticsearch-node-2,elasticsearch-node-3
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g -XX:+UseG1GC"
+      - xpack.security.enabled=true
+      - xpack.security.transport.ssl.enabled=true
+      - xpack.security.transport.ssl.verification=certificate
+      - xpack.security.transport.ssl.certificate=certificates/elasticsearch-node-3/elasticsearch-node-3.crt
+      - xpack.security.transport.ssl.key=certificates/elasticsearch-node-3/elasticsearch-node-3.key
+      - xpack.security.transport.ssl.certificate_authorities=certificates/ca/ca.crt
+      - xpack.security.http.ssl.enabled=true
+      - xpack.security.http.ssl.certificate=certificates/elasticsearch-node-3/elasticsearch-node-3.crt
+      - xpack.security.http.ssl.key=certificates/elasticsearch-node-3/elasticsearch-node-3.key
+      - xpack.security.http.ssl.certificate_authorities=certificates/ca/ca.crt
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data-3:/usr/share/elasticsearch/data
+      - ./elasticsearch/certificates:/usr/share/elasticsearch/config/certificates
+      - ./elasticsearch/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    ports:
+      - "9202:9200"
+      - "9302:9300"
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Logstash for log processing
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.15.0
+    container_name: logstash
+    volumes:
+      - ./logstash/pipeline:/usr/share/logstash/pipeline
+      - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./logstash/config/pipelines.yml:/usr/share/logstash/config/pipelines.yml
+      - ./logstash/templates:/usr/share/logstash/templates
+      - logstash-data:/usr/share/logstash/data
+    ports:
+      - "5044:5044"
+      - "5000:5000/tcp"
+      - "5000:5000/udp"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx1g -Xms1g"
+    networks:
+      - monitoring-network
+    depends_on:
+      - elasticsearch-node-1
+      - elasticsearch-node-2
+      - elasticsearch-node-3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # Kibana for visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_URL: https://elasticsearch-node-1:9200
+      ELASTICSEARCH_HOSTS: '["https://elasticsearch-node-1:9200","https://elasticsearch-node-2:9200","https://elasticsearch-node-3:9200"]'
+      SERVER_SSL_ENABLED: "true"
+      SERVER_SSL_CERTIFICATE: /usr/share/kibana/config/certificates/kibana.crt
+      SERVER_SSL_KEY: /usr/share/kibana/config/certificates/kibana.key
+      ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES: /usr/share/kibana/config/certificates/ca.crt
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_PASSWORD}
+    volumes:
+      - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml
+      - ./elasticsearch/certificates:/usr/share/kibana/config/certificates
+      - kibana-data:/usr/share/kibana/data
+    networks:
+      - monitoring-network
+    depends_on:
+      - elasticsearch-node-1
+      - elasticsearch-node-2
+      - elasticsearch-node-3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Filebeat for log collection
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.0
+    container_name: filebeat
+    user: root
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      - ./logs:/var/log/app:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - filebeat-data:/usr/share/filebeat/data
+    environment:
+      ELASTICSEARCH_HOSTS: '["https://elasticsearch-node-1:9200","https://elasticsearch-node-2:9200","https://elasticsearch-node-3:9200"]'
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD}
+    networks:
+      - monitoring-network
+    depends_on:
+      - elasticsearch-node-1
+      - logstash
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # APM Server
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.0
+    container_name: apm-server
+    volumes:
+      - ./apm-server/apm-server.yml:/usr/share/apm-server/apm-server.yml:ro
+      - ./elasticsearch/certificates:/usr/share/apm-server/certificates:ro
+    ports:
+      - "8200:8200"
+    environment:
+      ELASTICSEARCH_HOSTS: '["https://elasticsearch-node-1:9200","https://elasticsearch-node-2:9200","https://elasticsearch-node-3:9200"]'
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTICSEARCH_PASSWORD}
+    networks:
+      - monitoring-network
+    depends_on:
+      - elasticsearch-node-1
+      - elasticsearch-node-2
+      - elasticsearch-node-3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/rules:/etc/prometheus/rules
+      - ./prometheus/alert_rules:/etc/prometheus/alert_rules
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  # AlertManager for alert routing
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./alertmanager/templates:/etc/alertmanager/templates
+      - alertmanager-data:/alertmanager
+    ports:
+      - "9093:9093"
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource,grafana-piechart-panel,elastic_apm
+      - GF_SERVER_HTTP_PORT=3000
+      - GF_SERVER_DOMAIN=localhost
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+      - GF_SMTP_FROM_ADDRESS=${SMTP_FROM}
+    networks:
+      - monitoring-network
+    depends_on:
+      - prometheus
+      - elasticsearch-node-1
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Cadvisor for container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
+    container_name: cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=https://elasticsearch-node-1:9200,https://elasticsearch-node-2:9200,https://elasticsearch-node-3:9200
+      - ES_USERNAME=elastic
+      - ES_PASSWORD=${ELASTICSEARCH_PASSWORD}
+      - ES_TLS_SKIP_HOST_VERIFY=true
+      - ES_TLS_CA_CERTS=/usr/share/jaeger/certificates/ca.crt
+    volumes:
+      - ./elasticsearch/certificates:/usr/share/jaeger/certificates:ro
+    networks:
+      - monitoring-network
+    depends_on:
+      - elasticsearch-node-1
+      - elasticsearch-node-2
+      - elasticsearch-node-3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7.4.1-alpine
+    container_name: redis
+    volumes:
+      - redis-data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # Redis Exporter for Redis metrics
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.65.0
+    container_name: redis-exporter
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    ports:
+      - "9121:9121"
+    networks:
+      - monitoring-network
+    depends_on:
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 32M
+
+  # PostgreSQL for metrics storage
+  postgresql:
+    image: postgres:16.4-alpine
+    container_name: postgresql
+    volumes:
+      - postgresql-data:/var/lib/postgresql/data
+      - ./postgresql/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ./postgresql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=monitoring
+      - POSTGRES_USER=monitoring
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - monitoring-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+
+  # PostgreSQL Exporter for database metrics
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://monitoring:${POSTGRES_PASSWORD}@postgresql:5432/monitoring?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - monitoring-network
+    depends_on:
+      - postgresql
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+
+  # Nginx for load balancing and SSL termination
+  nginx:
+    image: nginx:1.27.0-alpine
+    container_name: nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8086:8086"
+    networks:
+      - monitoring-network
+    depends_on:
+      - kibana
+      - grafana
+      - prometheus
+      - alertmanager
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+volumes:
+  elasticsearch-data-1:
+    driver: local
+  elasticsearch-data-2:
+    driver: local
+  elasticsearch-data-3:
+    driver: local
+  logstash-data:
+    driver: local
+  kibana-data:
+    driver: local
+  filebeat-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  grafana-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgresql-data:
+    driver: local
+
+networks:
+  monitoring-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

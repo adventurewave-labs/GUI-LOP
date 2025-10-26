@@ -1,0 +1,203 @@
+# ==========================================
+# GUI-LOP Staging Docker Compose Configuration
+# Pre-production testing environment
+# ==========================================
+
+version: '3.8'
+
+services:
+  # Frontend - React with production build
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: gui-lop-frontend-staging
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://staging.api.gui-lop.com
+      - REACT_APP_WS_URL=ws://staging.api.gui-lop.com
+      - REACT_APP_ENVIRONMENT=staging
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - ./logs/nginx:/var/log/nginx:rw
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Backend - Node.js API Server
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: gui-lop-backend-staging
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - FRONTEND_URL=http://staging.gui-lop.com
+      - DATABASE_URL=postgresql://gui-lop:${POSTGRES_PASSWORD}@postgres:5432/gui_lop_staging
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - BCRYPT_ROUNDS=12
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=200
+      - LOG_LEVEL=info
+      - ENABLE_DEBUG_LOGGING=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - ./logs/backend:/app/logs:rw
+      - ./uploads:/app/uploads:rw
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: gui-lop-postgres-staging
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=gui_lop_staging
+      - POSTGRES_USER=gui-lop
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data:rw
+      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./logs/postgres:/var/log/postgresql:rw
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+      -c hba_file=/etc/postgresql/pg_hba.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gui-lop -d gui_lop_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: gui-lop-redis-staging
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - redis_staging_data:/data:rw
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./logs/redis:/var/log/redis:rw
+    command: >
+      redis-server /usr/local/etc/redis/redis.conf
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+    sysctls:
+      - net.core.somaxconn=1024
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: gui-lop-prometheus-staging
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - ./docker/prometheus/prometheus-staging.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_staging_data:/prometheus:rw
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: gui-lop-grafana-staging
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - grafana_staging_data:/var/lib/grafana:rw
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+
+  # Load Testing - Artillery
+  artillery:
+    image: artilleryio/artillery:latest
+    container_name: gui-lop-artillery-staging
+    restart: "no"
+    networks:
+      - gui-lop-staging-network
+    volumes:
+      - ./tests/load:/tests:ro
+      - ./artillery-reports:/artillery-reports:rw
+    command: run /tests/staging-load-test.yml --target http://backend:3001
+    depends_on:
+      - backend
+    profiles:
+      - load-test
+
+networks:
+  gui-lop-staging-network:
+    driver: bridge
+
+volumes:
+  postgres_staging_data:
+    driver: local
+  redis_staging_data:
+    driver: local
+  prometheus_staging_data:
+    driver: local
+  grafana_staging_data:
+    driver: local

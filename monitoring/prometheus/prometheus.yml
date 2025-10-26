@@ -1,0 +1,324 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'gui-lop'
+    environment: '${ENVIRONMENT:production}'
+    datacenter: '${DATACENTER:default}'
+
+# Alerting rules
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+  - "/etc/prometheus/alert_rules/*.yml"
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+      timeout: 10s
+      api_version: v2
+
+# Remote write configuration for long-term storage
+remote_write:
+  - url: "https://cortex.example.com/api/v1/push"
+    queue_config:
+      max_samples_per_send: 1000
+      max_shards: 200
+      capacity: 2500
+    tls_config:
+      insecure_skip_verify: false
+      cert_file: /etc/prometheus/certs/client.crt
+      key_file: /etc/prometheus/certs/client.key
+      ca_file: /etc/prometheus/certs/ca.crt
+
+# Scraping configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    honor_labels: true
+    honor_timestamps: true
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets:
+        - 'node-exporter:9100'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'production-node-1'
+
+  # Cadvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    honor_labels: true
+
+  # Grafana metrics
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /api/metrics
+    basic_auth:
+      username: admin
+      password: '${GRAFANA_PASSWORD}'
+
+  # AlertManager metrics
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+
+  # GUI-LOP Application metrics
+  - job_name: 'gui-lop-app'
+    static_configs:
+      - targets: ['host.docker.internal:3001']
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'gui-lop-app-1'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'gui-lop'
+
+  # Redis metrics
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis-master-1'
+
+  # PostgreSQL metrics
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgresql-master-1'
+
+  # Elasticsearch cluster metrics
+  - job_name: 'elasticsearch-exporter'
+    static_configs:
+      - targets:
+        - 'elasticsearch-node-1:9200'
+        - 'elasticsearch-node-2:9200'
+        - 'elasticsearch-node-3:9200'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /_prometheus/metrics
+    basic_auth:
+      username: elastic
+      password: '${ELASTICSEARCH_PASSWORD}'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        regex: 'elasticsearch-node-(\d+):9200'
+        replacement: 'elasticsearch-node-${1}'
+
+  # Kibana metrics
+  - job_name: 'kibana'
+    static_configs:
+      - targets: ['kibana:5601']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /api/stats
+    basic_auth:
+      username: elastic
+      password: '${ELASTICSEARCH_PASSWORD}'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+
+  # Logstash metrics
+  - job_name: 'logstash'
+    static_configs:
+      - targets: ['logstash:9600']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /_node/stats
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'logstash-1'
+
+  # APM Server metrics
+  - job_name: 'apm-server'
+    static_configs:
+      - targets: ['apm-server:8200']
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /stats
+    basic_auth:
+      username: elastic
+      password: '${ELASTICSEARCH_PASSWORD}'
+
+  # Nginx metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    scrape_interval: 15s
+    scrape_timeout: 5s
+    metrics_path: /metrics
+
+  # Kubernetes metrics (if running in k8s)
+  - job_name: 'kubernetes-apiservers'
+    kubernetes_sd_configs:
+      - role: endpoints
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+
+  - job_name: 'kubernetes-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  - job_name: 'kubernetes-cadvisor'
+    kubernetes_sd_configs:
+      - role: node
+    scheme: https
+    metrics_path: /metrics/cadvisor
+    tls_config:
+      ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+
+  - job_name: 'kubernetes-service-endpoints'
+    kubernetes_sd_configs:
+      - role: endpoints
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scheme]
+        action: replace
+        target_label: __scheme__
+        regex: (https?)
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+
+  # Blackbox monitoring for external endpoints
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://api.example.com/health
+        - https://app.example.com/health
+        - https://admin.example.com/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Synthetic monitoring
+  - job_name: 'synthetic-monitoring'
+    metrics_path: /probe
+    params:
+      module: [browser]
+    static_configs:
+      - targets:
+        - https://app.example.com/login
+        - https://app.example.com/dashboard
+        - https://app.example.com/profile
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Custom application metrics
+  - job_name: 'custom-app-metrics'
+    consul_sd_configs:
+      - server: 'consul:8500'
+        services: []
+    relabel_configs:
+      - source_labels: [__meta_consul_tags]
+        regex: .*,metrics,.*
+        action: keep
+      - source_labels: [__meta_consul_service]
+        target_label: service
+      - source_labels: [__meta_consul_node]
+        target_label: node
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+    retention.time: 30d
+    retention.size: 50GB
+    wal.compression: true
+
+# Query configuration
+query_max_samples: 50000000
+query_timeout: 2m
+
+# Alerting configuration
+alerting_notification_queue_capacity: 10000
+alerting_timeout: 10s

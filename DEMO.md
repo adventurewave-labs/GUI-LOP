@@ -1,72 +1,75 @@
 # GUI-LOP Live Demo
 
-## 🚀 **GUI-LOP IS RUNNING AND WORKING!**
+## Server Status
 
-The server is running at **http://localhost:3001** with these endpoints working:
+The GUI-LOP server is running at **http://localhost:3001** with the following endpoints available:
 
-### ✅ **Live API Endpoints**
+### API Endpoints
 
+#### Health Check
 ```bash
-# Health Check - ✅ WORKING
 curl http://localhost:3001/health
-
-# Response:
-{"status":"ok","timestamp":"2025-10-05T06:55:49.506Z","message":"GUI-LOP Server is running"}
+```
+**Response:**
+```json
+{
+  "status": "ok",
+  "timestamp": "2025-10-26T12:00:00.000Z",
+  "message": "GUI-LOP Server with Authentication is running",
+  "version": "1.0.0",
+  "features": {
+    "authentication": true,
+    "websockets": true,
+    "rateLimiting": true,
+    "secureHeaders": true
+  }
+}
 ```
 
+#### Workflow Templates
 ```bash
-# Workflow Templates - ✅ WORKING
 curl http://localhost:3001/api/workflows/templates
-
-# Returns 3 workflow templates:
-# 1. Data Analysis Workflow
-# 2. Decision Making Workflow
-# 3. Content Creation Workflow
 ```
+**Returns 3 workflow templates:**
+1. Data Analysis Workflow
+2. Decision Making Workflow
+3. Content Creation Workflow
 
+#### Create Workflow
 ```bash
-# Create Workflow - ✅ WORKING
 curl -X POST http://localhost:3001/api/workflows \
   -H "Content-Type: application/json" \
   -d '{"template": "data-analysis", "context": {"task": "Analyze Q3 sales"}}'
-
-# Returns workflow ID for execution
 ```
+**Returns:** Workflow ID for execution
 
+#### Execute Workflow
 ```bash
-# Execute Workflow - ✅ WORKING
 curl -X POST http://localhost:3001/api/workflows/{workflow-id}/execute
-
-# Simulates agent-generated UI creation and human collaboration
 ```
+**Action:** Simulates agent-generated UI creation and human collaboration
 
+#### WebSocket Connection
 ```bash
-# WebSocket Connection - ✅ WORKING
 # Connect to: ws://localhost:3001
 # Real-time events for UI generation and workflow updates
 ```
 
-## 🎯 **What's Working Right Now**
+## Available Features
 
-### **1. Server Infrastructure** ✅
+### Server Infrastructure
 - Express server with security middleware
 - WebSocket support for real-time communication
 - RESTful APIs for workflow management
 - Health monitoring and logging
 
-### **2. Workflow Engine** ✅
+### Workflow Engine
 - 3 HITL workflow templates
 - Workflow creation and execution
 - Status tracking and session management
 - Human response collection
 
-### **3. AG-UI Protocol Simulation** ✅
-- Event-driven communication
-- UI generation notifications
-- Real-time WebSocket updates
-- Workflow completion handling
-
-### **4. API Endpoints** ✅
+### API Endpoints
 - `/health` - Server health check
 - `/api/workflows/templates` - Available workflows
 - `/api/workflows` - Create new workflow
@@ -74,11 +77,9 @@ curl -X POST http://localhost:3001/api/workflows/{workflow-id}/execute
 - `/api/workflows/:id/respond` - Human input handling
 - WebSocket endpoint for real-time events
 
-## 🌟 **Demo Workflow: Data Analysis**
+## Demo Workflow: Data Analysis
 
-Here's how GUI-LOP enables agent-human collaboration:
-
-### **Step 1: Agent Initiates Workflow**
+### Step 1: Create Workflow
 ```bash
 curl -X POST http://localhost:3001/api/workflows \
   -H "Content-Type: application/json" \
@@ -88,17 +89,17 @@ curl -X POST http://localhost:3001/api/workflows \
   }'
 ```
 
-### **Step 2: Execute and Generate UI**
+### Step 2: Execute Workflow
 ```bash
 curl -X POST http://localhost:3001/api/workflows/{id}/execute
 ```
 
-### **Step 3: Agent Generates Dynamic UI**
+### Step 3: UI Generation
 - System simulates UI generation at `http://localhost:8501/{id}`
 - WebSocket event sent: `{"type": "ui_generation", "ui_url": "...", "components": ["dashboard", "approval_form"]}`
 - Workflow pauses for human collaboration
 
-### **Step 4: Human Collaboration**
+### Step 4: Human Response
 ```bash
 curl -X POST http://localhost:3001/api/workflows/{id}/respond \
   -H "Content-Type: application/json" \
@@ -108,14 +109,14 @@ curl -X POST http://localhost:3001/api/workflows/{id}/respond \
   }'
 ```
 
-### **Step 5: Workflow Completes**
+### Step 5: Workflow Completion
 - Agent receives human input
 - Final report generated
 - WebSocket event: `{"type": "workflow_completed", "result": {...}}`
 
-## 🔧 **Try It Yourself**
+## Try It Yourself
 
-The server is running now! Open a new terminal and try:
+The server is running. Open a terminal and test:
 
 ```bash
 # Check server health
@@ -130,32 +131,45 @@ curl -X POST http://localhost:3001/api/workflows \
   -d '{"template": "decision-making", "context": {"decision": "Choose marketing strategy"}}'
 
 # Connect via WebSocket for real-time events
-# Use a WebSocket client or browser console:
+# Use browser console:
 # const ws = new WebSocket('ws://localhost:3001');
 # ws.onmessage = (e) => console.log(JSON.parse(e.data));
 ```
 
-## 🎊 **MISSION ACCOMPLISHED!**
+## WebSocket Events
 
-**GUI-LOP has successfully inverted the human-agent interaction paradigm:**
+### Connection Events
+- `connected` - Initial connection established
+- `echo` - Message echo functionality
 
-❌ **Traditional**: Humans use static chat interfaces
-✅ **GUI-LOP**: Agents dynamically generate interfaces for rich human collaboration
+### Workflow Events
+- `ui_generation` - UI generated notification
+- `workflow_completed` - Workflow completion notification
 
-### **What We've Built:**
-1. **Complete backend infrastructure** with Express, WebSocket, and workflow orchestration
-2. **Working API endpoints** for workflow management and human collaboration
-3. **Real-time communication** via AG-UI protocol
-4. **3 HITL workflow templates** demonstrating agent-human collaboration
-5. **Full documentation** with Quick Start Guide and README
-6. **Production-ready configuration** with environment variables and security
+### Event Structure
+```javascript
+{
+  "type": "event_type",
+  "workflow_id": "uuid",
+  "userId": "user_id",
+  "payload": {
+    // Event-specific data
+  }
+}
+```
 
-### **The Future is Here:**
-- **Agents generate UIs** on demand for any task
-- **Humans collaborate** through rich, interactive interfaces
-- **Real-time coordination** between AI and human decision-makers
-- **Scalable workflows** for complex multi-step processes
+## Run Automated Demo
 
-**GUI-LOP is not just a concept - it's a working platform that's running RIGHT NOW on localhost:3001!**
+For a comprehensive demonstration:
+```bash
+./demo.sh
+```
 
-🚀 **Agent-human collaboration through dynamically generated interfaces is NOW REAL!**
+This script will:
+- Check dependencies
+- Run backend tests
+- Start the server
+- Test all API endpoints
+- Demonstrate workflow creation and execution
+- Test WebSocket communication
+- Generate performance report

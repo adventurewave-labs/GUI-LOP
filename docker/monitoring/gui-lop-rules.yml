@@ -1,0 +1,203 @@
+# ==========================================
+# Prometheus Alerting Rules for GUI-LOP
+# Production monitoring and alerting
+# ==========================================
+
+groups:
+  # Service availability alerts
+  - name: gui-lop-service-availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: 'gui-lop'
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute."
+
+      - alert: BackendHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Backend error rate is high"
+          description: "Backend error rate is {{ $value }} errors per second."
+
+      - alert: FrontendHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-frontend'
+        annotations:
+          summary: "Frontend response time is high"
+          description: "95th percentile response time is {{ $value }} seconds."
+
+  # Database alerts
+  - name: gui-lop-database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: 'gui-lop-postgres'
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-postgres'
+        annotations:
+          summary: "PostgreSQL connection count is high"
+          description: "PostgreSQL has {{ $value }} active connections."
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_statements_mean_time_seconds[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-postgres'
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Average query time is {{ $value }} seconds."
+
+  # Redis alerts
+  - name: gui-lop-redis
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: 'gui-lop-redis'
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-redis'
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+
+      - alert: RedisLowHitRate
+        expr: redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          service: 'gui-lop-redis'
+        annotations:
+          summary: "Redis hit rate is low"
+          description: "Redis cache hit rate is {{ $value | humanizePercentage }}."
+
+  # Application-specific alerts
+  - name: gui-lop-application
+    rules:
+      - alert: WorkflowProcessingDelay
+        expr: workflow_processing_duration_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-workflows'
+        annotations:
+          summary: "Workflow processing is delayed"
+          description: "Workflow {{ $labels.workflow_id }} has been processing for {{ $value }} seconds."
+
+      - alert: HighActiveWorkflows
+        expr: active_workflows_total > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: 'gui-lop-workflows'
+        annotations:
+          summary: "High number of active workflows"
+          description: "There are {{ $value }} active workflows."
+
+      - alert: AuthenticationFailureRate
+        expr: rate(auth_failures_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-auth'
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is {{ $value }} failures per second."
+
+  # System alerts
+  - name: gui-lop-system
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-system'
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}."
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-system'
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}."
+
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: 'gui-lop-system'
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is {{ $value }}% available on {{ $labels.instance }}."
+
+      - alert: ContainerHighMemoryUsage
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-containers'
+        annotations:
+          summary: "Container memory usage is high"
+          description: "Container {{ $labels.name }} memory usage is {{ $value }}%."
+
+  # Network alerts
+  - name: gui-lop-network
+    rules:
+      - alert: HighNetworkTraffic
+        expr: rate(container_network_transmit_bytes_total[5m]) + rate(container_network_receive_bytes_total[5m]) > 104857600
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-network'
+        annotations:
+          summary: "High network traffic"
+          description: "Network traffic is {{ $value | humanizeBytes }}/second."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "High error rate"
+          description: "Error rate is {{ $value | humanizePercentage }}."

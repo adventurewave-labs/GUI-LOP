@@ -1,0 +1,79 @@
+{
+  "name": "gui-lop-frontend",
+  "version": "1.0.0",
+  "description": "GUI-LOP React Frontend - Performance Optimized",
+  "main": "index.js",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "build:analyze": "npm run build && npx bundle-analyzer build/static/js/*.js",
+    "build:production": "NODE_ENV=production npm run build",
+    "test": "react-scripts test",
+    "test:performance": "npm run test:performance:unit && npm run test:performance:e2e",
+    "test:performance:unit": "jest --testPathPattern=performance --watchAll=false",
+    "test:performance:e2e": "playwright test --project=chromium tests/performance/",
+    "dev": "BROWSER=none PORT=3000 react-scripts start",
+    "serve": "serve -s build -l 3001",
+    "lighthouse": "lhci autorun --config=lighthouse.config.js",
+    "bundle-size": "bundlesize",
+    "optimize": "npm run build && npm run optimize:images && npm run optimize:js",
+    "optimize:images": "imagemin build/static/media/*.{png,jpg,jpeg,gif,svg} --out=build/static/media/",
+    "optimize:js": "terser build/static/js/*.js --compress --mangle --output-dir=build/static/js/minified/"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "axios": "^1.12.2",
+    "date-fns": "^4.1.0",
+    "js-cookie": "^3.0.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.65.0",
+    "react-router-dom": "^7.9.3",
+    "react-window": "^1.8.8",
+    "react-window-infinite-loader": "^1.0.9",
+    "web-vitals": "^3.5.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "babel-plugin-transform-remove-console": "^6.9.4",
+    "bundlesize": "^0.18.1",
+    "compression-webpack-plugin": "^10.0.0",
+    "imagemin": "^8.0.1",
+    "imagemin-cli": "^8.0.0",
+    "jest": "^27.5.1",
+    "lighthouse": "^12.2.1",
+    "lhci": "^0.12.0",
+    "playwright": "^1.55.1",
+    "serve": "^14.2.1",
+    "terser": "^5.34.1",
+    "webpack-bundle-analyzer": "^4.10.1",
+    "workbox-webpack-plugin": "^7.1.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all",
+      "not ie 11"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:3001",
+  "bundlesize": [
+    {
+      "path": "./build/static/js/*.js",
+      "maxSize": "300kb"
+    },
+    {
+      "path": "./build/static/css/*.css",
+      "maxSize": "30kb"
+    }
+  ]
+}

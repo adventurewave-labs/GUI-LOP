@@ -1,0 +1,50 @@
+# AWS Region
+aws_region = "us-east-1"
+
+# Project Configuration
+project_name = "gui-lop"
+environment = "production"
+
+# Domain Configuration
+domain_name = "gui-lop.com"
+certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
+
+# Networking Configuration
+vpc_cidr = "10.0.0.0/16"
+public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24", "10.0.30.0/24"]
+database_subnet_cidrs = ["10.0.40.0/24", "10.0.50.0/24", "10.0.60.0/24"]
+
+# ECS Configuration
+app_min_capacity = 2
+app_max_capacity = 50
+app_target_cpu = 60
+app_target_memory = 70
+
+# Database Configuration
+db_instance_class = "db.r6g.2xlarge"
+db_allocated_storage = 1000
+db_max_allocated_storage = 5000
+db_name = "gui_lop_prod"
+db_username = "gui_lop_admin"
+
+# Redis Configuration
+redis_node_type = "cache.r6g.xlarge"
+redis_num_shards = 3
+
+# Security Configuration
+allowed_ips = ["203.0.113.0/24", "198.51.100.0/24"] # Your office IP ranges
+ssh_key_name = "gui-lop-prod"
+
+# Monitoring and Alerting
+alert_email = "alerts@gui-lop.com"
+pagerduty_service_key = "" # Optional: Add your PagerDuty service integration key
+
+# Cloudflare Configuration
+cloudflare_api_token = "your_cloudflare_api_token_here"
+cloudflare_zone_id = "your_cloudflare_zone_id_here"
+
+# Backup Configuration
+backup_retention_days = 35
+cross_region_backup = true
+backup_region = "us-west-2"

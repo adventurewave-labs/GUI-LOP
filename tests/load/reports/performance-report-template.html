@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GUI-LOP Load Testing Performance Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .timestamp {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .grade-section {
+            text-align: center;
+            padding: 40px;
+            background: #f8f9fa;
+        }
+
+        .grade-circle {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4em;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            position: relative;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .grade-a { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .grade-b { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .grade-c { background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%); }
+        .grade-d { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); }
+        .grade-f { background: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%); }
+
+        .grade-description {
+            font-size: 1.2em;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            color: #2c3e50;
+            border-bottom: 3px solid #4facfe;
+            padding-bottom: 10px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 5px solid #4facfe;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .metric-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .metric-label {
+            font-size: 1em;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .metric-status {
+            margin-top: 10px;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+
+        .status-passed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        }
+
+        .chart-card h3 {
+            margin-bottom: 20px;
+            color: #2c3e50;
+            font-size: 1.3em;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        .test-results {
+            margin-top: 30px;
+        }
+
+        .test-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .test-item h4 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .test-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .test-metric {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .test-metric-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #4facfe;
+        }
+
+        .test-metric-label {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+
+        .recommendations {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+
+        .recommendations h3 {
+            color: #1565c0;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .recommendation-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .recommendation-item h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .recommendation-item p {
+            color: #6c757d;
+            line-height: 1.6;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: 500;
+            margin-bottom: 10px;
+        }
+
+        .priority-high {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .priority-medium {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .priority-low {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .summary-section {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+
+        .summary-item {
+            padding: 20px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .summary-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .summary-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .errors-section {
+            background: #fff5f5;
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+            border: 1px solid #fed7d7;
+        }
+
+        .errors-section h3 {
+            color: #c53030;
+            margin-bottom: 20px;
+        }
+
+        .error-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #fc8181;
+        }
+
+        .error-time {
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .error-message {
+            color: #c53030;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 15px;
+            }
+
+            .header {
+                padding: 30px 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .charts-container {
+                grid-template-columns: 1fr;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .grade-circle {
+                width: 150px;
+                height: 150px;
+                font-size: 3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <div class="header">
+            <h1>GUI-LOP Load Testing Report</h1>
+            <p>Comprehensive Performance Analysis & Validation</p>
+            <div class="timestamp" id="reportTimestamp">Generated on: Loading...</div>
+        </div>
+
+        <!-- Performance Grade Section -->
+        <div class="grade-section">
+            <div class="grade-circle" id="gradeCircle">
+                A
+            </div>
+            <div class="grade-description" id="gradeDescription">Excellent Performance</div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="content">
+            <!-- Key Metrics Overview -->
+            <div class="section">
+                <h2>📊 Performance Overview</h2>
+                <div class="metrics-grid" id="metricsGrid">
+                    <!-- Metrics will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Performance Charts -->
+            <div class="section">
+                <h2>📈 Performance Analytics</h2>
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <h3>Response Time Distribution</h3>
+                        <div class="chart-container">
+                            <canvas id="responseTimeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Success Rate Trends</h3>
+                        <div class="chart-container">
+                            <canvas id="successRateChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Throughput Analysis</h3>
+                        <div class="chart-container">
+                            <canvas id="throughputChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Concurrent User Load</h3>
+                        <div class="chart-container">
+                            <canvas id="concurrentUsersChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Results by Scenario -->
+            <div class="section">
+                <h2>🧪 Test Scenario Results</h2>
+                <div class="test-results" id="testResults">
+                    <!-- Test results will be populated dynamically -->
+                </div>
+            </div>
+
+            <!-- Performance Summary -->
+            <div class="section">
+                <div class="summary-section">
+                    <h2>📋 Executive Summary</h2>
+                    <div class="summary-grid" id="summaryGrid">
+                        <!-- Summary items will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="section">
+                <div class="recommendations">
+                    <h3>💡 Performance Recommendations</h3>
+                    <div id="recommendations">
+                        <!-- Recommendations will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Errors and Issues -->
+            <div class="section" id="errorsSection" style="display: none;">
+                <div class="errors-section">
+                    <h3>⚠️ Errors and Issues</h3>
+                    <div id="errorsList">
+                        <!-- Errors will be populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load and display test data
+        class LoadTestReport {
+            constructor() {
+                this.testData = null;
+                this.charts = {};
+                this.init();
+            }
+
+            async init() {
+                try {
+                    // Try to load the latest report data
+                    await this.loadTestData();
+                    this.renderReport();
+                } catch (error) {
+                    console.error('Failed to load test data:', error);
+                    this.renderErrorState();
+                }
+            }
+
+            async loadTestData() {
+                // This would normally load from a JSON file or API
+                // For demo purposes, using mock data
+                this.testData = {
+                    suiteName: "GUI-LOP Load Test Suite",
+                    timestamp: new Date().toISOString(),
+                    overallValidation: {
+                        grade: { grade: 'A', description: 'Excellent Performance' },
+                        overallPassed: true,
+                        score: 92
+                    },
+                    overallMetrics: {
+                        totalRequests: 15420,
+                        successfulRequests: 15234,
+                        failedRequests: 186,
+                        averageResponseTime: 234,
+                        p95ResponseTime: 445,
+                        successRate: 98.8,
+                        testCount: 5
+                    },
+                    summary: {
+                        readyForProduction: true,
+                        performanceGrade: 'A',
+                        keyMetrics: {
+                            totalRequests: 15420,
+                            averageResponseTime: 234,
+                            successRate: 98.8,
+                            peakConcurrentUsers: 200
+                        }
+                    },
+                    results: {
+                        authentication: {
+                            scenarioName: 'Authentication Load Test',
+                            results: {
+                                totalRequests: 3200,
+                                successfulRequests: 3180,
+                                failedRequests: 20,
+                                averageResponseTime: 189,
+                                p95ResponseTime: 342,
+                                successRate: 99.4,
+                                usersCreated: 50,
+                                loginAttempts: 50
+                            },
+                            validation: {
+                                passed: true,
+                                grade: { grade: 'A', description: 'Excellent' }
+                            }
+                        },
+                        workflows: {
+                            scenarioName: 'Workflow CRUD Load Test',
+                            results: {
+                                totalRequests: 4800,
+                                successfulRequests: 4720,
+                                failedRequests: 80,
+                                averageResponseTime: 267,
+                                p95ResponseTime: 489,
+                                successRate: 98.3,
+                                workflowsCompleted: 150,
+                                workflowsCreated: 150
+                            },
+                            validation: {
+                                passed: true,
+                                grade: { grade: 'B', description: 'Good' }
+                            }
+                        },
+                        websocket: {
+                            scenarioName: 'WebSocket Stress Test',
+                            results: {
+                                totalRequests: 3600,
+                                successfulRequests: 3540,
+                                failedRequests: 60,
+                                averageResponseTime: 45,
+                                p95ResponseTime: 89,
+                                successRate: 98.3,
+                                messageThroughput: 1250
+                            },
+                            validation: {
+                                passed: true,
+                                grade: { grade: 'A', description: 'Excellent' }
+                            }
+                        },
+                        database: {
+                            scenarioName: 'Database Performance Test',
+                            results: {
+                                totalRequests: 2100,
+                                successfulRequests: 2080,
+                                failedRequests: 20,
+                                averageResponseTime: 156,
+                                p95ResponseTime: 278,
+                                successRate: 99.0,
+                                queryThroughput: 850
+                            },
+                            validation: {
+                                passed: true,
+                                grade: { grade: 'A', description: 'Excellent' }
+                            }
+                        },
+                        redis: {
+                            scenarioName: 'Redis Cache Performance Test',
+                            results: {
+                                totalRequests: 1720,
+                                successfulRequests: 1714,
+                                failedRequests: 6,
+                                averageResponseTime: 23,
+                                p95ResponseTime: 45,
+                                successRate: 99.7,
+                                cacheHitRate: 94.2,
+                                operationThroughput: 2100
+                            },
+                            validation: {
+                                passed: true,
+                                grade: { grade: 'A', description: 'Excellent' }
+                            }
+                        }
+                    },
+                    recommendations: [
+                        {
+                            category: 'Success',
+                            priority: 'Info',
+                            description: 'All performance targets met. System is ready for production deployment with current load patterns.',
+                            action: 'Monitor performance in production and set up alerting for anomalies'
+                        },
+                        {
+                            category: 'Optimization',
+                            priority: 'Low',
+                            description: 'Consider implementing response caching for frequently accessed data to further improve performance.',
+                            action: 'Implement Redis caching layer for API responses'
+                        },
+                        {
+                            category: 'Monitoring',
+                            priority: 'Medium',
+                            description: 'Implement comprehensive monitoring and alerting for production environment.',
+                            action: 'Set up APM tools and establish performance baselines'
+                        }
+                    ]
+                };
+            }
+
+            renderReport() {
+                this.renderHeader();
+                this.renderGrade();
+                this.renderMetrics();
+                this.renderCharts();
+                this.renderTestResults();
+                this.renderSummary();
+                this.renderRecommendations();
+                this.renderErrors();
+            }
+
+            renderHeader() {
+                document.getElementById('reportTimestamp').textContent =
+                    `Generated on: ${new Date(this.testData.timestamp).toLocaleString()}`;
+            }
+
+            renderGrade() {
+                const gradeCircle = document.getElementById('gradeCircle');
+                const gradeDescription = document.getElementById('gradeDescription');
+                const grade = this.testData.overallValidation.grade;
+
+                gradeCircle.textContent = grade.grade;
+                gradeCircle.className = `grade-circle grade-${grade.grade.toLowerCase()}`;
+                gradeDescription.textContent = grade.description;
+            }
+
+            renderMetrics() {
+                const metricsGrid = document.getElementById('metricsGrid');
+                const metrics = this.testData.overallMetrics;
+
+                const metricsData = [
+                    {
+                        value: metrics.totalRequests.toLocaleString(),
+                        label: 'Total Requests',
+                        status: metrics.successRate > 95 ? 'passed' : 'failed'
+                    },
+                    {
+                        value: `${metrics.successRate.toFixed(1)}%`,
+                        label: 'Success Rate',
+                        status: metrics.successRate > 95 ? 'passed' : 'failed'
+                    },
+                    {
+                        value: `${metrics.averageResponseTime}ms`,
+                        label: 'Avg Response Time',
+                        status: metrics.averageResponseTime < 500 ? 'passed' : 'failed'
+                    },
+                    {
+                        value: `${metrics.p95ResponseTime}ms`,
+                        label: '95th Percentile',
+                        status: metrics.p95ResponseTime < 500 ? 'passed' : 'failed'
+                    },
+                    {
+                        value: `${(metrics.successfulRequests / 1000).toFixed(1)}K`,
+                        label: 'Successful Requests',
+                        status: 'passed'
+                    },
+                    {
+                        value: this.testData.summary.readyForProduction ? '✅ Yes' : '❌ No',
+                        label: 'Production Ready',
+                        status: this.testData.summary.readyForProduction ? 'passed' : 'failed'
+                    }
+                ];
+
+                metricsGrid.innerHTML = metricsData.map(metric => `
+                    <div class="metric-card">
+                        <div class="metric-value">${metric.value}</div>
+                        <div class="metric-label">${metric.label}</div>
+                        <div class="metric-status status-${metric.status}">
+                            ${metric.status === 'passed' ? '✓ Target Met' : '✗ Target Missed'}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            renderCharts() {
+                this.renderResponseTimeChart();
+                this.renderSuccessRateChart();
+                this.renderThroughputChart();
+                this.renderConcurrentUsersChart();
+            }
+
+            renderResponseTimeChart() {
+                const ctx = document.getElementById('responseTimeChart').getContext('2d');
+                const scenarios = Object.keys(this.testData.results);
+                const avgTimes = scenarios.map(s => this.testData.results[s].results.averageResponseTime);
+                const p95Times = scenarios.map(s => this.testData.results[s].results.p95ResponseTime);
+
+                this.charts.responseTime = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: scenarios.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                        datasets: [
+                            {
+                                label: 'Average Response Time',
+                                data: avgTimes,
+                                backgroundColor: 'rgba(79, 172, 254, 0.8)',
+                                borderColor: 'rgba(79, 172, 254, 1)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: '95th Percentile',
+                                data: p95Times,
+                                backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Response Time (ms)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderSuccessRateChart() {
+                const ctx = document.getElementById('successRateChart').getContext('2d');
+                const scenarios = Object.keys(this.testData.results);
+                const successRates = scenarios.map(s => this.testData.results[s].results.successRate);
+
+                this.charts.successRate = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: scenarios.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                        datasets: [{
+                            label: 'Success Rate',
+                            data: successRates,
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                min: 90,
+                                max: 100,
+                                title: {
+                                    display: true,
+                                    text: 'Success Rate (%)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderThroughputChart() {
+                const ctx = document.getElementById('throughputChart').getContext('2d');
+                const scenarios = Object.keys(this.testData.results);
+                const throughputs = scenarios.map(s => {
+                    const result = this.testData.results[s].results;
+                    return result.messageThroughput || result.queryThroughput ||
+                           result.operationThroughput || (result.totalRequests / 60);
+                });
+
+                this.charts.throughput = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: scenarios.map(s => s.charAt(0).toUpperCase() + s.slice(1)),
+                        datasets: [{
+                            data: throughputs,
+                            backgroundColor: [
+                                'rgba(79, 172, 254, 0.8)',
+                                'rgba(255, 99, 132, 0.8)',
+                                'rgba(255, 206, 86, 0.8)',
+                                'rgba(75, 192, 192, 0.8)',
+                                'rgba(153, 102, 255, 0.8)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                            },
+                            title: {
+                                display: true,
+                                text: 'Throughput by Scenario (ops/sec)'
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderConcurrentUsersChart() {
+                const ctx = document.getElementById('concurrentUsersChart').getContext('2d');
+
+                // Simulate concurrent user load over time
+                const timeLabels = ['0s', '30s', '60s', '90s', '120s', '150s', '180s'];
+                const userLoad = [10, 50, 100, 150, 200, 200, 200];
+                const responseTimes = [120, 180, 234, 267, 290, 278, 265];
+
+                this.charts.concurrentUsers = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: timeLabels,
+                        datasets: [
+                            {
+                                label: 'Concurrent Users',
+                                data: userLoad,
+                                borderColor: 'rgba(79, 172, 254, 1)',
+                                backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Response Time (ms)',
+                                data: responseTimes,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Concurrent Users'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Response Time (ms)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            renderTestResults() {
+                const testResults = document.getElementById('testResults');
+                const results = this.testData.results;
+
+                testResults.innerHTML = Object.entries(results).map(([key, result]) => {
+                    const metrics = [
+                        {
+                            value: result.results.totalRequests.toLocaleString(),
+                            label: 'Total Requests'
+                        },
+                        {
+                            value: `${result.results.successRate.toFixed(1)}%`,
+                            label: 'Success Rate'
+                        },
+                        {
+                            value: `${result.results.averageResponseTime}ms`,
+                            label: 'Avg Response'
+                        },
+                        {
+                            value: result.validation.grade.grade,
+                            label: 'Grade'
+                        }
+                    ];
+
+                    return `
+                        <div class="test-item">
+                            <h4>${result.scenarioName}</h4>
+                            <div class="test-metrics">
+                                ${metrics.map(metric => `
+                                    <div class="test-metric">
+                                        <div class="test-metric-value">${metric.value}</div>
+                                        <div class="test-metric-label">${metric.label}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            renderSummary() {
+                const summaryGrid = document.getElementById('summaryGrid');
+                const summary = this.testData.summary;
+
+                const summaryItems = [
+                    {
+                        value: summary.keyMetrics.totalRequests.toLocaleString(),
+                        label: 'Total Requests'
+                    },
+                    {
+                        value: `${summary.keyMetrics.averageResponseTime}ms`,
+                        label: 'Avg Response Time'
+                    },
+                    {
+                        value: `${summary.keyMetrics.successRate}%`,
+                        label: 'Success Rate'
+                    },
+                    {
+                        value: summary.performanceGrade,
+                        label: 'Performance Grade'
+                    },
+                    {
+                        value: summary.readyForProduction ? '✅ Yes' : '❌ No',
+                        label: 'Production Ready'
+                    },
+                    {
+                        value: summary.keyMetrics.peakConcurrentUsers,
+                        label: 'Peak Concurrent Users'
+                    }
+                ];
+
+                summaryGrid.innerHTML = summaryItems.map(item => `
+                    <div class="summary-item">
+                        <div class="summary-value">${item.value}</div>
+                        <div class="summary-label">${item.label}</div>
+                    </div>
+                `).join('');
+            }
+
+            renderRecommendations() {
+                const recommendationsDiv = document.getElementById('recommendations');
+                const recommendations = this.testData.recommendations;
+
+                recommendationsDiv.innerHTML = recommendations.map(rec => {
+                    const priorityClass = rec.priority.toLowerCase() === 'high' ? 'priority-high' :
+                                       rec.priority.toLowerCase() === 'medium' ? 'priority-medium' : 'priority-low';
+
+                    return `
+                        <div class="recommendation-item">
+                            <div class="priority-badge ${priorityClass}">${rec.priority} Priority</div>
+                            <h4>${rec.category}</h4>
+                            <p>${rec.description}</p>
+                            <p><strong>Action:</strong> ${rec.action}</p>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            renderErrors() {
+                // Check if there are any errors in the test results
+                const hasErrors = Object.values(this.testData.results).some(result =>
+                    result.results.failedRequests > 0
+                );
+
+                if (hasErrors) {
+                    const errorsSection = document.getElementById('errorsSection');
+                    const errorsList = document.getElementById('errorsList');
+
+                    errorsSection.style.display = 'block';
+
+                    const errors = [];
+                    Object.entries(this.testData.results).forEach(([key, result]) => {
+                        if (result.results.failedRequests > 0) {
+                            errors.push({
+                                scenario: result.scenarioName,
+                                failedRequests: result.results.failedRequests,
+                                totalRequests: result.results.totalRequests
+                            });
+                        }
+                    });
+
+                    errorsList.innerHTML = errors.map(error => `
+                        <div class="error-item">
+                            <div class="error-time">${error.scenario}</div>
+                            <div class="error-message">
+                                ${error.failedRequests} failed requests out of ${error.totalRequests} total
+                                (${((error.failedRequests / error.totalRequests) * 100).toFixed(2)}% failure rate)
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            renderErrorState() {
+                document.querySelector('.container').innerHTML = `
+                    <div style="text-align: center; padding: 100px 20px;">
+                        <h2>❌ Unable to Load Test Data</h2>
+                        <p>Could not load the load test results. Please ensure the test has been completed and the data file is available.</p>
+                        <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #4facfe; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize the report when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new LoadTestReport();
+        });
+    </script>
+</body>
+</html>

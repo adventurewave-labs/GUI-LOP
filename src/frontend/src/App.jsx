@@ -1,7 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AuthPage from './components/auth/AuthPage';
+import { createAuthenticatedWebSocket } from './services/api';
 
-const App = () => {
+const AppContent = () => {
+  const { isAuthenticated, user, logout, updateActivity } = useAuth();
   const [serverStatus, setServerStatus] = useState('loading');
   const [workflows, setWorkflows] = useState([]);
   const [activeWorkflow, setActiveWorkflow] = useState(null);
@@ -32,6 +37,27 @@ const App = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Track user activity for auto-logout
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    // Track various user activities
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      window.addEventListener(event, handleActivity);
+    });
+
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+    };
+  }, [isAuthenticated, updateActivity]);
+
   // Fetch workflow templates
   useEffect(() => {
     const fetchWorkflows = async () => {
@@ -49,37 +75,81 @@ const App = () => {
     }
   }, [serverStatus]);
 
-  // WebSocket connection
+  // WebSocket connection with authentication
   useEffect(() => {
-    if (serverStatus !== 'connected') return;
+    if (serverStatus !== 'connected' || !isAuthenticated) return;
 
-    const ws = new WebSocket('ws://localhost:3001');
+    let ws = null;
+    let reconnectTimeout = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
 
-    ws.onopen = () => {
-      setWsConnected(true);
-      addLog('WebSocket connected');
-    };
+    const connectWebSocket = () => {
+      try {
+        ws = createAuthenticatedWebSocket('ws://localhost:3001');
 
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      addLog(`Event: ${data.type}`);
+        ws.onopen = () => {
+          setWsConnected(true);
+          addLog('WebSocket connected');
+          reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+        };
 
-      if (data.type === 'ui_generation') {
-        addLog(`UI ready: ${data.payload.ui_url}`);
-      } else if (data.type === 'workflow_completed') {
-        addLog('Workflow completed');
-        setActiveWorkflow(prev => prev ? { ...prev, status: 'completed' } : null);
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            addLog(`Event: ${data.type}`);
+
+            if (data.type === 'ui_generation') {
+              addLog(`UI ready: ${data.payload.ui_url}`);
+            } else if (data.type === 'workflow_completed') {
+              addLog('Workflow completed');
+              setActiveWorkflow(prev => prev ? { ...prev, status: 'completed' } : null);
+            } else if (data.type === 'auth_error') {
+              addLog('Authentication error: WebSocket token expired');
+              // Force logout on auth error
+              logout();
+            }
+          } catch (error) {
+            addLog('WebSocket message parsing error');
+          }
+        };
+
+        ws.onclose = (event) => {
+          setWsConnected(false);
+          addLog(`WebSocket disconnected: ${event.code} - ${event.reason || 'Unknown reason'}`);
+
+          // Attempt reconnection if it wasn't a clean close and we haven't exceeded max attempts
+          if (event.code !== 1000 && reconnectAttempts < maxReconnectAttempts && isAuthenticated) {
+            reconnectAttempts++;
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff
+            addLog(`Attempting to reconnect in ${delay / 1000} seconds...`);
+
+            reconnectTimeout = setTimeout(connectWebSocket, delay);
+          }
+        };
+
+        ws.onerror = (error) => {
+          addLog('WebSocket connection error');
+          console.error('WebSocket error:', error);
+        };
+
+      } catch (error) {
+        addLog('Failed to create WebSocket connection');
+        console.error('WebSocket creation error:', error);
       }
     };
 
-    ws.onclose = () => {
-      setWsConnected(false);
-    };
+    connectWebSocket();
 
     return () => {
-      ws.close();
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+      if (ws) {
+        ws.close(1000, 'Component unmounted');
+      }
     };
-  }, [serverStatus]);
+  }, [serverStatus, isAuthenticated, logout]);
 
   // Create workflow
   const createWorkflow = async (templateId) => {
@@ -139,37 +209,117 @@ const App = () => {
     }
   };
 
+  // Handle user logout
+  const handleLogout = useCallback(() => {
+    logout();
+    addLog('User logged out');
+  }, [logout]);
+
   return (
     <Router>
       <div className="app">
         {/* Header */}
         <header className="header">
           <div className="header-content">
-            <h1>GUI-LOP - Generative UI Platform</h1>
-            <div className="status-indicators">
-              <span className={`status ${serverStatus}`}>
-                Server: {serverStatus}
-              </span>
-              <span className={`status ${wsConnected ? 'connected' : 'disconnected'}`}>
-                WS: {wsConnected ? 'Connected' : 'Disconnected'}
-              </span>
+            <Link to="/" className="brand-link">
+              <h1>GUI-LOP - Generative UI Platform</h1>
+            </Link>
+            <div className="header-right">
+              {isAuthenticated && user && (
+                <div className="user-info">
+                  <span className="welcome-text">Welcome, {user.username || user.email}</span>
+                  <button
+                    className="logout-button"
+                    onClick={handleLogout}
+                    title="Logout"
+                  >
+                    Logout
+                  </button>
+                </div>
+              )}
+              <div className="status-indicators">
+                <span className={`status ${serverStatus}`}>
+                  Server: {serverStatus}
+                </span>
+                <span className={`status ${wsConnected ? 'connected' : 'disconnected'}`}>
+                  WS: {wsConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </div>
             </div>
           </div>
         </header>
 
-        {/* Navigation */}
-        <nav className="nav">
-          <Link to="/" className="nav-link">Dashboard</Link>
-          <Link to="/workflows" className="nav-link">Workflows</Link>
-          <Link to="/events" className="nav-link">Events</Link>
-        </nav>
+        {/* Navigation - Only show when authenticated */}
+        {isAuthenticated && (
+          <nav className="nav">
+            <Link to="/" className="nav-link">Dashboard</Link>
+            <Link to="/workflows" className="nav-link">Workflows</Link>
+            <Link to="/events" className="nav-link">Events</Link>
+          </nav>
+        )}
 
         {/* Main Content */}
         <main className="main">
           <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/events" element={<EventsPage />} />
+            {/* Authentication Routes */}
+            <Route
+              path="/login"
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/" replace />
+                ) : (
+                  <AuthPage />
+                )
+              }
+            />
+            <Route
+              path="/register"
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/" replace />
+                ) : (
+                  <AuthPage />
+                )
+              }
+            />
+
+            {/* Protected Routes */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/workflows"
+              element={
+                <ProtectedRoute>
+                  <WorkflowsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/events"
+              element={
+                <ProtectedRoute>
+                  <EventsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Fallback route - redirect to login if not authenticated */}
+            <Route
+              path="*"
+              element={
+                isAuthenticated ? (
+                  <Navigate to="/" replace />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
+            />
           </Routes>
         </main>
       </div>
@@ -206,9 +356,53 @@ const App = () => {
           align-items: center;
         }
 
+        .brand-link {
+          text-decoration: none;
+          color: inherit;
+        }
+
+        .brand-link:hover h1 {
+          color: #007bff;
+        }
+
         .header h1 {
           font-size: 1.5rem;
           color: #333;
+          margin: 0;
+          transition: color 0.2s ease;
+        }
+
+        .header-right {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+        }
+
+        .user-info {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .welcome-text {
+          color: #666;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+
+        .logout-button {
+          background: #dc3545;
+          color: white;
+          border: none;
+          padding: 0.375rem 0.75rem;
+          border-radius: 4px;
+          font-size: 0.875rem;
+          cursor: pointer;
+          transition: background-color 0.2s ease;
+        }
+
+        .logout-button:hover {
+          background: #c82333;
         }
 
         .status-indicators {
@@ -363,6 +557,9 @@ const App = () => {
         <div className="card">
           <h2>GUI-LOP Dashboard</h2>
           <p>Welcome to the Generative UI & Human-in-the-Loop Orchestration Platform</p>
+          {user && (
+            <p>Logged in as: <strong>{user.username || user.email}</strong></p>
+          )}
           <p>Server Status: <strong>{serverStatus}</strong></p>
           <p>WebSocket: <strong>{wsConnected ? 'Connected' : 'Disconnected'}</strong></p>
         </div>
@@ -466,6 +663,15 @@ const App = () => {
       </div>
     );
   }
+};
+
+// Main App component with AuthProvider
+const App = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
 };
 
 export default App;

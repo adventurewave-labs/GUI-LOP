@@ -13,8 +13,8 @@
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd GUI-LOP
+git clone https://github.com/ruvnet/gui-lop.git
+cd gui-lop
 
 # Install all dependencies
 npm install

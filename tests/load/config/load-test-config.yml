@@ -1,0 +1,336 @@
+# GUI-LOP Load Testing Configuration
+# Week 8 Phase 2 - 200+ Concurrent User Performance Testing
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    # Warm-up phase
+    - duration: 30
+      arrivalRate: 10
+      name: "Warm up"
+
+    # Ramp-up to 50 users
+    - duration: 60
+      arrivalRate: 5
+      rampTo: 50
+      name: "Ramp up load"
+
+    # Sustained 50 users
+    - duration: 120
+      arrivalRate: 50
+      name: "Sustained load (50 users)"
+
+    # Ramp-up to 100 users
+    - duration: 60
+      arrivalRate: 50
+      rampTo: 100
+      name: "Ramp up to 100 users"
+
+    # Sustained 100 users
+    - duration: 180
+      arrivalRate: 100
+      name: "Sustained load (100 users)"
+
+    # Ramp-up to 200 users (target)
+    - duration: 120
+      arrivalRate: 100
+      rampTo: 200
+      name: "Ramp up to 200 users"
+
+    # Peak load test - 200+ users
+    - duration: 300
+      arrivalRate: 200
+      name: "Peak load test (200 users)"
+
+    # Stress test - spike to 250 users
+    - duration: 60
+      arrivalRate: 250
+      name: "Stress test spike (250 users)"
+
+    # Cool down
+    - duration: 60
+      arrivalRate: 25
+      name: "Cool down"
+
+  processor: "./test-processor.js"
+  variables:
+    testUserPrefix: "loadtest"
+    testUserDomain: "gui-lop-load.com"
+    testPassword: "LoadTest123!"
+    testWorkflowTemplate: "data-analysis"
+    testWorkflowContext: "Load testing scenario for performance validation"
+
+  # Load testing thresholds
+  expectations:
+    - http.response_time.p95: 500
+    - http.response_time.p99: 1000
+    - http.codes.200: 100
+    - http.codes.4xx: 0
+    - http.codes.5xx: 0
+
+  # Custom metrics
+  metrics:
+    - includeResponseTime: true
+    - includeHeaders: true
+    - includeBody: false
+
+scenarios:
+  # Authentication flow scenario
+  - name: "User Registration and Login Flow"
+    weight: 25
+    flow:
+      # Registration
+      - post:
+          url: "/api/auth/register"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+            - json: "$.refreshToken"
+              as: "refreshToken"
+            - json: "$.user.id"
+              as: "userId"
+          headers:
+            Content-Type: "application/json"
+          json:
+            email: "{{ testUserPrefix }}-{{ $randomString() }}@{{ testUserDomain }}"
+            password: "{{ testPassword }}"
+            firstName: "Load"
+            lastName: "Test"
+            role: "user"
+          expect:
+            - statusCode: 201
+            - hasBody: true
+
+      # Login verification
+      - post:
+          url: "/api/auth/login"
+          capture:
+            - json: "$.token"
+              as: "loginToken"
+            - json: "$.refreshToken"
+              as: "newRefreshToken"
+          headers:
+            Content-Type: "application/json"
+          json:
+            email: "{{ testUserPrefix }}-{{ $randomString() }}@{{ testUserDomain }}"
+            password: "{{ testPassword }}"
+          expect:
+            - statusCode: 200
+            - hasBody: true
+
+      # Token refresh
+      - post:
+          url: "/api/auth/refresh"
+          headers:
+            Content-Type: "application/json"
+            Authorization: "Bearer {{ loginToken }}"
+          json:
+            refreshToken: "{{ newRefreshToken }}"
+          expect:
+            - statusCode: 200
+
+  # Workflow operations scenario
+  - name: "Workflow CRUD Operations"
+    weight: 35
+    flow:
+      # Login first
+      - post:
+          url: "/api/auth/login"
+          capture:
+            - json: "$.token"
+              as: "workflowToken"
+            - json: "$.user.id"
+              as: "workflowUserId"
+          headers:
+            Content-Type: "application/json"
+          json:
+            email: "{{ testUserPrefix }}-{{ $randomString() }}@{{ testUserDomain }}"
+            password: "{{ testPassword }}"
+
+      # Get workflow templates
+      - get:
+          url: "/api/workflows/templates"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+          expect:
+            - statusCode: 200
+            - hasBody: true
+
+      # Create new workflow
+      - post:
+          url: "/api/workflows"
+          capture:
+            - json: "$.data.workflow_id"
+              as: "workflowId"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+            Content-Type: "application/json"
+          json:
+            template: "{{ testWorkflowTemplate }}"
+            context: "{{ testWorkflowContext }} - {{ $randomString() }}"
+          expect:
+            - statusCode: 201
+
+      # Get workflow status
+      - get:
+          url: "/api/workflows/{{ workflowId }}"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+          expect:
+            - statusCode: 200
+
+      # Execute workflow
+      - post:
+          url: "/api/workflows/{{ workflowId }}/execute"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+            Content-Type: "application/json"
+          expect:
+            - statusCode: 200
+
+      # Wait for workflow to be ready
+      - think: 3
+
+      # Submit human response
+      - post:
+          url: "/api/workflows/{{ workflowId }}/respond"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+            Content-Type: "application/json"
+          json:
+            action: "approve"
+            data:
+              feedback: "Load test approval"
+              rating: 5
+          expect:
+            - statusCode: 200
+
+      # Get user workflows list
+      - get:
+          url: "/api/workflows"
+          headers:
+            Authorization: "Bearer {{ workflowToken }}"
+          expect:
+            - statusCode: 200
+
+  # WebSocket real-time scenario
+  - name: "WebSocket Real-time Communication"
+    weight: 20
+    engine: ws
+    flow:
+      # Connect to WebSocket
+      - connect:
+          target: "ws://localhost:3001"
+          capture:
+            - json: "$.session_id"
+              as: "sessionId"
+
+      # Send messages
+      - send: |
+          {
+            "type": "ping",
+            "timestamp": "{{ $timestamp }}",
+            "sessionId": "{{ sessionId }}"
+          }
+
+      # Wait for response
+      - think: 1
+
+      # Send workflow status request
+      - send: |
+          {
+            "type": "workflow_status",
+            "workflowId": "loadtest-{{ $randomString() }}",
+            "sessionId": "{{ sessionId }}"
+          }
+
+      # Maintain connection
+      - think: 5
+
+      # Send heartbeat
+      - send: |
+          {
+            "type": "heartbeat",
+            "timestamp": "{{ $timestamp }}",
+            "sessionId": "{{ sessionId }}"
+          }
+
+      # Close connection
+      - close: {}
+
+  # Database and cache performance scenario
+  - name: "Database and Cache Performance"
+    weight: 15
+    flow:
+      # Login
+      - post:
+          url: "/api/auth/login"
+          capture:
+            - json: "$.token"
+              as: "dbToken"
+            - json: "$.user.id"
+              as: "dbUserId"
+          headers:
+            Content-Type: "application/json"
+          json:
+            email: "{{ testUserPrefix }}-{{ $randomString() }}@{{ testUserDomain }}"
+            password: "{{ testPassword }}"
+
+      # Multiple workflow operations to test database
+      - loop:
+          - post:
+              url: "/api/workflows"
+              capture:
+                - json: "$.data.workflow_id"
+                  as: "loopWorkflowId"
+              headers:
+                Authorization: "Bearer {{ dbToken }}"
+                Content-Type: "application/json"
+              json:
+                template: "{{ testWorkflowTemplate }}"
+                context: "DB Load Test {{ $loopIndex }}"
+
+          - get:
+              url: "/api/workflows/{{ loopWorkflowId }}"
+              headers:
+                Authorization: "Bearer {{ dbToken }}"
+
+          - post:
+              url: "/api/workflows/{{ loopWorkflowId }}/execute"
+              headers:
+                Authorization: "Bearer {{ dbToken }}"
+
+        count: 5
+
+      # Get all user workflows (tests database queries and caching)
+      - get:
+          url: "/api/workflows"
+          headers:
+            Authorization: "Bearer {{ dbToken }}"
+          expect:
+            - statusCode: 200
+
+  # Health check and public API scenario
+  - name: "Health Check and Public APIs"
+    weight: 5
+    flow:
+      # Health check
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+
+      # Public status
+      - get:
+          url: "/api/public/status"
+          expect:
+            - statusCode: 200
+
+      # Public templates (no auth)
+      - get:
+          url: "/api/workflows/templates"
+          expect:
+            - statusCode: 200
+
+      # Think time between requests
+      - think: 2

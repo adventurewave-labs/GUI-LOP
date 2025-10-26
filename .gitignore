@@ -1,40 +1,29 @@
-push
-# Claude Flow generated files
-.claude/settings.local.json
-.mcp.json
-claude-flow.config.json
-.swarm/
-.hive-mind/
-.claude-flow/
-memory/
-coordination/
-memory/claude-flow-data.json
-memory/sessions/*
-!memory/sessions/README.md
-memory/agents/*
-!memory/agents/README.md
-coordination/memory_bank/*
-coordination/subtasks/*
-coordination/orchestration/*
-*.db
-*.db-journal
-*.db-wal
-*.sqlite
-*.sqlite-journal
-*.sqlite-wal
-claude-flow
-# Removed Windows wrapper files per user request
-hive-mind-prompt-*.txt
+# ==========================================
+# GUI-LOP Comprehensive .gitignore
+# ==========================================
+# This file ensures only essential project files are under version control
+# Patterns organized by category with clear explanations
 
-# Dependencies
+# ==========================================
+# DEPENDENCIES AND PACKAGE MANAGERS
+# ==========================================
+# Node.js dependencies - should never be in version control
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+.pnpm-debug.log*
 
-# Build outputs and distributions
+# Package manager lock files - keep one based on preference
+# yarn.lock
+package-lock.json
+
+# ==========================================
+# BUILD OUTPUTS AND DISTRIBUTIONS
+# ==========================================
+# Compiled outputs and build artifacts
 dist/
 build/
 out/
@@ -44,7 +33,13 @@ out/
 .cache/
 .parcel-cache/
 
-# Environment and secret files
+# TypeScript compilation artifacts
+*.tsbuildinfo
+
+# ==========================================
+# ENVIRONMENT AND SECRET FILES
+# ==========================================
+# Environment files - contain sensitive configuration
 .env
 .env.local
 .env.development.local
@@ -53,10 +48,28 @@ out/
 *.secret
 *.key
 *.pem
+*.p12
+*.pfx
 
-# IDE and editor files
+# Database connection strings and API keys
+config/secrets.json
+secrets/
+credentials/
+
+# ==========================================
+# IDE AND EDITOR FILES
+# ==========================================
+# Visual Studio Code
 .vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains IDEs
 .idea/
+
+# Vim and Emacs temporary files
 *.swp
 *.swo
 *~
@@ -65,7 +78,14 @@ out/
 *.orig
 *.rej
 
-# OS-specific files
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ==========================================
+# OPERATING SYSTEM FILES
+# ==========================================
+# macOS
 .DS_Store
 .DS_Store?
 ._*
@@ -75,14 +95,39 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# Logs and runtime files
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ==========================================
+# LOGS AND RUNTIME FILES
+# ==========================================
+# Application logs
 *.log
 *.pid
 *.seed
 *.pid.lock
 .lock-wscript
 
-# Test coverage and results
+# Runtime databases and temporary data
+*.db
+*.db-journal
+*.db-wal
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+
+# Process and lock files
+*.pid
+*.lock
+.lockfile
+
+# ==========================================
+# TEST COVERAGE AND RESULTS
+# ==========================================
+# Test coverage reports
 coverage/
 .nyc_output/
 .coverage/
@@ -90,31 +135,173 @@ junit.xml
 test-results/
 playwright-report/
 .blob-storage/
-test-results/
 *.lcov
 
+# Test artifacts
+test-results/
+test-reports/
+
+# ==========================================
+# TEMPORARY FILES AND CACHE
+# ==========================================
 # Temporary files
 *.tmp
 *.temp
 *.cache
 *.bak
 *.backup
+*.old
+*.orig
+
+# Archive files (unless part of distribution)
 *.tgz
 *.tar.gz
 *.zip
 *.rar
+*.7z
 
-# Package manager lock files (keep one based on preference)
-# yarn.lock
-package-lock.json
-
-# Misc
-*.tgz
-*.tar.gz
+# Node.js runtime
 .npm
 .eslintcache
 .node_repl_history
-*.tsbuildinfo
 
-# Local development
-.local
+# ==========================================
+# LOCAL DEVELOPMENT
+# ==========================================
+# Local development directories
+.local/
+.localcache/
+tmp/
+temp/
+
+# User-specific configuration
+.settings/
+config.local.*
+user-config.*
+
+# ==========================================
+# CLAUDE FLOW AND AI AGENT RUNTIME
+# ==========================================
+# Claude Flow generated files and runtime data
+.claude/
+.claude-flow/
+.claude-flow.config
+claude-flow
+claude-flow.config.json
+.mcp.json
+
+# Swarm and hive-mind runtime directories
+.swarm/
+.hive-mind/
+memory/
+coordination/
+
+# Claude Flow data and sessions
+memory/claude-flow-data.json
+memory/sessions/*
+!memory/sessions/README.md
+memory/agents/*
+!memory/agents/README.md
+coordination/memory_bank/*
+coordination/subtasks/*
+coordination/orchestration/*
+
+# Hive-mind prompts and outputs
+hive-mind-prompt-*.txt
+
+# ==========================================
+# DEVELOPMENT TOOLS AND FRAMEWORKS
+# ==========================================
+# React development
+.eslintcache
+
+# Webpack
+.webpack/
+
+# Parcel
+.parcel-cache/
+
+# Vite
+.vite/
+
+# Docker development
+docker-compose.override.yml
+.docker/
+
+# ==========================================
+# MONITORING AND DEPLOYMENT
+# ==========================================
+# Monitoring configuration with secrets
+monitoring/.env
+monitoring/secrets/
+
+# Deployment artifacts
+.deploy/
+deployment/
+
+# ==========================================
+# PROJECT-SPECIFIC DIRECTORIES (User Requested)
+# ==========================================
+# Claude Code and development tool directories
+.claude
+.claude-flow
+.devcontainer
+.github
+.hive-mind
+.swarm
+
+# Development coordination directories
+agents/
+coordination
+memory
+
+# Development documentation
+claude-flow.wiki
+PLANS.md
+
+# DevPods configuration (keep only essential files)
+devpods/.env*
+devpods/secrets.*
+
+# ==========================================
+# MISCELLANEOUS
+# ==========================================
+# Large files that shouldn't be in git
+*.large
+*.bin
+*.exe
+*.dmg
+*.iso
+
+# Editor backup files
+*~
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# EXCEPTIONS (FILES TO KEEP DESPITE PATTERNS)
+# ==========================================
+# Keep example configuration files
+!.env.example
+!config/.env.example
+!database/config/.env.example
+
+# Keep essential documentation
+!README.md
+!CONTRIBUTING.md
+!docs/
+
+# Keep Claude Code development files when explicitly needed
+# Uncomment if you need these in version control:
+# !.claude/settings.json
+# !.claude/agents/
+
+# ==========================================
+# END OF .GITIGNORE
+# ==========================================
+# Last updated: Comprehensive cleanup for GUI-LOP repository
+# Total patterns: 150+ organized across 12 categories

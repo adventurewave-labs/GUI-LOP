@@ -1,0 +1,156 @@
+# ==========================================
+# GUI-LOP Development Docker Compose Configuration
+# Optimized for local development
+# ==========================================
+
+version: '3.8'
+
+services:
+  # Frontend - React with hot reload
+  frontend:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile.dev
+    container_name: gui-lop-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=http://localhost:3001
+      - REACT_APP_WS_URL=ws://localhost:3001
+      - CHOKIDAR_USEPOLLING=true
+      - FAST_REFRESH=true
+    depends_on:
+      - backend
+    networks:
+      - gui-lop-dev-network
+    volumes:
+      - ./src/frontend:/app:rw
+      - /app/node_modules
+    stdin_open: true
+    tty: true
+
+  # Backend - Node.js with nodemon for hot reload
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    container_name: gui-lop-backend-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      - "9229:9229"  # Debugging port
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - FRONTEND_URL=http://localhost:3000
+      - DATABASE_URL=postgresql://gui-lop:devpassword@postgres:5432/gui_lop_dev
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-jwt-secret-change-in-production
+      - JWT_REFRESH_SECRET=dev-refresh-secret-change-in-production
+      - JWT_EXPIRES_IN=15m
+      - JWT_REFRESH_EXPIRES_IN=7d
+      - BCRYPT_ROUNDS=10
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX_REQUESTS=1000
+      - LOG_LEVEL=debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - gui-lop-dev-network
+    volumes:
+      - ./src:/app/src:rw
+      - ./database:/app/database:rw
+      - ./scripts:/app/scripts:rw
+      - ./logs:/app/logs:rw
+      - /app/node_modules
+    command: npm run dev
+
+  # PostgreSQL Database (Development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: gui-lop-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=gui_lop_dev
+      - POSTGRES_USER=gui-lop
+      - POSTGRES_PASSWORD=devpassword
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    networks:
+      - gui-lop-dev-network
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data:rw
+      - ./docker/postgres/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gui-lop -d gui_lop_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: gui-lop-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - gui-lop-dev-network
+    volumes:
+      - redis_dev_data:/data:rw
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Redis Commander (Redis GUI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: gui-lop-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - gui-lop-dev-network
+
+  # pgAdmin (PostgreSQL GUI)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: gui-lop-pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@gui-lop.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    depends_on:
+      - postgres
+    networks:
+      - gui-lop-dev-network
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin:rw
+
+networks:
+  gui-lop-dev-network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local

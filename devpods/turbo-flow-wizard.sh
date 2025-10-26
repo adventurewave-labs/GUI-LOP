@@ -279,6 +279,9 @@ Please merge the configuration above with the existing CLAUDE.md in the root dir
 4. **Maintain** all existing execution rules and best practices
 5. **Adapt** verification system settings based on project type
 6. **Include** relevant MCP tools and agent patterns for this stack
+7. **Include** relevant agents in .claude/agents
+8. **Include** relevant commands in .claude/commands
+9. **Include** relevant subagents in the agents directory in the root of the project 
 
 ### Focus Areas for Integration:
 - Technology stack specific configurations
@@ -316,12 +319,17 @@ run_claude_merge() {
     if command -v claude >/dev/null 2>&1; then
         log "🚀 Executing Claude merge command..."
 
-        # Run the claude command to merge all three files
-        claude --dangerously-skip-permissions "Please merge these three files into an optimized CLAUDE.md:
+        # Run the claude command to merge all files
+        claude --dangerously-skip-permissions "Please merge these 9 files into an optimized CLAUDE.md:
 1. CLAUDE.pre (contains new project-specific configuration)
 2. CLAUDE.md (contains current configuration)
 3. CLAUDE.md.OLD (contains original backup configuration)
 4. PLANS.md (plans for current project)
+5. RESEARCH.md (Research for current project)
+6. QA_DEVELOPMENT_GUIDE.md (workflows & coordination patterns)
+7. FEEDCLAUDE.md (additonal context that might be useful in devpod directory)
+8. DEVELOPMENT_GUIDE.md (addtional context that might be useful in devpod directory)
+9. claude-flow-quick-reference.md (command reference & quick lookup)
 
 Create a cohesive, optimized CLAUDE.md that:
 - Preserves the best elements from all three files
