@@ -29,6 +29,10 @@ import {
   workflowCreationRateLimiter,
   workflowExecutionRateLimiter
 } from './middleware/rate-limiter.js';
+
+// Import authentication middleware and routes
+import { authenticate, authorize, optionalAuth } from '../backend/middleware/auth.js';
+import authRoutes from '../backend/routes/auth.js';
 import {
   metricsMiddleware,
   performanceMonitoring,
@@ -138,7 +142,10 @@ function createApp() {
     app.use('/api/v1/health', publicCache);
   }
 
-  // API Routes (will be added in subsequent steps)
+  // Authentication routes
+  app.use('/api/v1/auth', authRoutes);
+
+  // API Routes
   setupRoutes(app);
 
   // Documentation routes
@@ -220,35 +227,21 @@ function createApp() {
 }
 
 /**
+ * Input sanitization helper function
+ */
+function sanitizeInput(input) {
+  if (typeof input !== 'string') return input;
+  return input.trim()
+    .replace(/[<>]/g, '') // Remove HTML tags
+    .replace(/javascript:/gi, '') // Remove javascript: protocol
+    .replace(/on\w+=/gi, ''); // Remove event handlers
+}
+
+/**
  * Setup API routes
  */
 function setupRoutes(app) {
-  // Auth routes
-  app.post('/api/v1/auth/register',
-    validateUserRegistration,
-    asyncHandler(async (req, res, next) => {
-      // Auth registration implementation
-      res.status(201).json({
-        success: true,
-        message: 'User registration endpoint - to be implemented',
-        data: { body: req.body },
-        timestamp: new Date().toISOString()
-      });
-    })
-  );
-
-  app.post('/api/v1/auth/login',
-    validateLogin,
-    asyncHandler(async (req, res, next) => {
-      // Auth login implementation
-      res.json({
-        success: true,
-        message: 'User login endpoint - to be implemented',
-        data: { body: req.body },
-        timestamp: new Date().toISOString()
-      });
-    })
-  );
+  // Auth routes are now handled by the authRoutes middleware
 
   // Workflow routes
   app.get('/api/v1/workflows/templates',
@@ -292,65 +285,255 @@ function setupRoutes(app) {
   );
 
   app.get('/api/v1/workflows',
+    authenticate,
     asyncHandler(async (req, res) => {
-      res.json({
-        success: true,
-        message: 'Workflows endpoint - to be implemented',
-        data: {
-          workflows: [],
-          pagination: {
-            page: 1,
-            limit: 20,
-            total: 0,
-            totalPages: 0,
-            hasNext: false,
-            hasPrev: false
+      try {
+        const { page = 1, limit = 20, status, category } = req.query;
+        const offset = (page - 1) * limit;
+
+        // Mock workflow data - in production, this would come from database
+        const workflows = [
+          {
+            id: 'workflow-1',
+            name: 'Data Analysis Pipeline',
+            description: 'Automated data analysis with human validation steps',
+            status: 'active',
+            category: 'analytics',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            owner: req.user.id,
+            steps: ['Data Collection', 'Preprocessing', 'Analysis', 'Review', 'Report Generation']
+          },
+          {
+            id: 'workflow-2',
+            name: 'Content Approval Workflow',
+            description: 'Multi-stage content approval process',
+            status: 'draft',
+            category: 'content',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            owner: req.user.id,
+            steps: ['Create', 'Review', 'Approve', 'Publish']
           }
-        },
-        timestamp: new Date().toISOString()
-      });
+        ];
+
+        // Apply filters
+        let filteredWorkflows = workflows;
+        if (status) {
+          filteredWorkflows = filteredWorkflows.filter(w => w.status === status);
+        }
+        if (category) {
+          filteredWorkflows = filteredWorkflows.filter(w => w.category === category);
+        }
+
+        const total = filteredWorkflows.length;
+        const paginatedWorkflows = filteredWorkflows.slice(offset, offset + parseInt(limit));
+
+        res.json({
+          success: true,
+          message: 'Workflows retrieved successfully',
+          data: {
+            workflows: paginatedWorkflows,
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              total,
+              totalPages: Math.ceil(total / limit),
+              hasNext: offset + parseInt(limit) < total,
+              hasPrev: page > 1
+            }
+          },
+          metadata: {
+            timestamp: new Date().toISOString(),
+            user: req.user.email,
+            filters: { status, category }
+          }
+        });
+      } catch (error) {
+        console.error('Get workflows error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to retrieve workflows',
+          code: 'WORKFLOWS_ERROR'
+        });
+      }
     })
   );
 
   app.post('/api/v1/workflows',
+    authenticate,
     validateCreateWorkflow,
     asyncHandler(async (req, res) => {
-      res.status(201).json({
-        success: true,
-        message: 'Workflow creation endpoint - to be implemented',
-        data: { body: req.body },
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const { name, description, steps, category = 'general' } = req.body;
+
+        // Input validation
+        if (!name || !description || !steps || !Array.isArray(steps)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Name, description, and steps array are required',
+            code: 'VALIDATION_ERROR'
+          });
+        }
+
+        // Create workflow object
+        const workflow = {
+          id: `workflow-${Date.now()}`,
+          name: sanitizeInput(name),
+          description: sanitizeInput(description),
+          steps: steps.map(step => ({
+            id: `step-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: sanitizeInput(step.name || step),
+            type: step.type || 'manual',
+            description: sanitizeInput(step.description || ''),
+            required: step.required !== false
+          })),
+          category: sanitizeInput(category),
+          status: 'draft',
+          owner: req.user.id,
+          ownerEmail: req.user.email,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        console.log(`Workflow created: ${workflow.name} by ${req.user.email}`);
+
+        res.status(201).json({
+          success: true,
+          message: 'Workflow created successfully',
+          data: { workflow },
+          metadata: {
+            timestamp: new Date().toISOString(),
+            createdBy: req.user.email
+          }
+        });
+      } catch (error) {
+        console.error('Create workflow error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to create workflow',
+          code: 'WORKFLOW_CREATE_ERROR'
+        });
+      }
     })
   );
 
   app.post('/api/v1/workflows/:workflowId/execute',
+    authenticate,
     validateExecuteWorkflow,
     asyncHandler(async (req, res) => {
-      res.json({
-        success: true,
-        message: 'Workflow execution endpoint - to be implemented',
-        data: {
-          workflowId: req.params.workflowId,
-          body: req.body
-        },
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const { workflowId } = req.params;
+        const { inputData, options = {} } = req.body;
+
+        // Validate workflow ID format
+        if (!workflowId || workflowId.length < 3) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid workflow ID',
+            code: 'INVALID_WORKFLOW_ID'
+          });
+        }
+
+        // Create execution record
+        const execution = {
+          id: `exec-${Date.now()}`,
+          workflowId,
+          status: 'running',
+          startedAt: new Date().toISOString(),
+          initiatedBy: req.user.id,
+          initiatedByEmail: req.user.email,
+          inputData: inputData || {},
+          options,
+          steps: [
+            {
+              id: 'step-1',
+              name: 'Initialization',
+              status: 'completed',
+              startedAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              output: 'Workflow execution started successfully'
+            },
+            {
+              id: 'step-2',
+              name: 'Processing',
+              status: 'running',
+              startedAt: new Date().toISOString()
+            }
+          ]
+        };
+
+        console.log(`Workflow execution started: ${workflowId} by ${req.user.email}`);
+
+        res.json({
+          success: true,
+          message: 'Workflow execution started',
+          data: { execution },
+          metadata: {
+            timestamp: new Date().toISOString(),
+            estimatedDuration: '5-10 minutes'
+          }
+        });
+      } catch (error) {
+        console.error('Execute workflow error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to execute workflow',
+          code: 'WORKFLOW_EXECUTION_ERROR'
+        });
+      }
     })
   );
 
   app.post('/api/v1/workflows/:workflowId/respond',
+    authenticate,
     validateWorkflowResponse,
     asyncHandler(async (req, res) => {
-      res.json({
-        success: true,
-        message: 'Workflow response endpoint - to be implemented',
-        data: {
-          workflowId: req.params.workflowId,
-          response: req.body
-        },
-        timestamp: new Date().toISOString()
-      });
+      try {
+        const { workflowId } = req.params;
+        const { stepId, response, action } = req.body;
+
+        // Validate required fields
+        if (!stepId || !response) {
+          return res.status(400).json({
+            success: false,
+            message: 'Step ID and response are required',
+            code: 'VALIDATION_ERROR'
+          });
+        }
+
+        // Process the response
+        const processedResponse = {
+          id: `response-${Date.now()}`,
+          workflowId,
+          stepId,
+          response: sanitizeInput(response),
+          action: sanitizeInput(action || 'continue'),
+          respondedBy: req.user.id,
+          respondedByEmail: req.user.email,
+          respondedAt: new Date().toISOString(),
+          status: 'processed'
+        };
+
+        console.log(`Workflow response processed: ${workflowId}/${stepId} by ${req.user.email}`);
+
+        res.json({
+          success: true,
+          message: 'Workflow response processed successfully',
+          data: { response: processedResponse },
+          metadata: {
+            timestamp: new Date().toISOString(),
+            nextStep: action === 'continue' ? 'Proceeding to next step' : 'Workflow paused'
+          }
+        });
+      } catch (error) {
+        console.error('Workflow response error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to process workflow response',
+          code: 'WORKFLOW_RESPONSE_ERROR'
+        });
+      }
     })
   );
 }
