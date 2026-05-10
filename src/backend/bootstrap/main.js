@@ -140,15 +140,72 @@ export async function bootstrap(envOverride) {
 
   /* -------- workflow domain events -> outbox + handlers -------- */
 
-  // The PgWorkflowRepository writes events transactionally; the in-memory
-  // workflow repository doesn't. Forward any unsaved events from the
-  // workflow event sink (created by tests/dev mode) into the shared outbox
-  // so the OutboxConsumer can fan them out and the human-interaction
-  // handler can react to `workflow.human_input_required`.
+  // The Pg* aggregate repositories enqueue events transactionally inside
+  // their `save()`. The in-memory repos can't do that, so when running
+  // without Postgres we wire each in-memory repo to push events directly
+  // through Notification's DeliverEvent use case. That fans out to the
+  // WebSocket broadcaster (and the in-process event publisher) so:
+  //   - the human-interaction handler still reacts to
+  //     `workflow.human_input_required`;
+  //   - WebSocket subscribers still receive `workflow.*` /
+  //     `human_response.*` envelopes end-to-end without depending on
+  //     the OutboxConsumer's polling cadence.
+  // Recursion guard: nothing inside DeliverEvent calls back into a
+  // repository save, so the sink cannot re-enter itself.
   function forwardWorkflowEvents() {
-    // Subscribe to the in-process publisher used by all use cases for dev mode.
-    // The repositories already enqueue to `outbox`; this is a defensive hook
-    // for any future event sources we add.
+    if (pool) return; // Pg adapters already enqueue; nothing to do.
+    const deliver = notification.useCases.deliverEvent;
+    const onWorkflowHumanInputRequired =
+      humanInteraction.eventHandlers?.onWorkflowHumanInputRequired ?? null;
+    const onWorkflowCancelled =
+      humanInteraction.eventHandlers?.onWorkflowCancelled ?? null;
+    const sink = {
+      async append(events) {
+        if (!events || events.length === 0) return;
+        for (const ev of events) {
+          const json = typeof ev?.toJSON === 'function' ? ev.toJSON() : ev;
+          // Shape the envelope the OutboxConsumer would build, so the
+          // DeliverEvent contract (event.eventId/type/payload) matches.
+          const event = {
+            eventId: json.eventId ?? null,
+            type: json.eventType ?? json.type ?? null,
+            eventType: json.eventType ?? json.type ?? null,
+            version: json.eventVersion ?? json.version ?? 1,
+            aggregateId: json.aggregateId ?? null,
+            aggregateType: json.aggregateType ?? null,
+            payload: json.payload ?? {},
+            occurredAt: json.occurredAt ?? new Date().toISOString(),
+            correlationId: json.correlationId ?? null,
+          };
+          // 1. Cross-context handler: human-interaction projection.
+          if (event.type === 'workflow_orchestration.workflow.human_input_required'
+              && onWorkflowHumanInputRequired) {
+            try { await onWorkflowHumanInputRequired.handle(event); }
+            catch (err) { logger.error(`onWorkflowHumanInputRequired failed: ${err?.message ?? err}`); }
+          }
+          if (event.type === 'workflow_orchestration.workflow.cancelled'
+              && onWorkflowCancelled?.handle) {
+            try { await onWorkflowCancelled.handle(event); }
+            catch (err) { logger.error(`onWorkflowCancelled failed: ${err?.message ?? err}`); }
+          }
+          // 2. Notification fan-out: WebSocket broadcaster + transports.
+          try { await deliver.execute(event); }
+          catch (err) { logger.error(`deliverEvent failed: ${err?.message ?? err}`); }
+        }
+      },
+    };
+    if (typeof workflow.repositories.workflows.setEventSink === 'function') {
+      workflow.repositories.workflows.setEventSink(sink);
+    }
+    if (typeof humanInteraction.repositories.responseRepository.setEventSink === 'function') {
+      humanInteraction.repositories.responseRepository.setEventSink(sink);
+    }
+    // Templates emit events via the cached decorator's delegate; the
+    // delegate is the in-memory repo when there's no pool.
+    const tmplDelegate = workflow.repositories.templates?._delegate ?? workflow.repositories.templates;
+    if (tmplDelegate && typeof tmplDelegate.setEventSink === 'function') {
+      tmplDelegate.setEventSink(sink);
+    }
   }
   forwardWorkflowEvents();
 
@@ -167,6 +224,9 @@ export async function bootstrap(envOverride) {
 
   // Identity & Access (public + protected).
   app.use('/api/v1/auth', identity.router);
+  // Self-service API key management (auth required) and admin user routes.
+  app.use('/api/v1/auth/api-keys', identity.apiKeyRouter);
+  app.use('/api/v1/admin', identity.adminRouter);
 
   // Protected routes — every following route requires an authenticated principal.
   // Express middlewares are mounted by router, so protect at mount time.
@@ -181,34 +241,57 @@ export async function bootstrap(envOverride) {
   // Legacy alias for the simple-server `/api/workflows/*` shape.
   app.use('/api/workflows', identity.authMiddleware, workflow.legacyRouter);
 
-  // Liveness + dependency-status probe.
+  // Liveness + dependency-status probe (ADR 0021 — Observability).
   app.get('/health', async (_req, res) => {
     let dbStatus = pool ? 'unknown' : 'disabled';
+    let dbConnected = false;
     if (pool) {
       try {
         await pool.query('SELECT 1');
         dbStatus = 'ok';
+        dbConnected = true;
       } catch (err) {
         dbStatus = `error:${err.code ?? err.message ?? 'unknown'}`;
       }
     }
     let redisStatus = redis ? 'unknown' : 'disabled';
+    let redisConnected = false;
     if (redis) {
       try {
         const pong = await redis.ping();
         redisStatus = pong === 'PONG' ? 'ok' : 'unexpected';
+        redisConnected = pong === 'PONG';
       } catch (err) {
         redisStatus = `error:${err.message ?? 'unknown'}`;
       }
     }
+
+    // Outbox lag: oldest pending event age + total pending count. We
+    // surface -1 on lookup failure so monitoring can alert distinctly
+    // from "0 lag, all caught up".
+    let lagMs = 0;
+    let pendingCount = 0;
+    try {
+      lagMs = await outbox.getOldestPendingAge(new Date());
+    } catch (err) {
+      logger.warn(`outbox.getOldestPendingAge failed: ${err?.message ?? err}`);
+      lagMs = -1;
+    }
+    try {
+      pendingCount = await outbox.getPendingCount();
+    } catch (err) {
+      logger.warn(`outbox.getPendingCount failed: ${err?.message ?? err}`);
+      pendingCount = -1;
+    }
+
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       message: 'GUI-LOP v1 (DDD) is running',
       subsystems: {
-        db: dbStatus,
-        redis: redisStatus,
-        outbox_lag: 'unknown',
+        db: { status: dbStatus, connected: dbConnected },
+        redis: { status: redisStatus, connected: redisConnected },
+        outbox: { lag_ms: lagMs, pending_count: pendingCount },
       },
     });
   });

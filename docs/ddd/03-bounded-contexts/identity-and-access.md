@@ -83,8 +83,34 @@ are not part of v1.
 
 ### `ApiKey`
 
-For service-to-service calls. Key value is hashed; metadata only is
-stored.
+For service-to-service and CLI/CI use. The plaintext key is generated
+once (`glop_<43-base64url>`), returned to the caller of `mint()`, and
+*never* persisted; only the SHA-256 hex digest is stored. Holds:
+
+```
+ApiKey
+├── identity: ApiKeyId (branded UUID)
+├── user_id: UserId
+├── name: string
+├── key_hash: sha256 hex
+├── permissions: Permission[]
+├── created_at, expires_at?, revoked_at?, last_used_at?
+├── is_active: boolean
+└── pending_events
+```
+
+Behaviour: `mint({user, name, permissions, expiresAt?, idGen, clock})`
+(static, returns `{aggregate, plaintextKey}`), `revoke(now)`,
+`recordUsage(now)`, `isUsable(now)`.
+
+Invariants:
+
+- Plaintext is returned exactly once.
+- Revoked keys can never authenticate (irreversible).
+- Expired keys silently fail authentication.
+- Only the SHA-256 digest of the prefixed plaintext is stored.
+
+Events: `api_key.minted`, `api_key.revoked`, `api_key.used`.
 
 ## Domain Services
 
@@ -106,11 +132,19 @@ stored.
 - `ChangePassword({ user_id, old, new })`
 - `GrantPermission({ user_id, permission, scope? })`
 - `RevokePermission({ user_id, permission, scope? })`
+- `MintApiKey({ actor_user_id, actor_role, user_id, name, permissions?, expires_at? })`
+  → `{ id, plaintextKey, ... }` (plaintext returned once)
+- `RevokeApiKey({ actor_user_id, actor_role, api_key_id })`
+- `AuthenticateWithApiKey({ raw_key })` → principal (used by middleware)
+- `DeactivateUser({ actor_role, user_id })` (admin only)
+- `ReactivateUser({ actor_role, user_id })` (admin only)
 
 ### Queries
 
 - `GetUserProfile(user_id)`
 - `ListUserSessions(user_id)`
+- `ListApiKeysForUser({ actor_user_id, actor_role, user_id })`
+- `ListUsers({ limit?, offset? })` (admin only via the router)
 
 ## Repositories
 
@@ -130,13 +164,46 @@ stored.
 | POST   | `/password`      | `ChangePassword`    |
 | GET    | `/me`            | `GetUserProfile`    |
 
-Admin-only endpoints under `/api/v1/admin/users`, `/admin/roles`.
+### REST — API keys (under `/api/v1/auth/api-keys`)
+
+| Method | Path           | Use Case               |
+| ------ | -------------- | ---------------------- |
+| POST   | `/`            | `MintApiKey` (returns plaintext exactly once) |
+| GET    | `/`            | `ListApiKeysForUser`   |
+| DELETE | `/:id`         | `RevokeApiKey`         |
+
+The principal may operate on their own keys; admins may pass `?userId=`
+or a body `userId` to manage other users' keys.
+
+### REST — Admin (under `/api/v1/admin`)
+
+All endpoints require `principal.role === 'admin'` (enforced by
+`adminGuard`). 401 on missing token, 403 on non-admin (envelope:
+`{ success: false, code: 'forbidden', message: 'admin only' }`).
+
+| Method | Path                                              | Use Case                |
+| ------ | ------------------------------------------------- | ----------------------- |
+| GET    | `/users`                                          | `ListUsers` (paginated) |
+| GET    | `/users/:id`                                      | `GetUserProfile`        |
+| POST   | `/users/:id/permissions`                          | `GrantPermission`       |
+| DELETE | `/users/:id/permissions/:permission?scope=`       | `RevokePermission`      |
+| POST   | `/users/:id/deactivate`                           | `DeactivateUser`        |
+| POST   | `/users/:id/reactivate`                           | `ReactivateUser`        |
 
 ### Authentication Middleware
 
-A single Express middleware verifies the `Authorization: Bearer`
-token using `TokenVerifier` and attaches `Principal` to the request.
-WebSocket upgrade goes through the same path.
+A single Express middleware accepts `Authorization: Bearer <token>`.
+Two token shapes are supported, distinguished by prefix:
+
+- A token starting with `glop_` is treated as an API key and verified
+  via `AuthenticateWithApiKey`. The principal carries
+  `via: 'api-key'` and `apiKeyId` for audit.
+- Anything else is verified as a JWT via `TokenIssuer.verifyAccess`,
+  filtered against the blacklist. Principal carries `via: 'jwt'`.
+
+In both cases the middleware populates `req.principal`, `req.user`, and
+`req.actor` from the same source. WebSocket upgrade goes through the
+same path.
 
 ## Outbound Dependencies
 
@@ -150,10 +217,14 @@ WebSocket upgrade goes through the same path.
 - `user.authenticated`, `user.authentication_failed`
 - `session.created`, `session.refreshed`, `session.revoked`
 - `role.granted`, `permission.granted`, `permission.revoked`
+- `api_key.minted`, `api_key.revoked`, `api_key.used`
 
 ## Persistence
 
-- `users`, `roles`, `user_sessions`, `api_keys`.
+- `users`, `roles`, `user_sessions`, `api_keys`,
+  `user_permissions` (migration `009_user_permissions.sql` — durable
+  store for per-user scoped grants; the in-memory grants repository is
+  used in dev/CI).
 
 ## Security Notes
 

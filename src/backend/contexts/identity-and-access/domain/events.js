@@ -11,6 +11,7 @@ import { DomainEvent } from '../../../shared-kernel/domain/domain-event.js';
 
 const AGG_USER = 'User';
 const AGG_SESSION = 'Session';
+const AGG_API_KEY = 'ApiKey';
 
 function envelope({
   eventType,
@@ -228,6 +229,64 @@ export class PermissionRevoked extends DomainEvent {
       aggregateId: userId,
       aggregateType: AGG_USER,
       payload: { userId, permission, scope },
+      occurredAt,
+      correlationId,
+      actor,
+    }));
+  }
+}
+
+export class ApiKeyMinted extends DomainEvent {
+  constructor({
+    apiKeyId,
+    userId,
+    name,
+    permissions,
+    expiresAt,
+    occurredAt,
+    correlationId,
+    actor,
+  }) {
+    super(envelope({
+      eventType: 'api_key.minted',
+      aggregateId: apiKeyId,
+      aggregateType: AGG_API_KEY,
+      payload: {
+        apiKeyId,
+        userId,
+        name,
+        permissions: permissions ?? [],
+        expiresAt:
+          expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt ?? null,
+      },
+      occurredAt,
+      correlationId,
+      actor,
+    }));
+  }
+}
+
+export class ApiKeyRevoked extends DomainEvent {
+  constructor({ apiKeyId, userId, occurredAt, correlationId, actor }) {
+    super(envelope({
+      eventType: 'api_key.revoked',
+      aggregateId: apiKeyId,
+      aggregateType: AGG_API_KEY,
+      payload: { apiKeyId, userId },
+      occurredAt,
+      correlationId,
+      actor,
+    }));
+  }
+}
+
+export class ApiKeyUsed extends DomainEvent {
+  constructor({ apiKeyId, userId, occurredAt, correlationId, actor }) {
+    super(envelope({
+      eventType: 'api_key.used',
+      aggregateId: apiKeyId,
+      aggregateType: AGG_API_KEY,
+      payload: { apiKeyId, userId },
       occurredAt,
       correlationId,
       actor,

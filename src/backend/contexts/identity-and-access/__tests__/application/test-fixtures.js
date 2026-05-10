@@ -1,6 +1,7 @@
 import { InMemoryUserRepository } from '../../infrastructure/persistence/inmemory-user-repository.js';
 import { InMemorySessionRepository } from '../../infrastructure/persistence/inmemory-session-repository.js';
 import { InMemoryGrantsRepository } from '../../infrastructure/persistence/inmemory-grants-repository.js';
+import { InMemoryApiKeyRepository } from '../../infrastructure/persistence/inmemory-api-key-repository.js';
 import { InMemoryOutbox } from '../../application/ports/outbox.js';
 import { InMemoryTokenBlacklist } from '../../infrastructure/cache/inmemory-token-blacklist.js';
 import { FakePasswordHasher } from '../../infrastructure/crypto/fake-password-hasher.js';
@@ -29,6 +30,7 @@ export function makeFixtures(overrides = {}) {
     userRepository: new InMemoryUserRepository(),
     sessionRepository: new InMemorySessionRepository(),
     grantsRepository: new InMemoryGrantsRepository(),
+    apiKeyRepository: new InMemoryApiKeyRepository(),
     outbox: new InMemoryOutbox(),
     passwordHasher: new FakePasswordHasher(),
     tokenIssuer: new JwtTokenIssuer({ secret: 'test-secret' }),
@@ -36,5 +38,26 @@ export function makeFixtures(overrides = {}) {
     idGenerator: makeIdGen(),
     clock: makeFixedClock(),
     ...overrides,
+  };
+}
+
+/**
+ * Deterministic UUID-shaped id generator for tests that exercise the
+ * ApiKey aggregate (which validates ids are real UUIDs). The hex layout
+ * is fixed so repeated test runs produce the same identifiers.
+ */
+let uuidCounter = 0;
+export function makeUuidIdGen() {
+  uuidCounter = 0;
+  return {
+    newId: () => {
+      uuidCounter += 1;
+      const hex = uuidCounter.toString(16).padStart(12, '0');
+      return `00000000-0000-4000-8000-${hex}`;
+    },
+    randomBytes: (n) =>
+      Buffer.from(
+        Array.from({ length: n }, (_, i) => (uuidCounter * 31 + i) & 0xff),
+      ),
   };
 }
