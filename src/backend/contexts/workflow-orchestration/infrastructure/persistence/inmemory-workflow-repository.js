@@ -1,11 +1,32 @@
 import { WorkflowConflictError } from '../../domain/errors.js';
 import { Workflow } from '../../domain/workflow/workflow.js';
 
+/**
+ * In-memory `WorkflowRepository` for tests and dev-mode bootstrap.
+ *
+ * In production, the Pg adapter enqueues events into the outbox inside
+ * the same transaction as the aggregate write. The in-memory repo can't
+ * do that, so when a `setEventSink(sink)` has been wired by the
+ * composition root we forward `pullEvents()` to that sink after every
+ * successful save. This keeps the OutboxConsumer / WebSocket fan-out
+ * working end-to-end without Postgres.
+ *
+ * The sink is invoked synchronously inside `save()` but is a fire-and-
+ * forget: we await the call but never re-emit its events back into the
+ * sink, so there is no recursion risk.
+ */
 export class InMemoryWorkflowRepository {
-  constructor() {
+  constructor({ eventSink } = {}) {
     /** @type {Map<string, object>} */
     this._byId = new Map();
     this.publishedEvents = [];
+    /** @type {{append: (events: any[]) => Promise<void>}|null} */
+    this._eventSink = eventSink ?? null;
+  }
+
+  /** Wire (or replace) the event sink. */
+  setEventSink(sink) {
+    this._eventSink = sink ?? null;
   }
 
   async findById(id) {
@@ -25,6 +46,9 @@ export class InMemoryWorkflowRepository {
     this._byId.set(workflow.id, snap);
     const events = workflow.pullEvents();
     this.publishedEvents.push(...events);
+    if (this._eventSink && events.length) {
+      await this._eventSink.append(events);
+    }
   }
 
   async status(id) {

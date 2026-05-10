@@ -115,4 +115,49 @@ describe('createPgOutboxRepository', () => {
     const repo = createPgOutboxRepository(makePool());
     await expect(repo.markFailed('', 'why')).rejects.toThrow(TypeError);
   });
+
+  test('getOldestPendingAge returns 0 when MIN(occurred_at) is NULL', async () => {
+    const pool = {
+      query: jest.fn(async () => ({ rows: [{ age_ms: null }] })),
+      connect: jest.fn(),
+    };
+    const repo = createPgOutboxRepository(pool);
+    const age = await repo.getOldestPendingAge(new Date('2026-05-10T12:00:00Z'));
+    expect(age).toBe(0);
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/EXTRACT\(EPOCH/);
+    expect(sql).toMatch(/status = 'pending'/);
+    expect(params).toEqual(['2026-05-10T12:00:00.000Z']);
+  });
+
+  test('getOldestPendingAge coerces and clamps the age to a non-negative number', async () => {
+    const pool = {
+      query: jest.fn(async () => ({ rows: [{ age_ms: '1500.5' }] })),
+      connect: jest.fn(),
+    };
+    const repo = createPgOutboxRepository(pool);
+    const age = await repo.getOldestPendingAge(new Date());
+    expect(age).toBe(1500.5);
+  });
+
+  test('getPendingCount returns the COUNT(*) coerced to a number', async () => {
+    const pool = {
+      query: jest.fn(async () => ({ rows: [{ pending: '7' }] })),
+      connect: jest.fn(),
+    };
+    const repo = createPgOutboxRepository(pool);
+    const n = await repo.getPendingCount();
+    expect(n).toBe(7);
+    expect(pool.query.mock.calls[0][0]).toMatch(/COUNT\(\*\)/);
+  });
+
+  test('getPendingCount returns 0 when no row is returned', async () => {
+    const pool = {
+      query: jest.fn(async () => ({ rows: [] })),
+      connect: jest.fn(),
+    };
+    const repo = createPgOutboxRepository(pool);
+    const n = await repo.getPendingCount();
+    expect(n).toBe(0);
+  });
 });

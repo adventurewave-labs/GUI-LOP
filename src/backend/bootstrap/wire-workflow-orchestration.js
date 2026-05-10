@@ -90,13 +90,14 @@ export async function wireWorkflowOrchestration({
   identityAuthorisationService,
   generateUIForStepCommand,
   logger,
+  eventSink,
 }) {
   const workflows = pool
     ? new PgWorkflowRepository({ pool, outbox })
-    : new InMemoryWorkflowRepository();
+    : new InMemoryWorkflowRepository({ eventSink });
   const templatesDelegate = pool
-    ? new PgWorkflowTemplateRepository({ pool, outbox })
-    : new InMemoryWorkflowTemplateRepository();
+    ? new PgWorkflowTemplateRepository({ pool, outbox, logger })
+    : new InMemoryWorkflowTemplateRepository({ eventSink });
   // Hot read decorator. Workflow templates are read on every CreateWorkflow
   // and change at human tempo, so a 60s LRU+TTL cache strips a Postgres
   // round-trip off the workflow.create hot path with negligible staleness

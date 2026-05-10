@@ -150,6 +150,15 @@ within tolerance.
 - Remove the legacy aliases on `/api/workflows`.
 - Set the lint boundary rules to *strict* across the whole repo
   (no allowlist for legacy paths).
+- **Schema follow-up:** apply
+  `database/migrations/010_workflow_templates_version.sql` to promote
+  the `workflow_templates` aggregate version from
+  `default_config.__version` (JSONB back-channel) to a real `version`
+  INT column with a `(template_key, version)` unique index. The Pg
+  template repository keeps a one-release fallback to the JSON path
+  for staged rollouts and emits a one-time warning when it lands on a
+  schema that hasn't received the migration; remove that fallback in
+  the next minor.
 
 ## Cross-cutting Activities (Throughout)
 

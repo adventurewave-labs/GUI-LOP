@@ -34,9 +34,18 @@ describe('bootstrap composition root (in-memory)', () => {
     expect(res.body.message).toEqual(expect.any(String));
     expect(res.body.subsystems).toEqual(
       expect.objectContaining({
-        db: expect.any(String),
-        redis: expect.any(String),
-        outbox_lag: expect.any(String),
+        db: expect.objectContaining({
+          status: expect.any(String),
+          connected: expect.any(Boolean),
+        }),
+        redis: expect.objectContaining({
+          status: expect.any(String),
+          connected: expect.any(Boolean),
+        }),
+        outbox: expect.objectContaining({
+          lag_ms: expect.any(Number),
+          pending_count: expect.any(Number),
+        }),
       }),
     );
   });

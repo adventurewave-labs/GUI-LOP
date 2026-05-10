@@ -147,6 +147,34 @@ export class InMemoryOutbox {
     return out;
   }
 
+  /* ---------------- observability surface ---------------- */
+
+  /**
+   * Age of the oldest pending event in ms relative to `now`. Returns 0
+   * when no pending records exist. Mirrors the Postgres adapter so the
+   * `/health` probe can surface dispatch lag uniformly.
+   * @param {Date} [now]
+   */
+  async getOldestPendingAge(now) {
+    const ref = now instanceof Date ? now.getTime() : Date.now();
+    let oldest = null;
+    for (const r of this._records) {
+      if (r.status !== 'pending') continue;
+      const ts = Date.parse(r.occurredAt);
+      if (Number.isFinite(ts) && (oldest === null || ts < oldest)) oldest = ts;
+    }
+    if (oldest === null) return 0;
+    const age = ref - oldest;
+    return age > 0 ? age : 0;
+  }
+
+  /** Number of pending records. */
+  async getPendingCount() {
+    let n = 0;
+    for (const r of this._records) if (r.status === 'pending') n += 1;
+    return n;
+  }
+
   /** Test helper: return a copy of every record. */
   all() {
     return this._records.map((r) => ({ ...r }));

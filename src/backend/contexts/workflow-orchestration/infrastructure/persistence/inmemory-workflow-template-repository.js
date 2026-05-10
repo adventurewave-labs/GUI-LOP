@@ -1,10 +1,22 @@
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 
+/**
+ * In-memory `WorkflowTemplateRepository` for tests and dev-mode
+ * bootstrap. Optional `eventSink` lets the bootstrap forward template
+ * events (publish/deprecate) into the shared outbox so subscribers see
+ * them end-to-end without Postgres.
+ */
 export class InMemoryWorkflowTemplateRepository {
-  constructor() {
+  constructor({ eventSink } = {}) {
     /** @type {Map<string, Map<number, object>>} */
     this._byKey = new Map();
     this.publishedEvents = [];
+    this._eventSink = eventSink ?? null;
+  }
+
+  /** Wire (or replace) the event sink. */
+  setEventSink(sink) {
+    this._eventSink = sink ?? null;
   }
 
   async findCurrent(key) {
@@ -30,6 +42,9 @@ export class InMemoryWorkflowTemplateRepository {
     this._byKey.get(key).set(template.version.value, snap);
     const events = template.pullEvents();
     this.publishedEvents.push(...events);
+    if (this._eventSink && events.length) {
+      await this._eventSink.append(events);
+    }
   }
 
   async list(filter = {}) {
