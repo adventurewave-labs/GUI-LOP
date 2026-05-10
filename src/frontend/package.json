@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "test": "react-scripts test --watchAll=false",
+    "test:watch": "react-scripts test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -18,6 +21,14 @@
     "react-router-dom": "^7.9.3",
     "react-scripts": "5.0.1",
     "yup": "^1.7.1"
+  },
+  "jest": {
+    "testMatch": [
+      "<rootDir>/src/services/**/__tests__/**/*.test.{js,jsx}",
+      "<rootDir>/src/services/**/*.test.{js,jsx}",
+      "<rootDir>/src/features/**/__tests__/**/*.test.{js,jsx}",
+      "<rootDir>/src/features/**/*.test.{js,jsx}"
+    ]
   },
   "browserslist": {
     "production": [
