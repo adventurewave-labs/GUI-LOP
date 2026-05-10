@@ -37,6 +37,7 @@
     "test:load:full": "node tests/load/automated-load-test-suite.js",
     "build": "tsc",
     "lint": "echo 'Add linting here'",
+    "lint:arch": "depcruise --config .dependency-cruiser.cjs src/backend",
     "typecheck": "tsc --noEmit",
     "playwright": "playwright test",
     "db:migrate": "node database/migrations/migrate.js migrate",
