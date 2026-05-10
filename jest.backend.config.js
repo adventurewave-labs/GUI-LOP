@@ -14,7 +14,8 @@ export default {
   testMatch: [
     '<rootDir>/tests/backend/server.test.js',
     '<rootDir>/tests/backend/simple-server.test.js',
-    '<rootDir>/tests/integration/full-workflow.test.js'
+    '<rootDir>/tests/integration/full-workflow.test.js',
+    '<rootDir>/src/backend/contexts/**/__tests__/**/*.test.js'
   ],
 
   // Coverage configuration
