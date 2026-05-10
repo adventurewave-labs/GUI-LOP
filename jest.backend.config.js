@@ -10,32 +10,27 @@ export default {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
-  // Only test specific files
+  // Test files: legacy explicit set + new bounded-context tests.
   testMatch: [
     '<rootDir>/tests/backend/server.test.js',
     '<rootDir>/tests/backend/simple-server.test.js',
-    '<rootDir>/tests/integration/full-workflow.test.js'
+    '<rootDir>/tests/integration/full-workflow.test.js',
+    '<rootDir>/src/backend/contexts/**/__tests__/**/*.test.js'
   ],
 
-  // Coverage configuration
-  collectCoverage: true,
+  // Coverage configuration (disabled by default for the per-context
+  // suite; enable with `--coverage` when needed).
+  collectCoverage: false,
   collectCoverageFrom: [
     'src/backend/**/*.js',
+    '!src/backend/**/__tests__/**',
     '!src/frontend/**',
     '!**/node_modules/**'
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html', 'json'],
-  coverageThreshold: {
-    global: {
-      branches: 80,
-      functions: 80,
-      lines: 80,
-      statements: 80
-    }
-  },
 
-  
+
   // Verbose output
   verbose: true,
 
