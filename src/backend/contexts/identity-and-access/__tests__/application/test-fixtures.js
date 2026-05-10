@@ -1,0 +1,40 @@
+import { InMemoryUserRepository } from '../../infrastructure/persistence/inmemory-user-repository.js';
+import { InMemorySessionRepository } from '../../infrastructure/persistence/inmemory-session-repository.js';
+import { InMemoryGrantsRepository } from '../../infrastructure/persistence/inmemory-grants-repository.js';
+import { InMemoryOutbox } from '../../application/ports/outbox.js';
+import { InMemoryTokenBlacklist } from '../../infrastructure/cache/inmemory-token-blacklist.js';
+import { FakePasswordHasher } from '../../infrastructure/crypto/fake-password-hasher.js';
+import { JwtTokenIssuer } from '../../infrastructure/tokens/jwt-token-issuer.js';
+
+let counter = 0;
+export function makeIdGen() {
+  counter = 0;
+  return {
+    newId: () => `id-${++counter}`,
+    randomBytes: (n) => Buffer.from(Array.from({ length: n }, (_, i) => (counter * 31 + i) & 0xff)),
+  };
+}
+
+export function makeFixedClock(start = new Date('2026-05-10T00:00:00Z')) {
+  let t = new Date(start);
+  return {
+    now: () => new Date(t),
+    advance: (ms) => { t = new Date(t.getTime() + ms); },
+    set: (d) => { t = new Date(d); },
+  };
+}
+
+export function makeFixtures(overrides = {}) {
+  return {
+    userRepository: new InMemoryUserRepository(),
+    sessionRepository: new InMemorySessionRepository(),
+    grantsRepository: new InMemoryGrantsRepository(),
+    outbox: new InMemoryOutbox(),
+    passwordHasher: new FakePasswordHasher(),
+    tokenIssuer: new JwtTokenIssuer({ secret: 'test-secret' }),
+    tokenBlacklist: new InMemoryTokenBlacklist(),
+    idGenerator: makeIdGen(),
+    clock: makeFixedClock(),
+    ...overrides,
+  };
+}
