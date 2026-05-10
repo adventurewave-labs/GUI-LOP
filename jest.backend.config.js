@@ -20,7 +20,7 @@ export default {
   ],
 
   // Coverage configuration
-  collectCoverage: true,
+  collectCoverage: false,
   collectCoverageFrom: [
     'src/backend/**/*.js',
     '!src/backend/**/__tests__/**',
