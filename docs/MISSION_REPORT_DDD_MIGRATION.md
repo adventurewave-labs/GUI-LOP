@@ -1,8 +1,9 @@
 # DDD Migration Mission Report
 
 **Branch:** `claude/create-adr-ddd-docs-bZodK`
-**Range:** docs commit `5cecab8` → final commit `e816f43`
-**Date completed:** 2026-05-10
+**Range (iteration 1):** docs commit `5cecab8` → `e816f43`
+**Range (iteration 2):** `08dcc5b` → `e23be41`
+**Date:** 2026-05-10
 
 ## Headline
 
@@ -89,27 +90,58 @@ preserved in `baseline-pre-optimization.json`.
 - All contexts include both Postgres adapters and in-memory
   adapters; both pass the same use-case suites.
 
-### Known follow-ups (outside the loop's scope)
+### Iteration 2 (2026-05-10, post-mission-report follow-ups)
 
-These are clearly bounded next steps, captured for the backlog:
+In a second `/loop` pass, four parallel agents knocked down most of
+the backlog from iteration 1. Pushed commits:
 
-- **Frontend cut-over.** The React SPA still calls the legacy
-  `/api/workflows/*` endpoints. The legacy alias keeps it working,
-  but a v1 cut-over and the new WebSocket envelope handling are TODO.
+| Commit | Item | Tests added |
+| ------ | ---- | ----------- |
+| `835f06d` | Production Dockerfile + docker-compose + Helm chart + 4 GitHub Actions workflows + production deployment guide. `helm lint` clean; `helm template` renders 9 resources. | n/a |
+| `e9a9a83` | Identity follow-ups: `ApiKey` aggregate (mint/revoke/recordUsage/isUsable, plaintext-once, SHA-256 stored), API-key auth path in middleware (`glop_…` prefix), `/api/v1/auth/api-keys` router, `/api/v1/admin/{users,…/permissions,…/deactivate,…/reactivate}` admin router, `adminGuard`, migrations 008 (api_keys indexes) + 009 (`user_permissions` table). | +55 (78→133 in IAM) |
+| `1ed7dcd` | Frontend cut-over: centralised v1 API client with auto-refresh-on-401 + idempotency keys, versioned WebSocket client with reconnect backoff, feature folders per bounded context, RefreshGuard + protected routes, Playwright e2e coordinated via `webServer`. | +14 unit + 3 e2e |
+| `e23be41` | Workflow + observability: real `version` column on `workflow_templates` (migration 010 with one-release JSONB-fallback), `OutboxRepository` extended with `getOldestPendingAge()` + `getPendingCount()`, `/health` now reports `subsystems.{db,redis,outbox.{lag_ms,pending_count}}`, in-memory `forwardWorkflowEvents()` so dev mode fans events through the same DeliverEvent pipeline as prod. | +22 |
+
+**Iteration 2 totals:**
+- 500/500 tests passing across 66 suites (was 426/57).
+- 25/25 SLO benchmarks still PASS — `auth.login` p95 at 67–72 ms (well under 100 ms), workflow ops 1–2 ms p95.
+- Working tree clean; all four agent commits scoped to their non-overlapping path budgets.
+
+### Remaining backlog (iteration 3 candidates)
+
+Two items remain unaddressed:
+
 - **Real Postgres / Redis integration tests** under testcontainers.
   Currently only unit + in-memory integration coverage. Bench can
-  also be re-run against Postgres.
-- **API key aggregate** in Identity & Access (intentionally deferred
-  by Phase 1 agent).
-- **Admin routes** for grant/revoke permission and projection
-  rebuild are wired as use cases but not yet exposed via routers.
-- **Workflow templates `version` column** — see above.
-- **Outbox lag metric** in `/health` is reported as `'unknown'`;
-  needs a `MIN(occurred_at) WHERE status='pending'` query for the
-  Pg adapter.
-- **Forwarder for in-memory mode**: in dev, the in-memory workflow
-  repo does not enqueue events through the outbox. Reserved
-  `forwardWorkflowEvents()` hook in bootstrap.
+  also be re-run against Postgres. Deferred from iteration 2 because
+  it touches every context (high collision risk with parallel work).
+- **Real AI provider ACL** (ADR 0023): port and stub are in place,
+  no concrete vendor adapter yet. Lowest-priority item; the
+  `StubUIGenerationService` works for everything except live
+  generation.
+
+A small follow-up flagged by the workflow agent for iteration 3:
+
+- **`AdvanceWorkflow` doesn't yet apply the human response.** Dev-
+  mode workflows paused on a human step never resume to `completed`
+  because `AdvanceWorkflowUseCase.execute(...)` ignores the
+  `stepId`/`response` arguments the in-process `WorkflowAdvancer`
+  passes. Should call `workflow.applyHumanResponse(stepId, response, now)`
+  before re-running the engine. Tracked in
+  `docs/ddd/03-bounded-contexts/workflow-orchestration.md`'s open
+  questions.
+
+### Original known follow-ups (iteration 1, mostly resolved)
+
+The following items from the iteration-1 backlog are now done:
+
+- ~~**Frontend cut-over.**~~ Done (`1ed7dcd`).
+- ~~**API key aggregate** in Identity & Access.~~ Done (`e9a9a83`).
+- ~~**Admin routes** for grant/revoke permission.~~ Done (`e9a9a83`).
+- ~~**Workflow templates `version` column.**~~ Done (`e23be41`).
+- ~~**Outbox lag metric** in `/health`.~~ Done (`e23be41`).
+- ~~**Forwarder for in-memory mode.**~~ Done (`e23be41`).
+- ~~**Production Helm/K8s manifests.**~~ Done (`835f06d`).
 - **Real AI provider ACL** (ADR 0023): port and stub are in place,
   no concrete vendor adapter yet.
 - **Production Helm/K8s manifests** (ADR 0020): infrastructure
@@ -133,6 +165,17 @@ npm run bench:domain
 node src/backend/bootstrap/index.js
 # or with nodemon
 npm run dev:v1
+
+# Production-style local stack (added in iteration 2)
+docker-compose up        # Postgres + Redis + app, migrations auto-run
+
+# Helm (production deploy)
+helm lint infrastructure/helm/gui-lop
+helm install gui-lop infrastructure/helm/gui-lop -f values.prod.yaml
+
+# Frontend (added in iteration 2)
+cd src/frontend && npm test            # unit (no backend)
+cd src/frontend && npm run test:e2e    # Playwright (boots backend)
 ```
 
 ## Commit timeline (selected)
