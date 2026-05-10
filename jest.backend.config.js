@@ -16,7 +16,9 @@ export default {
     '<rootDir>/tests/backend/simple-server.test.js',
     '<rootDir>/tests/integration/full-workflow.test.js',
     // Per-context unit tests live next to the code (DDD layout).
-    '<rootDir>/src/backend/**/__tests__/**/*.test.js'
+    '<rootDir>/src/backend/**/__tests__/**/*.test.js',
+    // Phase 4-6 placed test fixtures under tests/backend/contexts.
+    '<rootDir>/tests/backend/contexts/**/*.test.js'
   ],
 
   // Coverage configuration
