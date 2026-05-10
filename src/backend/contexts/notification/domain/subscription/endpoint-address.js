@@ -5,8 +5,7 @@
  * - email:     RFC-5322 lite check
  * - webhook:   http(s) URL
  */
-
-import { ValidationError } from '../../../../shared/kernel/errors.js';
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import { CHANNELS } from './channel.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

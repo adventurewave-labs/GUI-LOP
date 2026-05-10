@@ -1,9 +1,7 @@
 /**
  * Envelope — VO that wraps a domain event for transport over a channel.
  */
-
-import { ValidationError } from '../../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export class Envelope {
   constructor({ type, version = 1, payload = {}, occurredAt }) {
     if (!type || typeof type !== 'string') {

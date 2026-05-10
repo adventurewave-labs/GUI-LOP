@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export const WorkflowStatus = Object.freeze({
   CREATED: 'created',
   RUNNING: 'running',

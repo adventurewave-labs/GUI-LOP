@@ -2,8 +2,7 @@
  * RetryDeadLetterCommand — re-feeds a stored dead-letter envelope into the
  * delivery pipeline. On success, removes it from the DLQ.
  */
-
-import { Result } from '../../../../shared/kernel/result.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { DeadLetterNotFound } from '../../domain/errors.js';
 
 export class RetryDeadLetterCommand {
@@ -29,7 +28,7 @@ export class RetryDeadLetterCommand {
     };
 
     const out = await this._deliver.execute(event);
-    if (out.isOk) {
+    if (out.isOk()) {
       await this._dlq.delete(id);
     }
     return out;

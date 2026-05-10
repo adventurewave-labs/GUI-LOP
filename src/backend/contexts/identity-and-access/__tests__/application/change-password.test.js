@@ -1,7 +1,7 @@
 import { RegisterUserUseCase } from '../../application/commands/register-user.js';
 import { ChangePasswordUseCase } from '../../application/commands/change-password.js';
 import { InvalidCredentialsError } from '../../domain/errors.js';
-import { NotFoundError } from '../../shared-kernel-stubs.js';
+import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { makeFixtures } from './test-fixtures.js';
 
 describe('ChangePasswordUseCase', () => {

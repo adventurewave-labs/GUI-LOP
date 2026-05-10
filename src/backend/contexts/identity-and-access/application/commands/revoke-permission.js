@@ -1,4 +1,4 @@
-import { ForbiddenError, NotFoundError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError, NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { Permission } from '../../domain/permission/permission.js';
 import { PermissionRevoked } from '../../domain/events.js';
 

@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const SECRET_BYTES = 32; // → 64 hex chars
 const HEX_RE = /^[a-f0-9]{64}$/;
 

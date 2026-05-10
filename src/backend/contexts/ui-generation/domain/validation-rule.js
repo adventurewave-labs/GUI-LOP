@@ -1,5 +1,4 @@
-import { ValidationError } from '../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 export const RULE_TYPES = Object.freeze({
   REQUIRED: 'required',
   MIN_LENGTH: 'minLength',

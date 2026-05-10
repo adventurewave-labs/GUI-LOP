@@ -1,5 +1,5 @@
 import { RegisterUserUseCase } from '../../application/commands/register-user.js';
-import { ConflictError } from '../../shared-kernel-stubs.js';
+import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 import { makeFixtures } from './test-fixtures.js';
 
 describe('RegisterUserUseCase', () => {

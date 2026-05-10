@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const HASH_BRAND = Symbol.for('identity-and-access.PasswordHash');
 
 /**

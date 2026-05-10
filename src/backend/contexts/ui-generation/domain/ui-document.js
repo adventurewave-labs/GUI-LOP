@@ -1,9 +1,7 @@
 /**
  * UIDocument — aggregate. Bound to (workflowId, stepId), immutable.
  */
-
-import { ValidationError } from '../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 export class UIDocument {
   constructor({ id, workflowId, stepId, url, contentRef, strategy, version = 1, generatedAt }) {
     if (!id) throw new ValidationError('UIDocument.id is required');

@@ -7,7 +7,7 @@ import {
   SessionExpiredError,
   SessionRevokedError,
 } from '../../domain/errors.js';
-import { NotFoundError } from '../../shared-kernel-stubs.js';
+import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { makeFixtures } from './test-fixtures.js';
 
 async function login(f) {

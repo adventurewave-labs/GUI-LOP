@@ -1,4 +1,5 @@
-import { ForbiddenError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { isAuthorised } from '../../domain/permission/authorisation-policy.js';
 import { Permission } from '../../domain/permission/permission.js';
 
@@ -27,7 +28,6 @@ export class AuthorisationService {
   async evaluate({ userId, permission, scope }) {
     const user = await this.userRepository.findById(userId);
     if (!user) {
-      const { Result } = await import('../../shared-kernel-stubs.js');
       return Result.fail(new ForbiddenError('Unknown user'));
     }
     const [role, grants] = await Promise.all([

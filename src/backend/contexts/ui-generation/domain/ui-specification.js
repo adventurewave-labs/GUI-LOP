@@ -9,8 +9,7 @@
  *     resolvable from the supplied catalogue at construction time when one
  *     is provided.
  */
-
-import { ValidationError } from '../../../shared/kernel/errors.js';
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 import { Field } from './field.js';
 import { Layout } from './layout.js';
 

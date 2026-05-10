@@ -11,7 +11,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { Result } from '../../../../shared/kernel/result.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { UISpecification } from '../../domain/ui-specification.js';
 import { UIDocument } from '../../domain/ui-document.js';
 import { compose } from '../../domain/services/layout-composer.js';

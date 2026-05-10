@@ -1,6 +1,14 @@
 /**
  * Result<T, E> — explicit success/failure container used across the domain.
  * Avoids exceptions for expected failure paths (validation, not-found, conflict).
+ *
+ * Two API styles are supported because contexts grew up in parallel:
+ *   - method form: `r.isOk()`, `r.isErr()`, `r.unwrap()`, `r.unwrapErr()`
+ *   - property form (legacy): `r.isOk`, `r.isFail`, `r.value`, `r.error`
+ *
+ * Both forms are intentional and tested. New code should prefer the method
+ * form, but the property form is kept so the bounded-context migration
+ * could happen one PR at a time.
  */
 export class Result {
   /** @private */
@@ -21,7 +29,12 @@ export class Result {
     return new Result(false, undefined, error);
   }
 
-  /** True when the Result is a success. */
+  /** Alias for `Result.err` (legacy). */
+  static fail(error) {
+    return new Result(false, undefined, error);
+  }
+
+  /** True when the Result is a success. Available as both method and getter. */
   isOk() {
     return this._ok === true;
   }
@@ -29,6 +42,27 @@ export class Result {
   /** True when the Result is a failure. */
   isErr() {
     return this._ok === false;
+  }
+
+  /** Legacy alias for {@link Result#isErr}. */
+  isFail() {
+    return this._ok === false;
+  }
+
+  /** Property accessor for the success value (legacy). */
+  get value() {
+    if (!this._ok) {
+      throw new Error('Cannot read .value of a failed Result');
+    }
+    return this._value;
+  }
+
+  /** Property accessor for the error (legacy). */
+  get error() {
+    if (this._ok) {
+      throw new Error('Cannot read .error of a successful Result');
+    }
+    return this._error;
   }
 
   /**
@@ -39,6 +73,16 @@ export class Result {
   map(fn) {
     if (!this._ok) return this;
     return Result.ok(fn(this._value));
+  }
+
+  /**
+   * Map the error through `fn`. Successes pass through untouched.
+   * @param {(e:any)=>any} fn
+   * @returns {Result}
+   */
+  mapError(fn) {
+    if (this._ok) return this;
+    return Result.err(fn(this._error));
   }
 
   /**
@@ -74,4 +118,18 @@ export class Result {
     }
     return this._error;
   }
+
+  /** Return the success value or `fallback` on failure. */
+  unwrapOr(fallback) {
+    return this._ok ? this._value : fallback;
+  }
 }
+
+/** Convenience constructor for an `Ok` Result. */
+export const ok = (v) => Result.ok(v);
+
+/** Convenience constructor for an `Err` Result. */
+export const err = (e) => Result.err(e);
+
+/** Legacy alias for {@link err}. */
+export const fail = (e) => Result.err(e);

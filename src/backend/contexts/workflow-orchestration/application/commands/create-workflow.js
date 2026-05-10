@@ -1,4 +1,4 @@
-import { ForbiddenError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { TemplateNotFoundError } from '../../domain/errors.js';
 import { Workflow } from '../../domain/workflow/workflow.js';
 

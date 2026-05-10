@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../shared-kernel-stubs.js';
+import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { InvalidCredentialsError } from '../../domain/errors.js';
 
 export class ChangePasswordUseCase {

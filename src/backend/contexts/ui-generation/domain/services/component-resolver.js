@@ -3,9 +3,7 @@
  * the catalogue. If the field has an explicit component reference it's used
  * verbatim; otherwise falls back to a default per field type.
  */
-
-import { ValidationError } from '../../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const TYPE_DEFAULTS = {
   text: 'text-input',
   email: 'text-input',

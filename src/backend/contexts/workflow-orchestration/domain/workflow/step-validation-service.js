@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Tiny schema validator. Supports the subset we need without pulling
  * in `ajv`. If the supplied schema is `undefined`/`null`, validation

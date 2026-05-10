@@ -1,4 +1,4 @@
-import { ConflictError } from '../../shared-kernel-stubs.js';
+import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 import { EmailAddress } from '../../domain/user/email-address.js';
 import { Username } from '../../domain/user/username.js';
 import { PasswordHash } from '../../domain/user/password-hash.js';

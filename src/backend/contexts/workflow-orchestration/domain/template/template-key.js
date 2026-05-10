@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const KEBAB_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /**

@@ -1,6 +1,5 @@
 import { validate, validateInput, validateOutput } from '../../domain/workflow/step-validation-service.js';
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 describe('step-validation-service', () => {
   it('passes when no schema', () => {
     expect(() => validate(undefined, undefined)).not.toThrow();

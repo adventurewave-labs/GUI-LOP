@@ -1,5 +1,4 @@
-import { NotFoundError } from '../../shared-kernel-stubs.js';
-
+import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 export class GetUserProfileQuery {
   constructor({ userRepository }) {
     this.userRepository = userRepository;

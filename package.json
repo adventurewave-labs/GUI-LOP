@@ -7,6 +7,7 @@
     "start": "node src/backend/simple-server.js",
     "start:api": "node src/api/index.js",
     "dev": "nodemon src/backend/simple-server.js",
+    "dev:v1": "nodemon src/backend/bootstrap/index.js",
     "dev:api": "nodemon src/api/index.js",
     "start:frontend": "concurrently \"npm run dev\" \"cd src/frontend && npm start\"",
     "dev:full": "concurrently \"npm run dev\" \"cd src/frontend && npm start\"",

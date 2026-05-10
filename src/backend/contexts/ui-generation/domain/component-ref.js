@@ -1,5 +1,4 @@
-import { ValidationError } from '../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 export class ComponentRef {
   constructor({ name, version }) {
     if (!name) throw new ValidationError('ComponentRef.name is required');

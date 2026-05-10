@@ -1,4 +1,4 @@
-import { FixedClock, SequentialIdGenerator } from '../../shared-kernel-stubs.js';
+import { FixedClock, SequentialIdGenerator } from '../../../../shared-kernel/infrastructure/test-fixtures.js';
 import { StepDefinition } from '../../domain/template/step-definition.js';
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 import { Workflow } from '../../domain/workflow/workflow.js';

@@ -5,8 +5,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { Result } from '../../../../shared/kernel/result.js';
-
+import { Result } from '../../../../shared-kernel/domain/result.js';
 export class ExportComplianceDataCommand {
   constructor({ eventStore, auditLogStore, objectStorage, idGenerator, clock }) {
     this._events = eventStore;

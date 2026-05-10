@@ -1,5 +1,4 @@
-import { DomainError } from '../../../shared/kernel/errors.js';
-
+import { DomainError } from '../../../shared-kernel/domain/errors.js';
 export class SubscriptionNotFound extends DomainError {
   constructor(id) {
     super('SUBSCRIPTION_NOT_FOUND', `Subscription not found: ${id}`, { id });

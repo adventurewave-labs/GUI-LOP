@@ -1,6 +1,5 @@
 import { sendError } from './error-mapper.js';
-import { UnauthorisedError } from '../../shared-kernel-stubs.js';
-
+import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 const BEARER_RE = /^Bearer\s+(.+)$/i;
 
 /**

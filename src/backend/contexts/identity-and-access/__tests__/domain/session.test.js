@@ -4,8 +4,7 @@ import {
   SessionExpiredError,
   SessionRevokedError,
 } from '../../domain/errors.js';
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const TTL = 60_000;
 
 const issue = ({ now = new Date('2026-01-01T00:00:00Z') } = {}) =>

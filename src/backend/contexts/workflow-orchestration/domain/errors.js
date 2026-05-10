@@ -1,9 +1,4 @@
-import {
-  ConflictError,
-  DomainError,
-  NotFoundError,
-} from '../shared-kernel-stubs.js';
-
+import { ConflictError, DomainError, NotFoundError } from '../../../shared-kernel/domain/errors.js';
 /** Raised when a template lookup fails. */
 export class TemplateNotFoundError extends NotFoundError {
   constructor(key, version) {

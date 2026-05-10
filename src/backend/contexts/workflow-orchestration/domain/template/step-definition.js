@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export const STEP_KINDS = Object.freeze(['automated', 'human', 'external']);
 
 export const TIMEOUT_POLICIES = Object.freeze([

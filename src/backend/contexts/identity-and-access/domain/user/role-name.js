@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export const ROLE_NAMES = Object.freeze(new Set(['admin', 'user', 'viewer']));
 
 /**

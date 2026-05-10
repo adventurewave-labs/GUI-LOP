@@ -1,5 +1,4 @@
-import { DomainError } from '../shared-kernel-stubs.js';
-
+import { DomainError } from '../../../shared-kernel/domain/errors.js';
 export class InvalidCredentialsError extends DomainError {
   constructor(message = 'Invalid credentials') {
     super(message, 'INVALID_CREDENTIALS');

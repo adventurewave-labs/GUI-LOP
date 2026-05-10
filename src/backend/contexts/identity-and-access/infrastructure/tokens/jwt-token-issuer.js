@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'node:crypto';
-import { UnauthorisedError } from '../../shared-kernel-stubs.js';
-
+import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * JwtTokenIssuer — HS256, configurable secret.
  */

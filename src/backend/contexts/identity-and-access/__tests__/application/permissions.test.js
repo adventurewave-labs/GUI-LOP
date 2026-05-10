@@ -3,7 +3,7 @@ import { RevokePermissionUseCase } from '../../application/commands/revoke-permi
 import { AuthorisationService } from '../../application/services/authorisation-service.js';
 import { RegisterUserUseCase } from '../../application/commands/register-user.js';
 import { Permission } from '../../domain/permission/permission.js';
-import { ForbiddenError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { makeFixtures } from './test-fixtures.js';
 
 const fakeRoleRepo = (rolePerms = {}) => ({

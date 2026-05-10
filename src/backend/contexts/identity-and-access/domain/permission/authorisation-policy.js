@@ -1,4 +1,5 @@
-import { ForbiddenError, Result } from '../../shared-kernel-stubs.js';
+import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { Permission } from './permission.js';
 
 /**

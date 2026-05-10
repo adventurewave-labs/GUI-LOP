@@ -1,9 +1,7 @@
 /**
  * Channel — value object enum.
  */
-
-import { ValidationError } from '../../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export const CHANNELS = Object.freeze({
   WEBSOCKET: 'websocket',
   EMAIL: 'email',

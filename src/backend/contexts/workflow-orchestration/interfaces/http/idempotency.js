@@ -1,6 +1,5 @@
 import crypto from 'node:crypto';
-import { ConflictError } from '../../shared-kernel-stubs.js';
-
+import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * `Idempotency-Key` header handling per ADR 0024.
  *

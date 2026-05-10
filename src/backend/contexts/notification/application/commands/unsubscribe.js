@@ -1,8 +1,7 @@
 /**
  * Unsubscribe — deletes a subscription by id.
  */
-
-import { Result } from '../../../../shared/kernel/result.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { SubscriptionNotFound } from '../../domain/errors.js';
 
 export class UnsubscribeCommand {

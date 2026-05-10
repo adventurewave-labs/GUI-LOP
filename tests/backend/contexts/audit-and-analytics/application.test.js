@@ -14,8 +14,7 @@ import { GetActiveWorkflowsQuery } from '../../../../src/backend/contexts/audit-
 import { InMemoryEventStore } from '../../../../src/backend/contexts/audit-and-analytics/infrastructure/persistence/inmemory-event-store.js';
 import { InMemoryAuditLogStore } from '../../../../src/backend/contexts/audit-and-analytics/infrastructure/persistence/inmemory-audit-log-store.js';
 import { InMemoryStorage } from '../../../../src/backend/contexts/ui-generation/infrastructure/storage/inmemory-storage.js';
-import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared/kernel/index.js';
-
+import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared-kernel/infrastructure/test-fixtures.js';
 const seedEvents = () => [
   {
     id: 'e1',
@@ -94,7 +93,7 @@ describe('ExportComplianceData', () => {
       clock
     });
     const out = await cmd.execute({ aggregateType: 'Workflow', aggregateId: 'wf-1' });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(out.value.url).toBe('/ui-documents/compliance-exports/exp-1.json');
     const stored = await storage.get('compliance-exports/exp-1.json');
     const parsed = JSON.parse(stored);
@@ -113,7 +112,7 @@ describe('RebuildProjection', () => {
 
     const cmd = new RebuildProjectionCommand({ eventStore: ev, projectionUpdater: updater });
     const out = await cmd.execute({ aggregateType: 'Workflow', aggregateId: 'wf-1' });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(out.value.processed).toBe(2);
     expect(seenTypes).toEqual(['workflow.started', 'workflow.completed']);
     expect(updater.processedCount).toBe(2);

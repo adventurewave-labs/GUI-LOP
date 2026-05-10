@@ -1,12 +1,4 @@
-import {
-  ConflictError,
-  DomainError,
-  ForbiddenError,
-  NotFoundError,
-  UnauthorisedError,
-  ValidationError,
-} from '../../shared-kernel-stubs.js';
-
+import { ConflictError, DomainError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Map a domain or unknown error to an HTTP `(status, body)` pair.
  * Body shape mirrors the legacy server's envelope so existing

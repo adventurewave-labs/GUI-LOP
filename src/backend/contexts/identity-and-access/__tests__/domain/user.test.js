@@ -7,8 +7,7 @@ import {
   InvalidCredentialsError,
   UserDeactivatedError,
 } from '../../domain/errors.js';
-import { ConflictError, ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ConflictError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const sampleProps = () => ({
   id: 'u-1',
   email: new EmailAddress('Test@Example.com'),

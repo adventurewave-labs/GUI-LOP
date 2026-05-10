@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const USERNAME_RE = /^[a-z0-9_-]+$/;
 const MIN = 3;
 const MAX = 100;

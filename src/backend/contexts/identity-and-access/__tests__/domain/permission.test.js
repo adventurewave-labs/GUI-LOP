@@ -1,6 +1,6 @@
 import { Permission } from '../../domain/permission/permission.js';
 import { isAuthorised } from '../../domain/permission/authorisation-policy.js';
-import { ForbiddenError, ValidationError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import { RoleName } from '../../domain/user/role-name.js';
 
 describe('Permission VO', () => {

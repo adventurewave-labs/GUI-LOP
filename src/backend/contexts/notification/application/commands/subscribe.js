@@ -3,8 +3,7 @@
  */
 
 import { Subscription } from '../../domain/subscription/subscription.js';
-import { Result } from '../../../../shared/kernel/result.js';
-
+import { Result } from '../../../../shared-kernel/domain/result.js';
 export class SubscribeCommand {
   constructor({ subscriptionRepository, clock, idGenerator }) {
     this._repo = subscriptionRepository;

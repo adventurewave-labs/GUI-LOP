@@ -3,9 +3,7 @@
  * passes each through a registered handler. Most projections in GUI-LOP are
  * derived directly via SQL views, so this is a thin orchestration shell.
  */
-
-import { Result } from '../../../../shared/kernel/result.js';
-
+import { Result } from '../../../../shared-kernel/domain/result.js';
 export class RebuildProjectionCommand {
   constructor({ eventStore, projectionUpdater }) {
     this._events = eventStore;

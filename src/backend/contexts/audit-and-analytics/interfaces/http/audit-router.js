@@ -40,7 +40,7 @@ export function createAuditRouter({
         aggregateId: req.body.aggregateId,
         range: req.body.range
       });
-      if (out.isFail) {
+      if (out.isFail()) {
         return res.status(400).json({ error: out.error?.message });
       }
       res.status(201).json(out.value);

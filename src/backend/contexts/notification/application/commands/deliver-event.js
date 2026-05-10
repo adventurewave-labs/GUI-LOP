@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { Result } from '../../../../shared/kernel/result.js';
+import { Result } from '../../../../shared-kernel/domain/result.js';
 import { routesFor } from '../../domain/services/routing-policy.js';
 import { build } from '../../domain/services/envelope-builder.js';
 import { next as nextRetry, DeadLetter } from '../../domain/services/retry-policy.js';

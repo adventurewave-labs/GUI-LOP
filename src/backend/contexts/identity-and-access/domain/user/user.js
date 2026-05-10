@@ -1,4 +1,4 @@
-import { ConflictError, ValidationError } from '../../shared-kernel-stubs.js';
+import { ConflictError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   UserDeactivatedError,
   InvalidCredentialsError,

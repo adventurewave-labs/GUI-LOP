@@ -1,4 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import { InvalidStateTransitionError } from '../errors.js';
 import { canStepTransition, ensureStatus, WorkflowStatus } from './workflow-status.js';
 

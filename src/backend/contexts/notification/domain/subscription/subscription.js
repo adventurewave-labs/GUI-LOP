@@ -10,7 +10,7 @@
  */
 
 import { randomUUID } from 'crypto';
-import { ValidationError } from '../../../../shared/kernel/errors.js';
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import { Channel } from './channel.js';
 import { Filter } from './filter.js';
 import { EndpointAddress } from './endpoint-address.js';

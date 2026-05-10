@@ -15,10 +15,12 @@ export function createUIRouter({
   router.post('/ui/generate', async (req, res, next) => {
     try {
       const out = await generateUIForStepCommand.execute(req.body);
-      if (out.isFail) {
+      if (out.isFail()) {
+        const code = out.error?.code;
+        const isValidation = code === 'VALIDATION' || code === 'VALIDATION_ERROR';
         return res
-          .status(out.error?.code === 'VALIDATION_ERROR' ? 400 : 500)
-          .json({ error: out.error?.message, code: out.error?.code });
+          .status(isValidation ? 400 : 500)
+          .json({ error: out.error?.message, code });
       }
       res.status(201).json(out.value.toJSON());
     } catch (err) {

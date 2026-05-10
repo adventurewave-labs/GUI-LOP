@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * TemplateVersion — positive integer; a template family is a sequence
  * of versions. Versions never decrease.

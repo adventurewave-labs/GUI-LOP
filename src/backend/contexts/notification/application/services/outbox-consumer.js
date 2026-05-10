@@ -30,7 +30,7 @@ export class OutboxConsumer {
       };
       try {
         const result = await this._deliver.execute(event);
-        if (result.isOk) {
+        if (result.isOk()) {
           await this._outbox.markDispatched(record.id);
         } else {
           await this._outbox.markFailed(record.id, result.error?.message ?? 'unknown');

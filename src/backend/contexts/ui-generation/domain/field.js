@@ -1,4 +1,4 @@
-import { ValidationError } from '../../../shared/kernel/errors.js';
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 import { FieldType } from './field-type.js';
 import { ValidationRule } from './validation-rule.js';
 import { ComponentRef } from './component-ref.js';

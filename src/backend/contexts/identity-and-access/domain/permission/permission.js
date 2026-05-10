@@ -1,5 +1,4 @@
-import { ValidationError } from '../../shared-kernel-stubs.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 const TOKEN_RE = /^[a-z][a-z0-9_-]*$/i;
 
 /**

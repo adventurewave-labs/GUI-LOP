@@ -16,10 +16,8 @@ import { InMemoryWebSocketBroadcaster } from '../../../../src/backend/contexts/n
 import { InMemoryEventPublisher } from '../../../../src/backend/contexts/notification/infrastructure/transport/inmemory-event-publisher.js';
 import { MockEmailSender } from '../../../../src/backend/contexts/notification/infrastructure/transport/mock-email-sender.js';
 import { MockWebhookSender } from '../../../../src/backend/contexts/notification/infrastructure/transport/mock-webhook-sender.js';
-
-import { InMemoryOutbox } from '../../../../src/backend/shared/outbox/outbox-port.js';
-import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared/kernel/index.js';
-
+import { InMemoryOutbox } from '../../../../src/backend/shared-kernel/infrastructure/inmemory-outbox.js';
+import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared-kernel/infrastructure/test-fixtures.js';
 function makeStack({ retryOptions } = {}) {
   const subs = new InMemorySubscriptionRepository();
   const attempts = new InMemoryDeliveryAttemptRepository();
@@ -58,7 +56,7 @@ describe('Subscribe / Unsubscribe', () => {
       channel: 'websocket',
       address: 'conn-1'
     });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(subs.size()).toBe(1);
     expect(out.value.id).toBe('sub-aaaa');
   });
@@ -72,7 +70,7 @@ describe('Subscribe / Unsubscribe', () => {
       channel: 'email',
       address: 'not-an-email'
     });
-    expect(out.isFail).toBe(true);
+    expect(out.isFail()).toBe(true);
   });
 
   it('unsubscribe removes the subscription', async () => {
@@ -84,7 +82,7 @@ describe('Subscribe / Unsubscribe', () => {
       address: 'https://x.test/h'
     });
     const out = await new UnsubscribeCommand({ subscriptionRepository: subs }).execute({ id: sub.value.id });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(subs.size()).toBe(0);
   });
 });
@@ -97,7 +95,7 @@ describe('RegisterWebhook', () => {
       subscriberRef: 'svc-1',
       url: 'https://hooks.example.com/incoming'
     });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(out.value.channel.value).toBe('webhook');
   });
 });
@@ -120,7 +118,7 @@ describe('DeliverEvent', () => {
       payload: { workflowId: 'wf-1' },
       occurredAt: '2026-05-10T00:00:00.000Z'
     });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(out.value.delivered).toBe(1);
     expect(out.value.failed).toBe(0);
     expect(ws.sent().length).toBe(1);
@@ -142,7 +140,7 @@ describe('DeliverEvent', () => {
       occurredAt: '2026-05-10T00:00:00.000Z'
     };
     const out = await deliver.execute(event);
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(out.value.failed).toBe(1);
     expect(out.value.deadLettered).toBe(1);
     expect(dlq.size()).toBe(1);
@@ -196,7 +194,7 @@ describe('RetryDeadLetter', () => {
       channel: 'webhook',
       address: 'https://hooks.good.example.com/x'
     });
-    expect(goodAddr.isOk).toBe(true);
+    expect(goodAddr.isOk()).toBe(true);
     await stack.subs.delete(sub.id);
 
     const dl = (await stack.dlq.list({}))[0];
@@ -205,7 +203,7 @@ describe('RetryDeadLetter', () => {
       deliverEventCommand: stack.deliver
     });
     const out = await retry.execute({ id: dl.id });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(stack.dlq.size()).toBe(0);
   });
 });

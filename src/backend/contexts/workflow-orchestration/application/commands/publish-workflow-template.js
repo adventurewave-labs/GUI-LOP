@@ -1,4 +1,4 @@
-import { ForbiddenError } from '../../shared-kernel-stubs.js';
+import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 import { StepDefinition } from '../../domain/template/step-definition.js';
 import { TemplateKey } from '../../domain/template/template-key.js';

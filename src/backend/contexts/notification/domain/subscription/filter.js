@@ -3,9 +3,7 @@
  *
  * Empty arrays mean "match everything" for that dimension.
  */
-
-import { ValidationError } from '../../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 export class Filter {
   constructor({ eventTypes = [], workflowIds = [] } = {}) {
     if (!Array.isArray(eventTypes)) {

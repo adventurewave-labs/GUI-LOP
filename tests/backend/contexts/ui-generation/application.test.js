@@ -9,8 +9,7 @@ import { ListUIComponentsQuery } from '../../../../src/backend/contexts/ui-gener
 import { InMemoryUIDocumentRepository } from '../../../../src/backend/contexts/ui-generation/infrastructure/persistence/inmemory-ui-document-repository.js';
 import { InMemoryComponentCatalogueRepository } from '../../../../src/backend/contexts/ui-generation/infrastructure/persistence/inmemory-component-catalogue-repository.js';
 import { InMemoryStorage } from '../../../../src/backend/contexts/ui-generation/infrastructure/storage/inmemory-storage.js';
-import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared/kernel/index.js';
-
+import { FrozenClock, FixedIdGenerator } from '../../../../src/backend/shared-kernel/infrastructure/test-fixtures.js';
 function makeStack() {
   const docs = new InMemoryUIDocumentRepository();
   const catalogue = new InMemoryComponentCatalogueRepository();
@@ -42,11 +41,11 @@ describe('GenerateUIForStep', () => {
         { id: 'age', label: 'Age', type: 'number' }
       ]
     });
-    expect(out.isOk).toBe(true);
+    expect(out.isOk()).toBe(true);
     expect(docs.size()).toBe(1);
     expect(storage.size()).toBe(1);
     expect(out.value.url).toMatch(/^\/ui-documents\/ui\/wf-1\/step-1\/doc-1\.json$/);
-    expect(sink.events.find((e) => e.type === 'ui.generated')).toBeTruthy();
+    expect(sink.events.find((e) => e.eventType === 'ui.generated')).toBeTruthy();
   });
 
   it('emits UIGenerationFailed and returns Result.fail on validation error', async () => {
@@ -59,8 +58,8 @@ describe('GenerateUIForStep', () => {
         { id: 'a', label: 'B', type: 'text' }
       ]
     });
-    expect(out.isFail).toBe(true);
-    expect(sink.events.find((e) => e.type === 'ui.generation_failed')).toBeTruthy();
+    expect(out.isFail()).toBe(true);
+    expect(sink.events.find((e) => e.eventType === 'ui.generation_failed')).toBeTruthy();
   });
 });
 

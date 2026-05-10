@@ -1,10 +1,4 @@
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  UnauthorisedError,
-  ValidationError,
-} from '../../shared-kernel-stubs.js';
+import { ConflictError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   InvalidCredentialsError,
   SessionExpiredError,

@@ -1,5 +1,4 @@
-import { ValidationError } from '../../../shared/kernel/errors.js';
-
+import { ValidationError } from '../../../shared-kernel/domain/errors.js';
 export const LAYOUT_KINDS = Object.freeze({
   STACK: 'stack',
   GRID: 'grid',

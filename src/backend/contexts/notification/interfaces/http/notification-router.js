@@ -33,7 +33,7 @@ export function createNotificationRouter({
   router.delete('/subscriptions/:id', async (req, res, next) => {
     try {
       const out = await unsubscribeCommand.execute({ id: req.params.id });
-      if (out.isFail) {
+      if (out.isFail()) {
         return res
           .status(out.error?.code === 'SUBSCRIPTION_NOT_FOUND' ? 404 : 400)
           .json({ error: out.error?.message, code: out.error?.code });
@@ -52,7 +52,7 @@ export function createNotificationRouter({
         url: req.body.url,
         filter: req.body.filter
       });
-      if (out.isFail) {
+      if (out.isFail()) {
         return res
           .status(400)
           .json({ error: out.error?.message, code: out.error?.code });
@@ -78,7 +78,7 @@ export function createNotificationRouter({
   router.post('/dead-letters/:id/retry', async (req, res, next) => {
     try {
       const out = await retryDeadLetterCommand.execute({ id: req.params.id });
-      if (out.isFail) {
+      if (out.isFail()) {
         return res
           .status(out.error?.code === 'DEAD_LETTER_NOT_FOUND' ? 404 : 400)
           .json({ error: out.error?.message, code: out.error?.code });

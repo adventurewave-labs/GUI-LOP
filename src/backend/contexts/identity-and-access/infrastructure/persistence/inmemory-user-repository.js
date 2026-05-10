@@ -1,5 +1,4 @@
-import { ConflictError } from '../../shared-kernel-stubs.js';
-
+import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * In-memory UserRepository for tests.
  * Stores aggregates by id; secondary indexes for email/username.
