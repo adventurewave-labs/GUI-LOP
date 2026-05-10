@@ -10,7 +10,7 @@ export default {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
-  // Only test specific files
+  // Test files: legacy explicit set + new bounded-context tests.
   testMatch: [
     '<rootDir>/tests/backend/server.test.js',
     '<rootDir>/tests/backend/simple-server.test.js',
@@ -21,7 +21,7 @@ export default {
     '<rootDir>/tests/backend/contexts/**/*.test.js'
   ],
 
-  // Coverage configuration
+  // Coverage configuration (disabled by default; enable with `--coverage`).
   collectCoverage: false,
   collectCoverageFrom: [
     'src/backend/**/*.js',
@@ -44,7 +44,6 @@ export default {
     }
   },
 
-  
   // Verbose output
   verbose: true,
 
