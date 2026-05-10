@@ -305,7 +305,3 @@ Thumbs.db
 # ==========================================
 # Last updated: Comprehensive cleanup for GUI-LOP repository
 # Total patterns: 150+ organized across 12 categories
-# Temporary: in-progress sub-agent worktree leaks during DDD migration mission.
-# Remove these lines once agent branches are merged.
-src/backend/contexts/*
-!src/backend/contexts/.gitkeep
