@@ -247,6 +247,10 @@ deployment/
 .claude-flow
 .devcontainer
 .github
+# But do track GitHub Actions workflows.
+!.github/
+!.github/workflows/
+!.github/workflows/**
 .hive-mind
 .swarm
 

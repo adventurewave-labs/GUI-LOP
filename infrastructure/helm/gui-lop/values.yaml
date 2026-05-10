@@ -1,0 +1,152 @@
+# =============================================================================
+# Default values for the gui-lop chart.
+# Override per-environment with `helm install -f values-prod.yaml ...`.
+# =============================================================================
+
+# Number of API pods. With 2 replicas a single pod restart leaves the service
+# available; tune up via the HPA below for sustained traffic.
+replicaCount: 2
+
+image:
+  # Override per-env via `--set image.tag=<git-sha>` (ADR 0020 immutable tags).
+  repository: ghcr.io/your-org/gui-lop
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# Optional pull secrets (e.g. for a private GHCR/ECR registry).
+imagePullSecrets: []
+# - name: regcred
+
+# Override the chart name / fullname for resources. Leave empty to use defaults.
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # If true, create a dedicated ServiceAccount; if false, use the default.
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod-level security: non-root, read-only FS, no privilege escalation.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ClusterIP service — Ingress (or a service mesh) handles ingress traffic.
+service:
+  type: ClusterIP
+  port: 3001
+  # Useful when scraping `/metrics` via Prometheus (ADR 0021).
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"  # WebSocket
+  hosts:
+    - host: gui-lop.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: gui-lop-tls
+    #   hosts:
+    #     - gui-lop.example.com
+
+# Per-pod compute envelope. The benchmarks suite shows the API is
+# bcrypt-bound on /auth/login at factor 12; 200m–1 CPU is comfortable.
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  # Optional: targetMemoryUtilizationPercentage: 80
+
+# Liveness probe → /health (returns 200 once the HTTP server is up).
+# Readiness probe → /health too; the bootstrap response embeds dependency
+# subsystem status which the orchestrator currently treats as informational.
+# Once /health/ready exists upstream, switch readinessProbe.httpGet.path.
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+# 12-factor non-secret config (ADR 0022). Anything sensitive belongs in
+# `.secrets` below or in an external secret store.
+config:
+  NODE_ENV: production
+  PORT: "3001"
+  LOG_LEVEL: info
+  BCRYPT_WORK_FACTOR: "12"
+  OUTBOX_BATCH_SIZE: "200"
+  RATE_LIMIT_WINDOW_MS: "900000"
+  RATE_LIMIT_MAX: "100"
+  CORS_ORIGINS: "https://gui-lop.example.com"
+
+# IMPORTANT (ADR 0022):
+#   In production these MUST come from a real secrets manager (e.g.
+#   external-secrets-operator pulling from AWS Secrets Manager / Vault /
+#   GCP Secret Manager). Setting them inline here is for *local only*.
+#   When `secrets.create: false` the chart references a pre-existing Secret
+#   named `secrets.existingSecretName` instead.
+secrets:
+  create: true
+  existingSecretName: ""
+  # Plain values — override via --set-file or `secrets.create: false`.
+  JWT_SECRET: ""
+  DATABASE_URL: ""
+  REDIS_URL: ""
+
+# Pre-install/pre-upgrade Job that runs `database/migrations/migrate.js`.
+# Uses the same image as the API. Disable for in-memory dev installs.
+migrations:
+  enabled: true
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Honour ADR 0020's 30-second drain budget.
+terminationGracePeriodSeconds: 30
+
+# PodDisruptionBudget — keep at least one replica during voluntary disruptions.
+pdb:
+  enabled: true
+  minAvailable: 1
+
+# Optional scheduling controls.
+nodeSelector: {}
+tolerations: []
+affinity: {}
