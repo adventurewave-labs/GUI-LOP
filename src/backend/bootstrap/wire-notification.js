@@ -33,6 +33,7 @@ export function wireNotification({
   clock,
   idGen,
   logger,
+  config,
 }) {
   const subscriptionRepository = pool
     ? new PgSubscriptionRepository(pool)
@@ -88,11 +89,13 @@ export function wireNotification({
   });
 
   let consumerStop = null;
-  function startOutboxConsumer({ intervalMs = 250 } = {}) {
+  function startOutboxConsumer({ intervalMs = 250, batchSize } = {}) {
     if (!outbox) return null;
     const consumer = new OutboxConsumer({
       outboxPort: outbox,
       deliverEventCommand,
+      // Tuned default — see config-loader.js OUTBOX_BATCH_SIZE JSDoc.
+      batchSize: batchSize ?? config?.OUTBOX_BATCH_SIZE ?? 200,
       logger,
     });
     consumerStop = consumer.start({ intervalMs });

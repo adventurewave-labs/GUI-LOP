@@ -23,11 +23,26 @@ const SCHEMA = {
   JWT_ACCESS_TTL_SECONDS: { type: 'number', default: 900 },
   JWT_REFRESH_TTL_SECONDS: { type: 'number', default: 604800 },
   BCRYPT_WORK_FACTOR: { type: 'number', default: 12 },
+  /**
+   * Override BCRYPT_WORK_FACTOR when NODE_ENV === 'test'. Defaults to 4 so
+   * test suites don't pay 150-300 ms per hash. Production picks
+   * BCRYPT_WORK_FACTOR (default 12); the bcrypt-password-hasher uses a
+   * worker-thread pool so factor 12 doesn't block the event loop.
+   */
+  BCRYPT_WORK_FACTOR_TEST: { type: 'number', default: 4 },
   RATE_LIMIT_WINDOW_MS: { type: 'number', default: 900000 },
   RATE_LIMIT_MAX: { type: 'number', default: 100 },
   CORS_ORIGINS: { type: 'csv', default: 'http://localhost:3000' },
   LOG_LEVEL: { type: 'string', default: 'info', enum: ['debug', 'info', 'warn', 'error'] },
-  OUTBOX_BATCH_SIZE: { type: 'number', default: 100 },
+  /**
+   * Number of outbox rows fetched per consumer tick. Tuned via
+   * `tests/benchmarks/scenarios/eventbus-throughput.bench.js` against the
+   * `outbox.publish[N]` drain SLOs. 200 outperformed 50/100/500 because:
+   * - 50 wastes too many round-trips per drain.
+   * - 500 spends most of the tick in a single batch and starves shutdown.
+   * - 200 keeps throughput high while bounding per-tick memory.
+   */
+  OUTBOX_BATCH_SIZE: { type: 'number', default: 200 },
 };
 
 function coerce(name, raw, spec) {
@@ -102,6 +117,13 @@ export function loadConfig(env = process.env) {
     throw new ConfigError(`Invalid configuration:\n${msg}`, {
       errors: errors.map((e) => ({ message: e.message, ...e.details })),
     });
+  }
+  // Test-environment override: when NODE_ENV === 'test' AND the caller did
+  // not explicitly set BCRYPT_WORK_FACTOR, fall back to the test factor so
+  // the suite isn't dominated by bcrypt cost. An explicit BCRYPT_WORK_FACTOR
+  // in the env is always honored.
+  if (out.NODE_ENV === 'test' && env.BCRYPT_WORK_FACTOR === undefined) {
+    out.BCRYPT_WORK_FACTOR = out.BCRYPT_WORK_FACTOR_TEST;
   }
   return Object.freeze(out);
 }

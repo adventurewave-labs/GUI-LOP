@@ -17,7 +17,18 @@ describe('loadConfig', () => {
     expect(cfg.RATE_LIMIT_MAX).toBe(100);
     expect(cfg.CORS_ORIGINS).toEqual(['http://localhost:3000']);
     expect(cfg.LOG_LEVEL).toBe('info');
-    expect(cfg.OUTBOX_BATCH_SIZE).toBe(100);
+    expect(cfg.OUTBOX_BATCH_SIZE).toBe(200);
+    expect(cfg.BCRYPT_WORK_FACTOR_TEST).toBe(4);
+  });
+
+  test('NODE_ENV=test uses BCRYPT_WORK_FACTOR_TEST when no explicit override', () => {
+    const cfg = loadConfig({ ...minimal(), NODE_ENV: 'test' });
+    expect(cfg.BCRYPT_WORK_FACTOR).toBe(4);
+  });
+
+  test('NODE_ENV=test honors explicit BCRYPT_WORK_FACTOR override', () => {
+    const cfg = loadConfig({ ...minimal(), NODE_ENV: 'test', BCRYPT_WORK_FACTOR: '6' });
+    expect(cfg.BCRYPT_WORK_FACTOR).toBe(6);
   });
 
   test('returns frozen object', () => {

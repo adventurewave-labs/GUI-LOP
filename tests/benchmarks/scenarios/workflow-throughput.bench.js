@@ -17,7 +17,6 @@
  * scenarios. Run directly with `node tests/benchmarks/scenarios/workflow-throughput.bench.js`.
  */
 
-import express from 'express';
 import request from 'supertest';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -30,9 +29,12 @@ const ITERATIONS = 500;
 const LIFECYCLE_ITERATIONS = 200;
 
 /**
- * Bring up the bootstrap stack with a `req.user = req.principal` shim so the
- * v1 workflow router's `getActor(req)` returns a non-null actor and the
- * authorisation adapter allows admin requests through.
+ * Bring up the bootstrap stack with NO test-only middleware shims. Fix 1
+ * of the DDD integration sweep makes the auth middleware pre-populate
+ * `req.user` and `req.actor` from `req.principal`, and Fix 2 makes the
+ * human-interaction router declare relative paths so its bootstrap mount
+ * produces the documented `/api/v1/inbox` and `/api/v1/workflows/:id/respond`
+ * URLs. The benches now exercise production wiring directly.
  */
 export async function bootBenchApp() {
   const booted = await bootstrap({
@@ -41,18 +43,6 @@ export async function bootBenchApp() {
     DATABASE_URL: undefined,
     REDIS_URL: undefined,
   });
-
-  // The v1 workflow router reads `req.user.id`, but the new auth middleware
-  // attaches `req.principal`. Inject a per-route shim AFTER each authMiddleware
-  // and BEFORE the matching router so HTTP requests carry a non-null actor.
-  installPrincipalToUserShim(booted.app);
-
-  // The human-interaction router defines absolute paths but is mounted at
-  // `/api/v1`, which makes `/api/v1/workflows/:id/respond` unreachable in
-  // production wiring. For the bench, attach the router again at `/` so we
-  // can measure the realistic HTTP cost of the respond hot path. Splice it in
-  // BEFORE the catch-all 404 handler the bootstrap installed.
-  installHumanRouterAtRoot(booted);
 
   // Register a real admin user so the AuthorisationService.ensure() lookup
   // succeeds. Admin role is implicitly authorised for every permission.
@@ -66,85 +56,6 @@ export async function bootBenchApp() {
   const registered = await booted.ctx.identity.useCases.registerUser.execute(credentials);
   const accessToken = await mintToken(booted, registered.id, 'admin');
   return { booted, app: booted.app, accessToken, principal: registered };
-}
-
-/**
- * Mount the Human Interaction router at `/` (in addition to its production
- * mount at `/api/v1`) and splice it into the express stack BEFORE the
- * bootstrap's 404 catch-all so requests can reach it.
- */
-function installHumanRouterAtRoot(booted) {
-  const stack = booted.app?._router?.stack;
-  if (!Array.isArray(stack)) return;
-  const probe = express();
-  probe.use('/', booted.ctx.identity.authMiddleware);
-  probe.use('/', (req, _res, next) => {
-    if (req.principal && !req.user) {
-      req.user = { id: req.principal.userId, role: req.principal.role };
-    }
-    if (req.principal && !req.actor) {
-      req.actor = { userId: req.principal.userId, sessionId: req.principal.sessionId };
-    }
-    next();
-  });
-  probe.use('/', booted.ctx.humanInteraction.router);
-  const newLayers = probe._router.stack.slice(2); // drop query + expressInit
-  // Find the position of the bootstrap's catch-all 404 (anonymous, regexp '/')
-  // by scanning from the end and stopping just before the first global-scope
-  // anonymous handler that isn't a router. Splice the new layers there.
-  let insertAt = stack.length;
-  for (let i = stack.length - 1; i >= 0; i -= 1) {
-    const layer = stack[i];
-    if (layer?.name === '<anonymous>' && layer?.regexp?.toString() === '/^\\/?(?=\\/|$)/i') {
-      insertAt = i;
-    }
-  }
-  stack.splice(insertAt, 0, ...newLayers);
-}
-
-/**
- * Walk the inner Express app's middleware stack and, immediately after every
- * `authMiddleware` layer, splice in a tiny shim that copies `req.principal`
- * onto `req.user` so workflow/human-interaction routers can lift the actor.
- *
- * This is a deliberately surgical patch — we don't want to depend on any
- * production code change to bench accurately.
- */
-function installPrincipalToUserShim(app) {
-  const stack = app?._router?.stack;
-  if (!Array.isArray(stack)) return;
-  function shim(req, _res, next) {
-    if (req.principal && !req.user) {
-      req.user = {
-        id: req.principal.userId,
-        role: req.principal.role,
-        sessionId: req.principal.sessionId,
-      };
-    }
-    if (req.principal && !req.actor) {
-      req.actor = {
-        userId: req.principal.userId,
-        sessionId: req.principal.sessionId,
-      };
-    }
-    next();
-  }
-  // Re-use a single bound layer so the splice doesn't bloat the stack.
-  for (let i = stack.length - 1; i >= 0; i -= 1) {
-    const layer = stack[i];
-    if (layer?.name === 'authMiddleware') {
-      // Build a Layer object the same way express.use does.
-      const fakeApp = express();
-      fakeApp.use(shim);
-      const shimLayer = fakeApp._router.stack[fakeApp._router.stack.length - 1];
-      // Apply the same regexp as the surrounding authMiddleware so we don't
-      // attach a global handler.
-      shimLayer.regexp = layer.regexp;
-      shimLayer.keys = layer.keys;
-      shimLayer.path = layer.path;
-      stack.splice(i + 1, 0, shimLayer);
-    }
-  }
 }
 
 async function mintToken(booted, sub, role = 'admin') {

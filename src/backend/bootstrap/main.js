@@ -29,6 +29,7 @@ import { InMemoryOutbox } from '../shared-kernel/infrastructure/inmemory-outbox.
 import { createLogger } from '../shared-kernel/infrastructure/logger.js';
 
 import { wireIdentityAndAccess } from './wire-identity-and-access.js';
+import { disposeBcryptWorkerPool } from '../contexts/identity-and-access/infrastructure/crypto/bcrypt-password-hasher.js';
 import { wireWorkflowOrchestration } from './wire-workflow-orchestration.js';
 import { wireUIGeneration } from './wire-ui-generation.js';
 import { wireHumanInteraction } from './wire-human-interaction.js';
@@ -126,6 +127,7 @@ export async function bootstrap(envOverride) {
     clock,
     idGen,
     logger,
+    config,
   });
 
   const audit = wireAuditAndAnalytics({
@@ -251,6 +253,8 @@ export async function bootstrap(envOverride) {
     if (pool && typeof pool.end === 'function') {
       try { await pool.end(); } catch { /* ignore */ }
     }
+    // Tear down the bcrypt worker-thread pool (if it was lazily spawned).
+    try { await disposeBcryptWorkerPool(); } catch { /* ignore */ }
   }
 
   return {

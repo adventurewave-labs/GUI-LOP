@@ -5,6 +5,7 @@ import { InMemoryWorkflowRepository } from '../contexts/workflow-orchestration/i
 import { InMemoryWorkflowTemplateRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/inmemory-workflow-template-repository.js';
 import { PgWorkflowRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/pg-workflow-repository.js';
 import { PgWorkflowTemplateRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/pg-workflow-template-repository.js';
+import { CachedWorkflowTemplateRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/cached-workflow-template-repository.js';
 import { StubAutomatedStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/automated-step-runner.js';
 import { StubExternalStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/external-step-runner.js';
 import { InMemoryIdempotencyStore } from '../contexts/workflow-orchestration/application/ports/idempotency-store.js';
@@ -93,9 +94,19 @@ export async function wireWorkflowOrchestration({
   const workflows = pool
     ? new PgWorkflowRepository({ pool, outbox })
     : new InMemoryWorkflowRepository();
-  const templates = pool
+  const templatesDelegate = pool
     ? new PgWorkflowTemplateRepository({ pool, outbox })
     : new InMemoryWorkflowTemplateRepository();
+  // Hot read decorator. Workflow templates are read on every CreateWorkflow
+  // and change at human tempo, so a 60s LRU+TTL cache strips a Postgres
+  // round-trip off the workflow.create hot path with negligible staleness
+  // cost. The decorator invalidates per-key on save() to keep
+  // publish/deprecate cycles correct.
+  const templates = new CachedWorkflowTemplateRepository({
+    delegate: templatesDelegate,
+    ttlMs: 60_000,
+    maxEntries: 100,
+  });
   const idempotency = new InMemoryIdempotencyStore();
   const automatedRunner = new StubAutomatedStepRunner();
   const externalRunner = new StubExternalStepRunner();

@@ -1,13 +1,18 @@
 /**
  * HTTP router for the Human Interaction bounded context.
  *
- * Routes:
+ * The router declares paths RELATIVE to its mount point so the composition
+ * root can mount it under `/api/v1` without producing the doubled prefix
+ * `/api/v1/api/v1/...`. The bootstrap mounts this router at `/api/v1`, so
+ * the effective routes are:
+ *
  *   POST /api/v1/workflows/:id/respond     -> RecordHumanResponse
  *   GET  /api/v1/inbox                     -> ListPendingStepsForUser
  *   GET  /api/v1/inbox/:workflowId/:stepId -> GetPendingStep
  *
  * The composition root supplies the use cases and an `auth` middleware
- * that attaches `req.actor = { userId, sessionId }`.
+ * that attaches `req.actor = { userId, sessionId }` (the bootstrap auth
+ * middleware also pre-populates this from `req.principal`).
  */
 import { Router } from 'express';
 import { mapError } from './error-mapper.js';
@@ -39,7 +44,7 @@ export function createHumanInteractionRouter(deps) {
   });
 
   router.post(
-    '/api/v1/workflows/:id/respond',
+    '/workflows/:id/respond',
     auth,
     requireIdempotencyKey,
     async (req, res) => {
@@ -67,7 +72,7 @@ export function createHumanInteractionRouter(deps) {
     },
   );
 
-  router.get('/api/v1/inbox', auth, async (req, res) => {
+  router.get('/inbox', auth, async (req, res) => {
     try {
       const userId = req.actor?.userId ?? req.user?.id;
       const steps = await deps.listPendingStepsForUser.execute({ userId, filter: { openOnly: true } });
@@ -78,7 +83,7 @@ export function createHumanInteractionRouter(deps) {
     }
   });
 
-  router.get('/api/v1/inbox/:workflowId/:stepId', auth, async (req, res) => {
+  router.get('/inbox/:workflowId/:stepId', auth, async (req, res) => {
     try {
       const step = await deps.getPendingStep.execute({
         workflowId: req.params.workflowId,
