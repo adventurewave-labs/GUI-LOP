@@ -4,6 +4,7 @@ export class GetUserActivityQuery {
   }
 
   async execute({ userId, limit = 100, offset = 0 }) {
+    if (!this._pool || typeof this._pool.query !== 'function') return [];
     const sql = `SELECT * FROM user_activity WHERE user_id = $1 LIMIT $2 OFFSET $3`;
     try {
       const { rows } = await this._pool.query(sql, [userId, limit, offset]);

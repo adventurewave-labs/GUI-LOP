@@ -9,6 +9,7 @@ export class GetWorkflowAnalyticsQuery {
   }
 
   async execute({ limit = 100, offset = 0 } = {}) {
+    if (!this._pool || typeof this._pool.query !== 'function') return [];
     const sql = `SELECT * FROM workflow_analytics LIMIT $1 OFFSET $2`;
     try {
       const { rows } = await this._pool.query(sql, [limit, offset]);

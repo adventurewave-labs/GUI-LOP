@@ -1,483 +1,474 @@
 # GUI-LOP: Generative UI & Human-in-the-Loop Orchestration Platform
 
-**A fully functional platform for creating dynamic user interfaces and human-in-the-loop workflows with comprehensive testing and validation.**
+A platform for orchestrating workflows that interleave automated steps with
+human decision points. Built as a domain-driven backend (6 bounded
+contexts, hexagonal architecture, transactional outbox) with a React SPA
+and a WebSocket-based real-time channel.
 
-## 🚀 Quick Start
+- **Backend:** Node.js 18+, Express, WebSocket (`ws`), Postgres + Redis
+  (with in-memory fall-backs for dev), JWT auth, OpenAI/Anthropic ACL.
+- **Frontend:** React 18 SPA at `src/frontend/`.
+- **Status:** 560 backend tests passing across 75 suites; 25/25 SLO
+  benchmarks PASS; six bounded contexts wired through one bootstrap
+  composition root.
+
+For the why and how, read:
+
+- [`docs/MISSION_REPORT_DDD_MIGRATION.md`](docs/MISSION_REPORT_DDD_MIGRATION.md) — full migration history (4 iterations).
+- [`docs/adr/README.md`](docs/adr/README.md) — 24 Architecture Decision Records.
+- [`docs/ddd/README.md`](docs/ddd/README.md) — Domain-Driven Design overview.
+
+---
+
+## Quick Start
 
 ### Prerequisites
 
 - **Node.js** 18.x or higher
-- **npm** 8.x or higher
+- **npm** 9.x or higher
+- (Optional) **Docker** — required for the testcontainers contract
+  suite; not needed for `npm run dev` or the backend Jest suite.
 
-### Installation & Setup
+### Install
 
 ```bash
-# Clone the repository
-git clone https://github.com/ruvnet/gui-lop.git
-cd gui-lop
-
-# Install all dependencies
+git clone https://github.com/marcuspat/GUI-LOP.git
+cd GUI-LOP
 npm install
-
-# Install frontend dependencies
 cd src/frontend && npm install && cd ../..
 ```
 
-### Running the Application
-
-#### Option 1: Backend Only (Recommended for Testing)
-```bash
-# Start backend server
-npm run dev
-# Server runs on http://localhost:3001
-```
-
-#### Option 2: Full Stack Development
-```bash
-# Run both backend and frontend concurrently
-npm run dev:full
-# Backend: http://localhost:3001, Frontend: http://localhost:3000
-```
-
-### Verify Installation
-
-1. **Backend Health Check**:
-   ```bash
-   curl http://localhost:3001/health
-   # Expected: {"status":"ok","timestamp":"2024-01-01T12:00:00.000Z","message":"GUI-LOP Server is running"}
-   ```
-
-2. **Test Workflow Templates**:
-   ```bash
-   curl http://localhost:3001/api/workflows/templates
-   # Returns 3 workflow templates with full structure
-   ```
-
-3. **Run Automated Demo**:
-   ```bash
-   ./demo.sh
-   # Comprehensive automated demonstration with measurable outputs
-   ```
-
-## 🏗️ Architecture
-
-### System Overview
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React Frontend │◄──►│ Express Backend │◄──►│ WebSocket Server │
-│   (Port 3000)    │    │   (Port 3001)    │    │   (Port 3001)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   User Browser  │    │   API Endpoints │    │   Real-time     │
-│                 │    │   • Health      │    │   Events        │
-│                 │    │   • Templates   │    │   • UI Generated │
-│                 │    │   • Workflows   │    │   • Status      │
-│                 │    │   • Responses   │    │   • Completion  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-```
-
-### Core Components
-
-#### Backend Server (`src/backend/simple-server.js`)
-- **Express.js** HTTP server with RESTful API
-- **WebSocket** server for real-time communication
-- **In-memory** workflow storage (production-ready with database integration)
-- **Middleware**: CORS, JSON parsing, error handling
-
-#### API Endpoints
-| Method | Endpoint | Description | Response |
-|--------|----------|-------------|----------|
-| GET | `/health` | Server health check | `{"status":"ok","timestamp":"...","message":"..."}` |
-| GET | `/api/workflows/templates` | List workflow templates | `{"templates":[{"id":"data-analysis","name":"...","description":"...","steps":[...]}]}` |
-| POST | `/api/workflows` | Create new workflow | `{"workflow_id":"uuid","status":"created","message":"..."}` |
-| GET | `/api/workflows/:id` | Get workflow status | Full workflow object |
-| POST | `/api/workflows/:id/execute` | Execute workflow | `{"workflow_id":"uuid","status":"executing","message":"..."}` |
-| POST | `/api/workflows/:id/respond` | Submit human response | `{"workflow_id":"uuid","status":"completed","message":"..."}` |
-
-#### WebSocket Events
-- `connected` - Client connection established
-- `echo` - Message echo functionality
-- `ui_generation` - UI generated notification
-- `workflow_completed` - Workflow completion notification
-
-### Workflow Templates
-
-#### 1. Data Analysis Workflow
-```json
-{
-  "id": "data-analysis",
-  "name": "Data Analysis Workflow",
-  "description": "Analyze data and generate insights with human approval",
-  "steps": ["Data Ingestion", "Analysis", "Insight Generation", "Human Review", "Final Report"]
-}
-```
-
-#### 2. Decision Making Workflow
-```json
-{
-  "id": "decision-making",
-  "name": "Decision Making Workflow",
-  "description": "Generate options and collect human input for decisions",
-  "steps": ["Context Analysis", "Option Generation", "Human Selection", "Reasoning", "Confidence Assessment"]
-}
-```
-
-#### 3. Content Creation Workflow
-```json
-{
-  "id": "content-creation",
-  "name": "Content Creation Workflow",
-  "description": "Create content with human review and revision",
-  "steps": ["Requirements", "Content Generation", "Human Review", "Revision", "Finalization"]
-}
-```
-
-## 🧪 Testing & Validation
-
-### Test Results Summary
-- **Backend Tests**: ✅ 33/33 passing (100%)
-- **Integration Tests**: ✅ 12/12 passing (100%)
-- **Frontend Tests**: ✅ Playwright configured
-- **Coverage Reports**: Generated in `coverage/` directory
-
-### Running Tests
+### Run the backend (in-memory mode)
 
 ```bash
-# Backend tests (Jest)
-npx jest --config jest.backend.config.js --verbose
-
-# Integration tests (requires running server)
-npx jest tests/integration/full-workflow.test.js --config jest.backend.config.js --verbose
-
-# Frontend tests (Playwright)
-cd src/frontend && npx playwright test
-
-# All tests with coverage
-npm run test:coverage
+# JWT_SECRET is the one required env var; everything else has defaults.
+JWT_SECRET=dev-secret npm run dev
+# Server: http://localhost:3001 (HTTP + WebSocket on same port)
 ```
 
-### Test Coverage Reports
-- **HTML Report**: `coverage/index.html` - Interactive visualization
-- **LCOV Report**: `coverage/lcov.info` - CI/CD integration
-- **JSON Data**: `coverage/coverage-final.json` - Machine-readable
+In-memory mode auto-seeds the three default workflow templates
+(`data-analysis`, `decision-making`, `content-creation`). When
+`DATABASE_URL` is set, Postgres is used instead and the seed runs once
+through the migration job.
 
-### Automated Demo
-```bash
-# Run comprehensive automated demo
-./demo.sh
-
-# Demo includes:
-# - Dependency checking
-# - Backend test execution
-# - Server startup
-# - API endpoint testing
-# - Workflow creation & execution
-# - WebSocket testing
-# - Performance benchmarks
-# - Detailed reporting
-```
-
-## 📖 Usage Examples
-
-### Basic Workflow Creation
+### Run the full stack
 
 ```bash
-# 1. Create a data analysis workflow
-curl -X POST http://localhost:3001/api/workflows \
-  -H "Content-Type: application/json" \
-  -d '{
-    "template": "data-analysis",
-    "context": {
-      "task": "Analyze Q3 sales data",
-      "dataSource": "sales_q3.csv"
-    }
-  }'
-# Response: {"workflow_id":"uuid-123","status":"created","message":"Workflow created successfully"}
-
-# 2. Execute the workflow
-curl -X POST http://localhost:3001/api/workflows/uuid-123/execute
-# Response: {"workflow_id":"uuid-123","status":"executing","message":"Workflow execution started"}
-
-# 3. Check workflow status
-curl http://localhost:3001/api/workflows/uuid-123
-# Returns full workflow object with current status
-
-# 4. Provide human input
-curl -X POST http://localhost:3001/api/workflows/uuid-123/respond \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "approve",
-    "data": {
-      "insights": ["Sales increased 25%", "Top product: Widget A"],
-      "recommendations": ["Increase Widget A inventory", "Focus on underperforming regions"]
-    }
-  }'
-# Response: {"workflow_id":"uuid-123","status":"completed","message":"Human response received and workflow completed"}
+JWT_SECRET=dev-secret npm run dev:full
+# Backend: http://localhost:3001   Frontend: http://localhost:3000
 ```
 
-### WebSocket Communication
-
-```javascript
-// Connect to WebSocket server
-const ws = new WebSocket('ws://localhost:3001');
-
-// Connection established
-ws.onopen = () => {
-  console.log('Connected to GUI-LOP server');
-  // Send test message
-  ws.send(JSON.stringify({type: 'test', message: 'Hello'}));
-};
-
-// Receive messages
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Received:', data.type, data);
-  // Examples: {type: "connected"}, {type: "echo"}, {type: "workflow_completed"}
-};
-
-// Handle errors
-ws.onerror = (error) => {
-  console.error('WebSocket error:', error);
-};
-```
-
-## 🛠️ Development
-
-### Project Structure
-```
-GUI-LOP/
-├── src/
-│   ├── backend/                 # Express server and API
-│   │   ├── simple-server.js     # Main server file
-│   │   └── agents/             # Workflow orchestration (planned)
-│   └── frontend/               # React frontend application
-│       ├── src/
-│       │   ├── components/     # React components
-│       │   ├── App.jsx         # Main React app
-│       │   └── index.js        # Application entry
-│       ├── tests/               # Frontend tests
-│       ├── package.json         # Frontend dependencies
-│       └── playwright.config.js # E2E test configuration
-├── tests/                      # Test files
-│   ├── backend/                # Backend unit tests
-│   │   ├── server.test.js      # Mock server tests
-│   │   ├── simple-server.test.js # Real server tests
-│   │   └── websocket.test.js   # WebSocket tests
-│   ├── integration/             # Integration tests
-│   │   └── full-workflow.test.js # Full workflow tests
-│   └── setup.js                # Test environment setup
-├── coverage/                   # Test coverage reports
-├── jest.backend.config.js       # Jest configuration for backend
-├── demo.sh                     # Automated demo script
-├── TEST_EXECUTION_SUMMARY.md   # Comprehensive test results
-├── package.json                # Dependencies and scripts
-└── README.md                   # This file
-```
-
-### Development Scripts
+### Verify
 
 ```bash
-# Backend Development
-npm run dev              # Start backend in development mode
-npm run start            # Start backend in production mode
+# 1. Health probe (open, no auth).
+curl -s http://localhost:3001/health | jq
 
-# Frontend Development
-cd src/frontend
-npm start              # Start React development server
-npm run build            # Build React app for production
+# 2. Register a user (open). We mint an admin for this walkthrough
+#    so the workflow-permission grants don't get in the way. In
+#    production, the register endpoint should refuse self-promotion
+#    to admin — that's a tracked follow-up.
+curl -s -X POST http://localhost:3001/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"alice@example.com","username":"alice","password":"correct-horse-battery-staple","role":"admin"}'
 
-# Testing
-npm test                # Run backend tests
-npm run test:coverage    # Run tests with coverage report
-npm run test:watch       # Run tests in watch mode
+# 3. Log in to get an access token.
+TOKEN=$(curl -s -X POST http://localhost:3001/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"identifier":"alice","password":"correct-horse-battery-staple"}' \
+  | jq -r '.accessToken')
 
-# Automated Demo
-./demo.sh               # Run comprehensive automated demo
-
-# Full Stack Development
-npm run dev:full         # Start both backend and frontend
+# 4. List the three seeded templates (requires auth).
+curl -s http://localhost:3001/api/v1/workflows/templates \
+  -H "Authorization: Bearer $TOKEN" | jq '.data.templates | length'
 ```
-
-### Configuration
-
-#### Environment Variables
-The application uses sensible defaults but can be configured:
-
-```bash
-# Server Configuration
-PORT=3001                    # Backend server port
-NODE_ENV=development         # Environment mode
-
-# Database (Future Enhancement)
-DATABASE_URL=postgresql://... # PostgreSQL connection (when implemented)
-```
-
-#### Available Templates
-- `data-analysis` - Data analysis with human approval
-- `decision-making` - Multi-option decision workflows
-- `content-creation` - Content creation with iterative feedback
-
-## 📊 Performance & Monitoring
-
-### Response Times (Benchmarked)
-- **Health Check**: <50ms
-- **Template Retrieval**: <10ms
-- **Workflow Creation**: <20ms
-- **Workflow Execution**: <10ms
-- **Human Response**: <10ms
-
-### Concurrency Capabilities
-- **Concurrent Workflows**: 10+ simultaneous workflows
-- **WebSocket Connections**: 100+ concurrent connections
-- **Memory Usage**: <50MB for base operations
-
-### Monitoring Endpoints
-- `/health` - Server health and basic metrics
-- `/api/workflows/templates` - Available workflow count
-- WebSocket events for real-time status updates
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **Port Already in Use**
-   ```bash
-   # Check what's using port 3001
-   lsof -ti:3001
-
-   # Kill the process
-   kill -9 <pid>
-
-   # Or use different port
-   PORT=3002 npm run dev
-   ```
-
-2. **Dependencies Missing**
-   ```bash
-   # Clean install
-   rm -rf node_modules package-lock.json
-   npm install
-
-   # Frontend dependencies
-   cd src/frontend && rm -rf node_modules package-lock.json && npm install
-   ```
-
-3. **Tests Failing**
-   ```bash
-   # Clear Jest cache
-   npx jest --clear-cache
-
-   # Run specific test file
-   npx jest tests/backend/server.test.js --verbose
-
-   # Check test configuration
-   cat jest.backend.config.js
-   ```
-
-4. **WebSocket Connection Issues**
-   ```bash
-   # Test WebSocket connection manually
-   npx wscat -c ws://localhost:3001
-
-   # Check if server is running
-   curl http://localhost:3001/health
-   ```
-
-### Health Checks
-
-```bash
-# Backend health
-curl http://localhost:3001/health
-
-# WebSocket connectivity
-npx wscat -c ws://localhost:3001
-
-# API endpoints availability
-curl http://localhost:3001/api/workflows/templates
-
-# Frontend accessibility (if running)
-curl http://localhost:3000
-```
-
-### Debug Mode
-
-```bash
-# Enable verbose logging
-DEBUG=gui-lop:* npm run dev
-
-# Test with specific port
-PORT=3999 npm run dev
-
-# Run in production mode locally
-NODE_ENV=production npm start
-```
-
-## 📋 Requirements Verification
-
-### ✅ Completed Requirements
-
-1. **Comprehensive Testing**: ✅
-   - Backend tests: 33/33 passing
-   - Integration tests: 12/12 passing
-   - Coverage reports generated
-   - Automated demo script with measurable outputs
-
-2. **Working Application**: ✅
-   - All API endpoints functional
-   - WebSocket communication working
-   - Complete workflow lifecycle tested
-   - Error handling verified
-
-3. **Documentation**: ✅
-   - Complete architecture diagram
-   - Exact installation instructions
-   - Working examples with curl commands
-   - Troubleshooting guide
-   - Performance characteristics documented
-
-4. **Demo Capabilities**: ✅
-   - Automated demo script (`./demo.sh`)
-   - Measurable outputs and metrics
-   - Comprehensive test execution summary
-   - Real-time functionality demonstration
-
-### 🎯 Evidence of Functionality
-
-**Backend API Verification**:
-```bash
-# All endpoints tested and working
-GET /health ✅
-GET /api/workflows/templates ✅
-POST /api/workflows ✅
-POST /api/workflows/:id/execute ✅
-GET /api/workflows/:id ✅
-POST /api/workflows/:id/respond ✅
-```
-
-**Workflow Lifecycle**:
-```bash
-Created → Executing → Waiting for Human → Completed ✅
-```
-
-**WebSocket Communication**:
-```bash
-Connection → Message Echo → Event Broadcasting → Cleanup ✅
-```
-
-**Performance Metrics**:
-```bash
-Response Times: <50ms for all operations ✅
-Concurrent Workflows: 5+ simultaneous ✅
-Memory Usage: Stable ✅
-```
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
 
 ---
 
-**This application is FULLY FUNCTIONAL and ready for demonstration, development, or production deployment.**
+## Architecture
+
+The backend is split into six **bounded contexts** under
+`src/backend/contexts/`. Each context follows a strict four-layer
+hexagonal layout (`domain/`, `application/`, `infrastructure/`,
+`interfaces/`) enforced by `dependency-cruiser` (`npm run lint:arch`).
+
+```
+                    ┌─────────────────────────┐
+                    │  React SPA (port 3000)  │
+                    └────────────┬────────────┘
+                                 │  /api/v1/*  +  ws://…
+                    ┌────────────▼─────────────┐
+                    │   bootstrap (port 3001)  │
+                    │   composition root        │
+                    └────────────┬─────────────┘
+                                 │
+   ┌───────────┬────────────┬────┴────┬────────────┬──────────────┐
+   ▼           ▼            ▼         ▼            ▼              ▼
+┌──────┐ ┌──────────┐ ┌─────────┐ ┌──────┐ ┌────────────┐ ┌──────────────┐
+│ IAM  │ │ Workflow │ │ Human   │ │  UI  │ │Notification│ │   Audit &    │
+│      │ │ Orchestr.│ │ Inter.  │ │ Gen. │ │  & Real-   │ │  Analytics   │
+│      │ │ (core)   │ │ (core)  │ │      │ │  time      │ │              │
+└──────┘ └──────────┘ └─────────┘ └──────┘ └────────────┘ └──────────────┘
+   │                                              │
+   │                                              ▼
+   │                                       ┌────────────┐
+   │                                       │  Postgres  │  +  ┌─────────┐
+   │                                       │  (or       │     │  Redis  │
+   │                                       │   in-mem)  │     │ (or i.m)│
+   └──────────────────────────────────────►└────────────┘     └─────────┘
+```
+
+| Context              | Role         | Code path                                    |
+| -------------------- | ------------ | -------------------------------------------- |
+| Identity & Access    | supporting   | `src/backend/contexts/identity-and-access/`  |
+| Workflow Orchestration | **core**   | `src/backend/contexts/workflow-orchestration/` |
+| Human Interaction    | **core**     | `src/backend/contexts/human-interaction/`    |
+| UI Generation        | supporting   | `src/backend/contexts/ui-generation/`        |
+| Notification & Realtime | supporting | `src/backend/contexts/notification/`         |
+| Audit & Analytics    | generic      | `src/backend/contexts/audit-and-analytics/`  |
+
+Shared building blocks (Result, DomainEvent, Clock/IdGen, config,
+outbox, logger) live in `src/backend/shared-kernel/`.
+
+The entry point is `src/backend/bootstrap/index.js`. Read
+`src/backend/bootstrap/main.js` to see how everything is wired.
+
+---
+
+## API Reference (v1)
+
+All paths are versioned under `/api/v1/`. Mutating endpoints honour
+an `Idempotency-Key` header (UUID v4 recommended).
+
+### Auth — `/api/v1/auth`
+
+| Method | Path           | Auth | Notes                                          |
+| ------ | -------------- | ---- | ---------------------------------------------- |
+| POST   | `/register`    | open | `{email, username, password, role?}` → 201     |
+| POST   | `/login`       | open | `{identifier, password}` → `{accessToken, refreshToken}` |
+| POST   | `/refresh`     | open | `{refreshToken}` → new token pair              |
+| POST   | `/logout`      | JWT  | revokes the session                            |
+| POST   | `/password`    | JWT  | `{oldPassword, newPassword}`                   |
+| GET    | `/me`          | JWT  | current user profile                           |
+
+### API keys — `/api/v1/auth/api-keys`
+
+| Method | Path  | Auth | Notes                                             |
+| ------ | ----- | ---- | ------------------------------------------------- |
+| POST   | `/`   | JWT  | mint a key — plaintext returned **once**, prefixed `glop_…` |
+| GET    | `/`   | JWT  | list active keys for current user                  |
+| DELETE | `/:id`| JWT  | revoke a key (irreversible)                       |
+
+API keys can be used in place of JWTs on any endpoint:
+`Authorization: Bearer glop_<key>`.
+
+### Admin — `/api/v1/admin` (role `admin` required)
+
+| Method | Path                                  | Notes                       |
+| ------ | ------------------------------------- | --------------------------- |
+| GET    | `/users`                              | paginated user list         |
+| GET    | `/users/:id`                          | profile + activity          |
+| POST   | `/users/:id/permissions`              | `{permission, scope?}`      |
+| DELETE | `/users/:id/permissions/:permission`  | optional `?scope=`          |
+| POST   | `/users/:id/deactivate`               |                             |
+| POST   | `/users/:id/reactivate`               |                             |
+
+### Workflows — `/api/v1/workflows` (JWT required)
+
+| Method | Path                | Notes                                     |
+| ------ | ------------------- | ----------------------------------------- |
+| GET    | `/templates`        | list active templates                     |
+| POST   | `/templates`        | publish a new template version (admin)    |
+| POST   | `/`                 | create a workflow from a template         |
+| GET    | `/:id`              | full workflow detail (steps + transitions)|
+| POST   | `/:id/execute`      | run the engine until pause or terminal    |
+| POST   | `/:id/cancel`       | cancel an in-flight workflow              |
+
+### Human interaction — `/api/v1` (JWT required)
+
+| Method | Path                            | Notes                          |
+| ------ | ------------------------------- | ------------------------------ |
+| POST   | `/workflows/:id/respond`        | submit a response to a paused step (Idempotency-Key required) |
+| GET    | `/inbox`                        | list pending steps for current user |
+| GET    | `/inbox/:workflowId/:stepId`    | single pending step             |
+
+### UI Generation — `/api/v1/ui` (JWT required)
+
+| Method | Path             | Notes                                     |
+| ------ | ---------------- | ----------------------------------------- |
+| POST   | `/generate`      | render a UI document for a step           |
+| GET    | `/documents/:id` | fetch a generated document                |
+| GET    | `/components`    | catalogue introspection                   |
+
+### Analytics, audit, dashboards — `/api/v1` (JWT required)
+
+`/analytics/workflows`, `/analytics/users/:id`, `/audit/workflows/:id`,
+`/audit/aggregates/:type/:id`, `/audit/exports`,
+`/dashboards/active-workflows`.
+
+### Health — `/health` (open)
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-05-10T07:31:08.123Z",
+  "message": "GUI-LOP v1 (DDD) is running",
+  "subsystems": {
+    "db":    { "status": "disabled|ok|error:CODE", "connected": false },
+    "redis": { "status": "disabled|ok|error:MSG",  "connected": false },
+    "outbox":{ "lag_ms": 0, "pending_count": 0 }
+  }
+}
+```
+
+---
+
+## WebSocket
+
+Connect: `ws://localhost:3001/ws/v1?token=<accessToken>` (in dev, the
+backend also accepts `?user_id=...` as a stand-in until a JWT verifier
+on the upgrade is wired into production).
+
+All messages are envelopes:
+
+```json
+{ "type": "workflow.completed", "version": 1, "payload": {...}, "occurredAt": "..." }
+```
+
+Server-to-client event types: `workflow.created`, `workflow.started`,
+`workflow.step_started`, `workflow.step_completed`,
+`workflow.step_failed`, `workflow.human_input_required`,
+`workflow.completed`, `workflow.failed`, `workflow.cancelled`,
+`human_response.recorded`, `ui.generated`.
+
+---
+
+## End-to-End Workflow Walk-through
+
+```bash
+# Assumes $TOKEN from the auth flow above.
+
+# Create a data-analysis workflow.
+IDEMP=$(uuidgen)
+WF=$(curl -s -X POST http://localhost:3001/api/v1/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $IDEMP" \
+  -d '{"template":"data-analysis","context":{"task":"Q3 sales"}}')
+WID=$(echo "$WF" | jq -r '.data.workflow_id')
+echo "workflow id = $WID"
+
+# Run the engine until it pauses on the human step.
+curl -s -X POST http://localhost:3001/api/v1/workflows/$WID/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" | jq '.data.stopped_reason'
+# Expect: "waiting_for_human"
+
+# Find the pending step.
+SID=$(curl -s http://localhost:3001/api/v1/inbox \
+  -H "Authorization: Bearer $TOKEN" | jq -r '.data[0].stepId')
+echo "pending step id = $SID"
+
+# Submit a human response.
+curl -s -X POST http://localhost:3001/api/v1/workflows/$WID/respond \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d "{\"stepId\":\"$SID\",\"action\":\"approve\",\"payload\":{\"ok\":true}}" | jq '.data.action'
+
+# Confirm completion.
+curl -s http://localhost:3001/api/v1/workflows/$WID \
+  -H "Authorization: Bearer $TOKEN" | jq '.data.workflow.status'
+# Expect: "completed"
+```
+
+---
+
+## Testing & Benchmarks
+
+```bash
+# Backend unit + integration suite (no infrastructure needed).
+npx jest --config jest.backend.config.js
+# Expect: 560 passing across 75 suites.
+
+# Contract suite: same assertions, in-memory + Postgres adapters.
+# Auto-skips cleanly when Docker is unavailable.
+npm run test:contracts
+
+# SLO benchmark suite (25 scenarios; results in tests/benchmarks/results/).
+npm run bench
+
+# Per-scenario benches.
+npm run bench:workflow
+npm run bench:auth
+npm run bench:domain
+
+# Frontend.
+cd src/frontend && npm test                 # Jest unit
+cd src/frontend && npm run test:e2e         # Playwright e2e
+```
+
+Current numbers (latest run):
+
+| Bench                | p95     | SLO       | Status |
+| -------------------- | ------- | --------- | ------ |
+| `workflow.detail`    | ~1.3 ms | < 250 ms  | PASS   |
+| `workflow.create`    | ~1.9 ms | < 250 ms  | PASS   |
+| `workflow.lifecycle` | ~5.5 ms | < 750 ms  | PASS   |
+| `auth.login`         | ~62 ms  | < 100 ms  | PASS   |
+| `outbox.publish[1000]` drain | ~26 ms | < 5 s | PASS |
+| `websocket.broadcast[500]` p99 | ~5 ms | < 1 s | PASS |
+
+See `tests/benchmarks/results/latest.md` for the full table after each
+run.
+
+---
+
+## Configuration
+
+All config comes from environment variables. A schema-validated loader
+at `src/backend/shared-kernel/config/config-loader.js` is the single
+source of truth.
+
+| Variable                  | Default                   | Notes                                  |
+| ------------------------- | ------------------------- | -------------------------------------- |
+| `JWT_SECRET`              | — (required)              | HS256 signing secret                   |
+| `PORT`                    | `3001`                    |                                        |
+| `NODE_ENV`                | `development`             |                                        |
+| `DATABASE_URL`            | — (optional)              | unset = in-memory adapters             |
+| `REDIS_URL`               | — (optional)              | unset = in-memory adapters             |
+| `JWT_ACCESS_TTL_SECONDS`  | `900` (15 min)            |                                        |
+| `JWT_REFRESH_TTL_SECONDS` | `604800` (7 d)            |                                        |
+| `BCRYPT_WORK_FACTOR`      | `12` (prod), `4` (test)   | bcrypt cost; offloaded to worker pool  |
+| `RATE_LIMIT_WINDOW_MS`    | `900000`                  |                                        |
+| `RATE_LIMIT_MAX`          | `100`                     |                                        |
+| `CORS_ORIGINS`            | `http://localhost:3000`   | csv                                    |
+| `LOG_LEVEL`               | `info`                    |                                        |
+| `OUTBOX_BATCH_SIZE`       | `200`                     |                                        |
+| `AI_PROVIDER`             | `stub`                    | `stub`/`openai`/`anthropic`            |
+| `AI_API_KEY`              | —                         | required if provider ≠ `stub`          |
+| `AI_BASE_URL`, `AI_MODEL`, `AI_TIMEOUT_MS`, `AI_MAX_RETRIES` | sane defaults | per provider                |
+
+A working dev example lives in `.env.example`.
+
+---
+
+## Production Deployment
+
+See [`docs/PRODUCTION_DEPLOYMENT_GUIDE.md`](docs/PRODUCTION_DEPLOYMENT_GUIDE.md).
+
+```bash
+# Local stack via Docker Compose (Postgres + Redis + app, migrations auto-run).
+docker compose up
+
+# Build the image directly.
+npm run docker:build
+
+# Helm chart (production target).
+helm lint infrastructure/helm/gui-lop
+helm install gui-lop infrastructure/helm/gui-lop -f my-values.yaml
+```
+
+CI workflows under `.github/workflows/`:
+
+| Workflow         | Trigger                      | Gate          |
+| ---------------- | ---------------------------- | ------------- |
+| `ci.yml`         | every PR + push to `main`    | required      |
+| `arch-lint.yml`  | every PR + push to `main`    | required      |
+| `docker.yml`     | push to `main`               | informational |
+| `bench.yml`      | push to `main` (+ manual)    | informational |
+| `contracts.yml`  | every PR + push to `main`    | informational |
+
+---
+
+## Development
+
+### Project Layout
+
+```
+GUI-LOP/
+├── src/
+│   ├── backend/
+│   │   ├── bootstrap/         # composition root (main.js, index.js, wire-*.js)
+│   │   ├── shared-kernel/     # Result, DomainEvent, ports, config, outbox
+│   │   └── contexts/          # six bounded contexts (DDD)
+│   ├── frontend/              # React 18 SPA
+│   └── api/                   # (optional, separate public API entry)
+├── database/
+│   ├── schemas/               # canonical SQL
+│   ├── migrations/            # versioned forward migrations (001 … 010)
+│   └── seeds/                 # default workflow templates
+├── tests/
+│   ├── integration/           # bootstrap, health, completion, forwarding…
+│   ├── backend/contexts/      # additional per-context tests (Phase 4-6)
+│   ├── contracts/             # testcontainers Postgres + Redis suites
+│   └── benchmarks/            # SLO benchmark scenarios
+├── infrastructure/
+│   ├── helm/gui-lop/          # Helm chart
+│   └── scripts/               # operational scripts
+├── docs/
+│   ├── adr/                   # 24 ADRs
+│   ├── ddd/                   # strategic + tactical DDD docs
+│   └── PRODUCTION_DEPLOYMENT_GUIDE.md
+├── Dockerfile
+├── docker-compose.yml
+├── .dependency-cruiser.cjs    # strict layer + cross-context rules
+├── jest.backend.config.js
+├── jest.contracts.config.js
+└── package.json               # main: src/backend/bootstrap/index.js
+```
+
+### Scripts
+
+```bash
+npm run dev                # backend (nodemon, bootstrap entry)
+npm run dev:full           # backend + frontend
+npm run start              # backend (no nodemon)
+npm run typecheck          # tsc --noEmit (currently a no-op; project is pure ESM JS)
+npm run lint:arch          # dependency-cruiser layer rules
+npm run bench              # full SLO benchmark suite
+npm run docker:build       # build the production image
+npm run helm:lint          # lint the Helm chart
+```
+
+---
+
+## Troubleshooting
+
+### Port already in use
+
+```bash
+lsof -ti:3001 | xargs kill -9     # free port
+PORT=3999 JWT_SECRET=dev-secret npm run dev   # or pick another port
+```
+
+### Fresh install
+
+```bash
+rm -rf node_modules package-lock.json && npm install
+cd src/frontend && rm -rf node_modules package-lock.json && npm install && cd ../..
+```
+
+### Test cache problems
+
+```bash
+npx jest --clear-cache
+```
+
+### Contract tests "all skipped"
+
+Expected when Docker isn't available. The suite gates each Postgres /
+Redis block via `describeIfDocker`. Run them in CI (the
+`contracts.yml` workflow always has Docker).
+
+### Inspect the health probe under load
+
+```bash
+watch -n1 'curl -s http://localhost:3001/health | jq ".subsystems.outbox"'
+```
+
+---
+
+## License
+
+MIT — see `LICENSE`.

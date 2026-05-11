@@ -1,8 +1,8 @@
 # GUI-LOP Benchmark Results
 
-Generated: 2026-05-11T21:13:38.630Z
+Generated: 2026-05-11T22:07:34.954Z
 Node: v22.22.2 (linux/x64)
-Total elapsed: 16.07 s
+Total elapsed: 17.41 s
 
 SLO references: ADR 0021 (observability).
 
@@ -12,51 +12,51 @@ SLO references: ADR 0021 (observability).
 
 | Scenario | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | OPS/sec | SLO | Status |
 |---|---:|---:|---:|---:|---:|---|---|
-| `workflow.next_action` | 0.001 | 0.001 | 0.002 | 0.008 | 622977.7 | p95 < 1 ms | PASS |
-| `workflow.apply_human_response` | 0.036 | 0.010 | 0.019 | 0.042 | 27374.7 | p95 < 1 ms | PASS |
-| `response_validation.validate` | 0.012 | 0.006 | 0.010 | 0.034 | 82540.2 | p95 < 1 ms | PASS |
-| `authorisation.is_authorised` | 0.001 | 0.001 | 0.002 | 0.003 | 837929.4 | p95 < 1 ms | PASS |
+| `workflow.next_action` | 0.001 | 0.001 | 0.002 | 0.010 | 461081.7 | p95 < 1 ms | PASS |
+| `workflow.apply_human_response` | 0.032 | 0.009 | 0.015 | 0.037 | 31185.3 | p95 < 1 ms | PASS |
+| `response_validation.validate` | 0.006 | 0.005 | 0.008 | 0.024 | 99842.3 | p95 < 1 ms | PASS |
+| `authorisation.is_authorised` | 0.001 | 0.001 | 0.001 | 0.002 | 882927.4 | p95 < 1 ms | PASS |
 
 ## repository-throughput
 
 | Scenario | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | OPS/sec | SLO | Status |
 |---|---:|---:|---:|---:|---:|---|---|
-| `workflow_repo.save` | 0.013 | 0.011 | 0.020 | 0.061 | 77319.3 | p95 < 5 ms | PASS |
-| `workflow_repo.findById` | 0.021 | 0.014 | 0.019 | 0.045 | 47281.2 | p95 < 5 ms | PASS |
-| `human_response_repo.save` | 0.011 | 0.009 | 0.015 | 0.051 | 93168.8 | p95 < 5 ms | PASS |
-| `human_response_repo.findByIdempotencyKey` | 0.007 | 0.007 | 0.009 | 0.014 | 138380.5 | p95 < 5 ms | PASS |
-| `outbox.enqueue` | 0.009 | 0.003 | 0.004 | 0.011 | 114517.8 | p95 < 1 ms | PASS |
-| `outbox.pickBatch(100)` | 0.016 | 0.008 | 0.016 | 0.047 | 63177.2 | p95 < 5 ms | PASS |
+| `workflow_repo.save` | 0.011 | 0.010 | 0.016 | 0.034 | 87631.8 | p95 < 5 ms | PASS |
+| `workflow_repo.findById` | 0.016 | 0.013 | 0.017 | 0.030 | 63382.9 | p95 < 5 ms | PASS |
+| `human_response_repo.save` | 0.010 | 0.009 | 0.015 | 0.031 | 98128.6 | p95 < 5 ms | PASS |
+| `human_response_repo.findByIdempotencyKey` | 0.007 | 0.007 | 0.010 | 0.014 | 132730.3 | p95 < 5 ms | PASS |
+| `outbox.enqueue` | 0.007 | 0.002 | 0.004 | 0.007 | 140548.0 | p95 < 1 ms | PASS |
+| `outbox.pickBatch(100)` | 0.016 | 0.009 | 0.018 | 0.053 | 61851.5 | p95 < 5 ms | PASS |
 
 ## eventbus-throughput
 
 | Scenario | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | OPS/sec | SLO | Status |
 |---|---:|---:|---:|---:|---:|---|---|
-| `outbox.publish[100]` | 0.746 | 0.657 | 0.943 | 2.369 | 1339.5 | drain p95 < 5 s | PASS |
-| `outbox.publish[500]` | 5.186 | 4.369 | 7.785 | 11.614 | 192.7 | drain p95 < 5 s | PASS |
-| `outbox.publish[1000]` | 12.901 | 12.155 | 15.748 | 16.163 | 77.5 | drain p95 < 5 s | PASS |
-| `websocket.broadcast[10]` | 0.006 | 0.005 | 0.009 | 0.043 | 153628.6 | p99 < 1 s | PASS |
-| `websocket.broadcast[100]` | 0.033 | 0.030 | 0.057 | 0.106 | 30105.0 | p99 < 1 s | PASS |
-| `websocket.broadcast[500]` | 0.162 | 0.054 | 0.195 | 5.326 | 6164.2 | p99 < 1 s | PASS |
+| `outbox.publish[100]` | 0.662 | 0.602 | 0.694 | 1.954 | 1508.6 | drain p95 < 5 s | PASS |
+| `outbox.publish[500]` | 4.354 | 4.009 | 6.663 | 6.759 | 229.6 | drain p95 < 5 s | PASS |
+| `outbox.publish[1000]` | 12.900 | 12.398 | 15.380 | 15.580 | 77.5 | drain p95 < 5 s | PASS |
+| `websocket.broadcast[10]` | 0.006 | 0.005 | 0.010 | 0.019 | 171097.5 | p99 < 1 s | PASS |
+| `websocket.broadcast[100]` | 0.033 | 0.029 | 0.051 | 0.134 | 29764.0 | p99 < 1 s | PASS |
+| `websocket.broadcast[500]` | 0.128 | 0.054 | 0.183 | 2.655 | 7766.7 | p99 < 1 s | PASS |
 
 ## workflow-throughput
 
 | Scenario | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | OPS/sec | SLO | Status |
 |---|---:|---:|---:|---:|---:|---|---|
-| `workflow.create` | 1.424 | 1.312 | 1.838 | 3.152 | 701.5 | p95 < 250 ms | PASS |
-| `workflow.execute` | 1.419 | 1.364 | 1.639 | 3.687 | 704.3 | p95 < 250 ms | PASS |
-| `workflow.respond` | 1.666 | 1.578 | 2.032 | 4.107 | 599.7 | p95 < 250 ms | PASS |
-| `workflow.detail` | 1.083 | 1.022 | 1.377 | 1.643 | 922.7 | p95 < 250 ms | PASS |
-| `workflow.lifecycle` | 4.125 | 3.853 | 5.695 | 6.762 | 242.3 | p95 < 750 ms | PASS |
+| `workflow.create` | 1.582 | 1.482 | 1.964 | 3.548 | 631.6 | p95 < 250 ms | PASS |
+| `workflow.execute` | 1.535 | 1.501 | 1.678 | 3.482 | 650.9 | p95 < 250 ms | PASS |
+| `workflow.respond` | 1.743 | 1.660 | 2.080 | 3.935 | 573.1 | p95 < 250 ms | PASS |
+| `workflow.detail` | 1.129 | 1.072 | 1.358 | 1.968 | 884.7 | p95 < 250 ms | PASS |
+| `workflow.lifecycle` | 4.253 | 4.130 | 4.576 | 6.509 | 235.0 | p95 < 750 ms | PASS |
 
 ## auth-throughput
 
 | Scenario | Mean (ms) | p50 (ms) | p95 (ms) | p99 (ms) | OPS/sec | SLO | Status |
 |---|---:|---:|---:|---:|---:|---|---|
-| `auth.register` | 63.468 | 63.280 | 64.654 | 65.701 | 15.8 | p95 < 250 ms | PASS |
-| `auth.login` | 64.455 | 64.085 | 66.389 | 67.439 | 15.5 | p95 < 100 ms | PASS |
-| `auth.refresh` | 1.114 | 1.072 | 1.294 | 1.448 | 896.4 | p95 < 50 ms | PASS |
-| `auth.middleware` | 0.943 | 0.879 | 1.327 | 1.786 | 1059.4 | p95 < 10 ms | PASS |
+| `auth.register` | 72.427 | 72.184 | 73.442 | 75.868 | 13.8 | p95 < 250 ms | PASS |
+| `auth.login` | 72.953 | 72.685 | 74.938 | 76.902 | 13.7 | p95 < 100 ms | PASS |
+| `auth.refresh` | 1.193 | 1.131 | 1.455 | 1.642 | 837.0 | p95 < 50 ms | PASS |
+| `auth.middleware` | 0.914 | 0.887 | 1.058 | 1.334 | 1091.8 | p95 < 10 ms | PASS |
 
 ## SLO budgets
 
