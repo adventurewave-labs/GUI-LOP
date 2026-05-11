@@ -3,6 +3,7 @@
 **Branch:** `claude/create-adr-ddd-docs-bZodK`
 **Range (iteration 1):** docs commit `5cecab8` → `e816f43`
 **Range (iteration 2):** `08dcc5b` → `e23be41`
+**Range (iteration 3):** `13296a9` → `dcbab3b`
 **Date:** 2026-05-10
 
 ## Headline
@@ -106,6 +107,22 @@ the backlog from iteration 1. Pushed commits:
 - 500/500 tests passing across 66 suites (was 426/57).
 - 25/25 SLO benchmarks still PASS — `auth.login` p95 at 67–72 ms (well under 100 ms), workflow ops 1–2 ms p95.
 - Working tree clean; all four agent commits scoped to their non-overlapping path budgets.
+
+### Iteration 3 (2026-05-10, final follow-ups)
+
+Three parallel agents closed out the remaining backlog. Pushed commits:
+
+| Commit | Item | Tests added |
+| ------ | ---- | ----------- |
+| `9227e38` | **AdvanceWorkflow fix.** `AdvanceWorkflowUseCase` now applies the human response to the `Workflow` aggregate (`workflow.applyHumanResponse(stepId, response, now)`) before re-running the engine, so dev-mode workflows now reach `workflow.completed` end-to-end. The in-process `WorkflowAdvancer` adapter already forwarded `{stepId, response}` — no wiring change. New integration test `tests/integration/workflow-completion.test.js` asserts the full event sequence including `workflow.completed`. | +7 |
+| `73cc7bd` | **Real AI provider ACL** (ADR 0023). `AIProvider` + `ClassificationService` ports. OpenAI and Anthropic adapters (no vendor SDKs — `fetch` only, default Anthropic model `claude-haiku-4-5`). `BaseAIAdapter` composes retry+jitter, circuit breaker, telemetry, PII scrubbing. Domain error taxonomy (`AIProviderUnavailable`, `AIQuotaExceeded`, `AIInvalidRequest`, `AIBadResponse`). `wire-ui-generation.js` reads `AI_PROVIDER` (`stub`/`openai`/`anthropic`, default `stub`); fails fast at boot if a real vendor is selected without `AI_API_KEY`. `GenerateUIForStepUseCase` routes through the provider when `strategyHint === 'ai-assisted'`, deterministic fallback otherwise. | +61 |
+| `dcbab3b` | **Testcontainers contract suites** for every bounded context. 22 files under `tests/contracts/` covering 14 repositories + Redis-backed token blacklist, event publisher, rate-limit primitives. Same `describe.each` runs the same assertions against in-memory and Postgres adapters; the Postgres branch is gated by `describeIfDocker(...)` from `_helpers/docker-available.js`. Adds `testcontainers@^10` + `@testcontainers/postgresql` + `@testcontainers/redis` devDeps, `jest.contracts.config.js`, `npm run test:contracts`, and `.github/workflows/contracts.yml` (informational, non-blocking). | +148 (Docker-gated) |
+
+**Iteration 3 totals:**
+- 561/561 backend tests passing across 75 suites (was 500/66 — net +61 from the AI ACL agent's tests; AdvanceWorkflow added 7, contracts added 0 because they auto-skip without Docker).
+- 148 additional contract tests skipped cleanly when Docker is unavailable; they execute against real Postgres + Redis containers in CI and any dev environment with Docker.
+- 25/25 SLO benchmarks still PASS — no regression.
+- Working tree clean; three agent commits scoped to fully non-overlapping path budgets.
 
 ### Remaining backlog (iteration 3 candidates)
 
