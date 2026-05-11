@@ -582,6 +582,439 @@ it shipped.
 
 \* PASS after a doc correction.
 
+## Per-use-case commands and outputs
+
+The literal commands run against `JWT_SECRET=dev-secret npm run dev`
+on `http://localhost:3001`, and the actual responses captured. Long
+outputs are shown abbreviated with `…`.
+
+### UC1 — Sign in and get an access token
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/auth/register \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"ops@example.com","username":"opsuser","password":"long-and-memorable-pass-phrase"}'
+```
+
+```json
+{ "id": "bea79121-…", "email": "ops@example.com", "username": "opsuser", "role": "user" }
+```
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"identifier":"opsuser","password":"long-and-memorable-pass-phrase"}'
+```
+
+Returns keys `accessToken, refreshToken, accessTokenExpiresAt, refreshTokenExpiresAt, sessionId, user`.
+Access token length: 375 chars. Refresh token: 64 chars.
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/auth/refresh \
+    -H 'Content-Type: application/json' \
+    -d "{\"refreshToken\":\"$REFRESH\"}"
+```
+
+Returns a new pair (`accessToken, refreshToken, accessTokenExpiresAt,
+refreshTokenExpiresAt, sessionId`). Previous refresh token now
+rejected.
+
+```bash
+$ curl -s http://localhost:3001/api/v1/auth/me -H "Authorization: Bearer $TOKEN"
+```
+
+```json
+{
+  "id": "bea79121-…",
+  "email": "ops@example.com",
+  "username": "opsuser",
+  "role": "user",
+  "fullName": null,
+  "isActive": true,
+  "createdAt": "2026-05-11T22:36:19.760Z",
+  "updatedAt": "2026-05-11T22:36:19.777Z",
+  "lastLogin": "2026-05-11T22:36:19.777Z"
+}
+```
+
+**Result:** PASS. 3-char usernames (e.g. `ops`) also accepted —
+verified separately.
+
+### UC2 — Submit a workflow that needs a human decision
+
+```bash
+$ curl -s http://localhost:3001/api/v1/workflows/templates -H "Authorization: Bearer $TOKEN"
+# data.templates ids: ['data-analysis','decision-making','content-creation']
+```
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/workflows \
+    -H "Authorization: Bearer $USER_TOKEN" -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: $UUID" \
+    -d '{"template":"data-analysis","context":{"task":"test"}}'
+# success: true, workflow_id: …
+```
+
+```bash
+$ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/execute" \
+    -H "Authorization: Bearer $USER_TOKEN" -H "Idempotency-Key: $UUID"
+```
+
+```json
+{
+  "success": false,
+  "message": "Permission denied: workflow:execute@…",
+  "code": "FORBIDDEN"
+}
+```
+
+Re-ran as **admin**:
+
+```bash
+$ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/execute" \
+    -H "Authorization: Bearer $ADMIN" -H "Idempotency-Key: $UUID"
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "workflow_id": "156dad32-…",
+    "status": "waiting_for_human",
+    "stopped_reason": "waiting_for_human",
+    "ran_steps": 3
+  }
+}
+```
+
+**Result:** PASS\* — doc updated to register an admin.
+
+### UC3 — Review and approve a pending step
+
+```bash
+$ curl -s http://localhost:3001/api/v1/inbox -H "Authorization: Bearer $ADMIN"
+```
+
+```json
+{
+  "data": [
+    {
+      "workflowId": "156dad32-…",
+      "stepId": "ab99ef77-…",
+      "uiDocumentId": null,
+      "eligibility": {"requiredRole": null, "requiredPermissions": [], "scope": null},
+      "deadline": null,
+      "onTimeout": "escalate",
+      "escalationLevel": 0,
+      "openedAt": "2026-05-11T22:36:55.419Z",
+      "closedAt": null
+    }
+  ]
+}
+```
+
+```bash
+$ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/respond" \
+    -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+    -H "Idempotency-Key: $IDEMP" \
+    -d "{\"stepId\":\"$SID\",\"action\":\"approve\",\"payload\":{…},\"rationale\":\"Reviewed.\",\"confidence\":0.92}"
+```
+
+```json
+{
+  "data": {
+    "id": "e795856c-…",
+    "workflowId": "156dad32-…",
+    "stepId": "ab99ef77-…",
+    "responder": "45bdc31e-…",
+    "action": "approve",
+    "payload": {"approvedInsights": ["Q3 up 12%"], "notes": "ok"},
+    "rationale": "Reviewed.",
+    "confidence": 0.92,
+    "idempotencyKey": "94bd6404-…",
+    "recordedAt": "…"
+  },
+  "deduplicated": false
+}
+```
+
+**Idempotency replay** (same key, same body): `"deduplicated": true`. ✓
+
+**Concurrent submit with a fresh key after the step is closed:**
+
+```bash
+$ curl -s -w "\nHTTP %{http_code}\n" -X POST .../respond \
+    -H "Idempotency-Key: $(uuidgen)" -d "{\"stepId\":\"$SID\",\"action\":\"approve\",\"payload\":{}}"
+```
+
+```
+{"error":{"code":"STEP_NOT_PENDING","message":"No open pending step for this (workflow, step)",
+          "details":{"workflowId":"…","stepId":"…"}}}
+HTTP 404
+```
+
+Doc claimed `409`; actual is **`404 STEP_NOT_PENDING`**. Corrected.
+
+Final workflow status: `completed`.
+
+**Result:** PASS\* (doc-status-code fix).
+
+### UC4 — Reject or modify a response
+
+```bash
+# reject path
+$ curl -s -X POST .../respond -d "{…\"action\":\"reject\",\"rationale\":\"Stale ETL.\"…}"
+# action recorded: "reject"
+
+$ curl -s .../workflows/$WID | jq '.data.workflow.status'
+"completed"   # not "failed" as doc claimed
+```
+
+```bash
+# modify path
+$ curl -s -X POST .../respond -d "{…\"action\":\"modify\",\"payload\":{\"correctedInsights\":[…]}…}"
+# action recorded: "modify"
+
+$ curl -s .../workflows/$WID | jq '.data.workflow.status'
+"completed"
+```
+
+**Result:** **FAIL → corrected.** Both `reject` and `modify` end as
+`completed`, not `failed`. The doc was rewritten with a behavioural-
+note callout: to halt a workflow, use UC5 (cancel) instead.
+
+### UC5 — Cancel a stuck workflow
+
+```bash
+$ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/cancel" \
+    -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+    -d '{"reason":"Reviewer unavailable; restarting with alternate routing."}'
+```
+
+```json
+{
+  "success": true,
+  "data": {
+    "workflowId": "eec72155-…",
+    "status": "cancelled",
+    "reason": "Reviewer unavailable; restarting with alternate routing."
+  }
+}
+```
+
+Subsequent `GET /workflows/$WID` → `status: "cancelled"`.
+
+**Result:** PASS.
+
+### UC6 — Operator dashboard & analytics
+
+```bash
+$ curl -s http://localhost:3001/api/v1/dashboards/active-workflows -H "Authorization: Bearer $ADMIN"
+{"items": []}
+
+$ curl -s http://localhost:3001/api/v1/analytics/workflows           -H "Authorization: Bearer $ADMIN"
+{"items": []}
+
+$ curl -s "http://localhost:3001/api/v1/analytics/users/$ME"         -H "Authorization: Bearer $ADMIN"
+{"items": []}
+```
+
+**Result:** PASS. All three return `{"items": []}` cleanly in dev
+mode (the iteration-3 null-pool fix on `main` ensures these no
+longer 500).
+
+### UC7 — Real-time WebSocket updates
+
+Initial attempts with the doc's `?token=` query-param form:
+
+```
+ws://localhost:3001/ws/v1?token=…     → 401, close 1006
+ws://localhost:3001/?token=…           → 401, close 1006
+ws://localhost:3001/ws?token=…         → 401, close 1006
+ws://localhost:3001                    → 401, close 1006
+```
+
+Reading `src/backend/bootstrap/main.js:308–314` reveals
+`principalFromUpgrade` is a dev shim that reads the
+`x-user-id` header. Retried:
+
+```javascript
+const ws = new WebSocket('ws://localhost:3001/', { headers: { 'x-user-id': MY_USER_ID } });
+// OPENED
+// (no messages on a bare connection — see subscription note)
+```
+
+Even after kicking off a workflow that transitions through
+`workflow.created`, `started`, `step_started`, `human_input_required`,
+the bare WS receives **no messages** because the in-memory event
+publisher routes through `Subscription` records and a bare connection
+isn't auto-subscribed (this is documented in
+`tests/integration/inmemory-event-forwarding.test.js`).
+
+**Result:** **FAIL → corrected.** Doc rewritten with an
+implementation-status callout: dev shim uses `x-user-id` header (not
+the documented `?token=` query param), the `/ws/v1` path doesn't
+exist, and a "Subscribe before you'll see events" subsection was
+added.
+
+### UC8 — Audit a completed workflow
+
+```bash
+$ curl -s "http://localhost:3001/api/v1/audit/workflows/$WID" -H "Authorization: Bearer $ADMIN"
+{"workflowId":"156dad32-…","items":[]}
+
+$ curl -s "http://localhost:3001/api/v1/audit/aggregates/Workflow/$WID" -H "Authorization: Bearer $ADMIN"
+{"aggregateType":"Workflow","aggregateId":"156dad32-…","events":[],"logs":[]}
+
+$ curl -s -X POST "http://localhost:3001/api/v1/audit/exports" -H "Authorization: Bearer $ADMIN" \
+    -H 'Content-Type: application/json' \
+    -d "{\"scope\":{\"workflowIds\":[\"$WID\"]},\"range\":{\"from\":\"2026-01-01T00:00:00Z\",\"to\":\"2026-12-31T23:59:59Z\"}}"
+{"id":"55241273-…","url":"/ui-documents/compliance-exports/55241273-….json","generatedAt":"…","events":0,"logs":0}   # HTTP 201
+```
+
+**Result:** PASS\* — endpoints behave correctly; trail is empty in
+dev mode (no Postgres). Doc updated to mention the dev-mode caveat.
+
+### UC9 — Publish a new workflow template
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/workflows/templates \
+    -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+    -d '{"key":"loan-approval","version":1,"name":"Loan Approval Workflow",
+         "description":"…","steps":[…4 steps…],"defaultConfig":{"riskThreshold":0.7}}'
+```
+
+```json
+{ "success": true, "data": { "key": "loan-approval", "version": 1, "status": "published" } }
+```
+
+```bash
+$ curl -s http://localhost:3001/api/v1/workflows/templates -H "Authorization: Bearer $ADMIN" \
+  | jq '[.data.templates[].id]'
+["data-analysis","decision-making","content-creation","loan-approval"]
+```
+
+**Result:** PASS.
+
+### UC10 — Administer users, roles, permissions
+
+```bash
+$ curl -s http://localhost:3001/api/v1/admin/users -H "Authorization: Bearer $ADMIN" | jq '. | keys'
+["pagination","users"]    # doc said .users[] flat — corrected to {users, pagination}
+
+$ curl -s -w "\nHTTP %{http_code}\n" -X POST .../admin/users/$TGT/permissions \
+    -d '{"permission":"workflow:respond","scope":"compliance-review"}'
+{"permission":"workflow:respond@compliance-review"}     # HTTP 201
+
+$ curl -s -w "\nHTTP %{http_code}\n" -X DELETE \
+    ".../admin/users/$TGT/permissions/workflow:respond?scope=compliance-review"
+{"permission":"workflow:respond@compliance-review"}     # HTTP 200
+
+$ curl -s -X POST .../admin/users/$TGT/deactivate
+{"id":"…","isActive":false}                              # HTTP 200
+
+$ curl -s -X POST .../admin/users/$TGT/reactivate
+{"id":"…","isActive":true}                               # HTTP 200
+```
+
+**Result:** PASS\* (list-shape fix in doc).
+
+### UC11 — Mint, use, revoke an API key
+
+```bash
+$ curl -s -X POST http://localhost:3001/api/v1/auth/api-keys \
+    -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' -H "Idempotency-Key: $UUID" \
+    -d '{"name":"nightly-sales-job","permissions":["workflow:create","workflow:execute"],
+         "expiresAt":"2027-01-01T00:00:00Z"}'
+```
+
+```json
+{
+  "id": "abd56526-…",
+  "userId": "45bdc31e-…",
+  "name": "nightly-sales-job",
+  "permissions": ["workflow:create", "workflow:execute"],
+  "expiresAt": "2027-01-01T00:00:00.000Z",
+  "createdAt": "…",
+  "plaintextKey": "glop_HUa2TpQxXdT5ez5m7_aXFqvMq44qPYDAiG6XnlwcMXY"
+}
+```
+
+```bash
+$ curl -s http://localhost:3001/api/v1/workflows/templates \
+    -H "Authorization: Bearer glop_HUa2TpQx…"
+# success: True, template count: 5
+
+$ curl -s -X POST .../workflows ... -H "Authorization: Bearer glop_…" -d '{"template":"data-analysis",…}'
+# success: True
+
+$ curl -s http://localhost:3001/api/v1/auth/api-keys -H "Authorization: Bearer $ADMIN"
+{"apiKeys":[{"id":"…","name":"nightly-sales-job",…,"lastUsedAt":"…","isActive":true}]}
+
+$ curl -s -X DELETE "http://localhost:3001/api/v1/auth/api-keys/$KEYID" -H "Authorization: Bearer $ADMIN"
+{"id":"abd56526-…","revokedAt":"…"}                       # HTTP 200
+
+$ curl -s -w "\nHTTP %{http_code}\n" http://localhost:3001/api/v1/workflows/templates \
+    -H "Authorization: Bearer glop_HUa2TpQx…"             # using the revoked key
+{"error":"unauthorised","message":"Invalid API key"}
+HTTP 401
+```
+
+**Result:** PASS — full lifecycle, including immediate 401 after
+revoke.
+
+### UC12 — Webhook subscription
+
+```bash
+$ curl -s -w "\nHTTP %{http_code}\n" -X POST http://localhost:3001/api/v1/webhooks \
+    -H "Authorization: Bearer $ADMIN" -H 'Content-Type: application/json' \
+    -d '{"url":"https://crm.example.com/hooks/gui-lop","signingSecret":"shared-secret",
+         "filters":{"eventTypes":["workflow.completed","workflow.failed"]}}'
+```
+
+```json
+{
+  "id": "ebd6fa56-…",
+  "subscriberKind": "webhook",
+  "subscriberRef": "45bdc31e-…",
+  "channel": "webhook",
+  "address": { "channel": "webhook", "value": "https://crm.example.com/hooks/gui-lop" },
+  "filter": { "eventTypes": [], "workflowIds": [] },
+  "isActive": true,
+  "createdAt": "…",
+  "lastActiveAt": null
+}                                                         # HTTP 201
+```
+
+Three gaps surfaced at this single endpoint:
+
+1. Request body field is **`filter`** (singular) — the doc's
+   `filters` is ignored.
+2. Even with the correct field name, `filter.eventTypes` is silently
+   dropped by `RegisterWebhookUseCase` (saved as `[]`). Tracked.
+3. `signingSecret` is silently ignored — no field for it in the
+   use case.
+
+Inspection of `src/backend/contexts/notification/infrastructure/transport/mock-webhook-sender.js`
+confirms there is no production webhook sender — only a
+`MockWebhookSender` that stores deliveries in an array. The
+`X-GUI-LOP-Signature` / `Event-Id` / `Timestamp` headers in the doc
+are forward-looking design (ADR 0014), not yet emitted.
+
+```bash
+$ curl -s http://localhost:3001/api/v1/subscriptions -H "Authorization: Bearer $ADMIN"
+{"items":[{"id":"ebd6fa56-…",…}]}                          # HTTP 200
+
+$ curl -s http://localhost:3001/api/v1/dead-letters -H "Authorization: Bearer $ADMIN"
+{"items":[]}                                              # HTTP 200
+```
+
+**Result:** **PARTIAL → corrected.** Subscription lifecycle works;
+filter propagation and signing are forward-looking. Doc rewritten
+with an explicit implementation-status callout.
+
+---
+
 ## Bugs Found and Fixed in USE_CASES.md
 
 Eight distinct issues, all fixed in this pass:
