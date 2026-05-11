@@ -36,6 +36,14 @@ decisions. Five personas appear across the use cases below.
 - All mutating endpoints accept an `Idempotency-Key` header (any
   UUID v4) so retries are safe.
 - The platform speaks JSON; pipe to `jq` for readability.
+- **Permission note.** Most workflow-mutating actions
+  (`workflow:execute`, `workflow:cancel`, `workflow:respond`) are
+  *resource-scoped* and need an explicit grant per workflow id. The
+  fastest path through this guide is to register and log in as an
+  **admin** — admins implicitly hold every permission — and that is
+  what every example below assumes. In production, registration of an
+  admin role should be gated; for the platform's current state see the
+  security caveat at the end of Use Case 1.
 
 ---
 
@@ -48,7 +56,9 @@ a short-lived access token.
 ### Step 1 — Create an account
 
 Open registration is enabled in dev environments. In production this
-is usually an admin-only operation (see Use Case 10).
+is usually an admin-only operation (see Use Case 10). For this guide
+we mint an admin so the workflow-permission scoping doesn't get in
+the way — see the security caveat at the end.
 
 ```bash
 curl -s -X POST http://localhost:3001/api/v1/auth/register \
@@ -56,15 +66,18 @@ curl -s -X POST http://localhost:3001/api/v1/auth/register \
   -d '{
     "email": "ops@example.com",
     "username": "ops",
-    "password": "long-and-memorable-pass-phrase"
+    "password": "long-and-memorable-pass-phrase",
+    "role": "admin"
   }'
 ```
 
-You get back your user id and role (`user` by default):
+You get back your user id and role (`admin` if you supplied it):
 
 ```json
-{ "id": "…", "email": "ops@example.com", "username": "ops", "role": "user" }
+{ "id": "…", "email": "ops@example.com", "username": "ops", "role": "admin" }
 ```
+
+Username must be 3–100 chars matching `[a-z0-9_-]`.
 
 ### Step 2 — Sign in
 
@@ -94,6 +107,15 @@ curl -s http://localhost:3001/api/v1/auth/me \
 
 Send the refresh token to `/api/v1/auth/refresh`; you'll get a new
 pair. The previous refresh token is invalidated atomically.
+
+### Security caveat about `role: "admin"`
+
+`POST /api/v1/auth/register` currently accepts the `role` field
+without challenge. This is a dev convenience and **must be hardened
+before production** — registration of admins should require an
+existing admin. Until that lands, the simplest production posture is
+to deploy with registration disabled at the proxy and have an admin
+provision users via Use Case 10.
 
 ---
 
@@ -244,8 +266,8 @@ curl -s http://localhost:3001/api/v1/workflows/$WID \
 If your network drops and you retry with the same
 `Idempotency-Key`, you get the original response back (with
 `"deduplicated": true`) — no double-write. Retry with a *different*
-key after a successful response and you'll get a `409 Conflict`
-because the step is already closed.
+key after a successful response and you'll get a `404` with
+`code: "STEP_NOT_PENDING"` because the step is already closed.
 
 ---
 
@@ -255,7 +277,18 @@ because the step is already closed.
 **Scenario:** the AI's analysis missed something; you want to push
 back instead of approving.
 
-### Reject outright
+> **Important behavioural note (current state).** In the current
+> engine, `action: "reject"` and `action: "modify"` are *recorded* on
+> the response and audit trail, but the engine still advances the
+> workflow through the remaining automated steps. The workflow ends
+> as `completed` either way. **If you actually want to halt the
+> workflow, use [Use Case 5 — Cancel](#use-case-5-cancel-a-stuck-workflow)
+> instead.** Fail-on-reject semantics are a known gap to be wired into
+> the step's `onTimeout` / on-reject policy in a future release;
+> see the open questions in
+> `docs/ddd/03-bounded-contexts/workflow-orchestration.md`.
+
+### Reject (record the dissent)
 
 ```bash
 curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/respond" \
@@ -270,9 +303,10 @@ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/respond" \
   }"
 ```
 
-The workflow's terminal status will be `failed` (the engine sees a
-rejection at a required gate and does not continue). The rationale
-is recorded and queryable from the audit trail (Use Case 8).
+The `reject` is recorded with its rationale and is queryable from the
+audit trail (Use Case 8). The workflow itself ends `completed`. If
+the reviewer's intent is "stop everything now," follow up with a
+`POST /workflows/$WID/cancel`.
 
 ### Modify (counter-propose)
 
@@ -295,9 +329,10 @@ curl -s -X POST "http://localhost:3001/api/v1/workflows/$WID/respond" \
   }"
 ```
 
-The workflow resumes with the *modified* payload threaded into the
-remaining steps; the original AI-proposed payload is preserved on the
-response record for the audit trail.
+The workflow resumes with the modified payload recorded on the
+response record. The original AI-proposed payload is on the same
+record's payload history; the audit trail (Use Case 8) shows both.
+Final status: `completed`.
 
 ---
 
@@ -362,26 +397,49 @@ platform.
 events as they happen — workflow paused for input, response recorded,
 completion, etc.
 
-### Connect
+### Connect (current dev wiring)
+
+The bootstrap's `principalFromUpgrade` adapter is a dev shim that
+identifies the client by the `x-user-id` request header. A JWT
+verifier on the WebSocket upgrade is **not yet wired in production**
+(tracked in `docs/MISSION_REPORT_DDD_MIGRATION.md`). Until it lands,
+non-browser clients connect like this:
 
 ```javascript
-const ws = new WebSocket(
-  `ws://localhost:3001/ws/v1?token=${accessToken}`,
-);
+import WebSocket from 'ws';
+const ws = new WebSocket('ws://localhost:3001/', {
+  headers: { 'x-user-id': myUserId },
+});
+ws.on('open', () => console.log('connected'));
+ws.on('message', (data) => console.log(JSON.parse(data.toString())));
 ```
 
-The backend uses the same auth path as HTTP. Send the access token on
-the upgrade.
+Browser clients can't set arbitrary headers on a WebSocket upgrade,
+so the SPA's reference client at
+`src/frontend/src/services/websocket/client.js` is structured for a
+future JWT-on-upgrade flow (`?token=…`) — that path is *not* honoured
+by the backend in the current build.
+
+### Subscribe before you'll see events
+
+A bare WebSocket connection does **not** automatically subscribe to
+any events. The Notification context dispatches events through
+matching `Subscription` records. In production you'd register a
+subscription via the application code (e.g. when the frontend
+mounts) or via a webhook for an external integrator (Use Case 12).
+For a local probe, you can observe traffic by inspecting
+`tests/integration/inmemory-event-forwarding.test.js`, which
+demonstrates the full publish → subscribe → broadcast loop.
 
 ### Event envelope
 
-Every message is JSON:
+Every delivered message is JSON:
 
 ```json
 { "type": "workflow.completed", "version": 1, "payload": { … }, "occurredAt": "…" }
 ```
 
-### Event types you'll see
+### Event types
 
 - `workflow.created`, `workflow.started`
 - `workflow.step_started`, `workflow.step_completed`, `workflow.step_failed`
@@ -394,8 +452,9 @@ Every message is JSON:
 ### Reconnect
 
 Clients should reconnect with exponential backoff. The SPA's
-`src/frontend/src/services/websocket/client.js` is a working reference
-implementation.
+`src/frontend/src/services/websocket/client.js` is the reference
+implementation of the backoff + dispatch loop (note the auth caveat
+above).
 
 ---
 
@@ -411,24 +470,33 @@ which inputs.
 ```bash
 curl -s "http://localhost:3001/api/v1/audit/workflows/$WID" \
   -H "Authorization: Bearer $TOKEN" | jq
+# { "workflowId": "…", "items": [ … domain events … ] }
 ```
 
 Returns every domain event published for that workflow — creation,
 each step transition, the human response (including the responder's
 id and rationale), and the final completion / failure.
 
+> **Dev-mode note.** In in-memory mode (no `DATABASE_URL`), the
+> `events` table doesn't exist, so the trail is empty: you'll get
+> `{"workflowId":"…","items":[]}`. In production (Postgres) the
+> events written through the outbox populate the trail.
+
 ### Trail for any aggregate
 
 ```bash
 curl -s "http://localhost:3001/api/v1/audit/aggregates/Workflow/$WID" \
   -H "Authorization: Bearer $TOKEN"
+# { "aggregateType":"Workflow", "aggregateId":"…", "events":[…], "logs":[…] }
 
 curl -s "http://localhost:3001/api/v1/audit/aggregates/HumanResponse/$RESPONSE_ID" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 Useful when an investigation focuses on a specific entity rather than
-a whole workflow.
+a whole workflow. `events` is the domain-event trail; `logs` is the
+row-level audit log written by Postgres triggers (also empty in
+dev mode).
 
 ### Compliance export
 
@@ -503,7 +571,8 @@ respond to compliance workflows (but nothing else).
 
 ```bash
 curl -s http://localhost:3001/api/v1/admin/users \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.users[] | {id, username, role, isActive}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
+# { "users": [ {…}, … ], "pagination": { … } }
 ```
 
 ### Grant a scoped permission
@@ -569,9 +638,24 @@ KEYRESP=$(curl -s -X POST http://localhost:3001/api/v1/auth/api-keys \
 echo "$KEYRESP" | jq
 ```
 
-The response contains a `plaintextKey` like `glop_…43-base64url-chars`.
-**This is the only time you will see it.** Store it in Jenkins
-credentials immediately; only the SHA-256 digest is kept server-side.
+The response (note: flat, **not** wrapped in `{success, data}` like
+the workflow endpoints) is:
+
+```json
+{
+  "id": "…",
+  "userId": "…",
+  "name": "nightly-sales-job",
+  "permissions": ["workflow:create", "workflow:execute"],
+  "expiresAt": "2027-01-01T00:00:00.000Z",
+  "createdAt": "…",
+  "plaintextKey": "glop_…43-base64url-chars"
+}
+```
+
+The `plaintextKey` is the only time you will see it. Store it in
+Jenkins credentials immediately; only the SHA-256 digest is kept
+server-side.
 
 ### Use the key
 
@@ -610,6 +694,19 @@ If a key leaks, revoke it — every request after the revocation will
 workflow completes so it can write the outcome onto the customer
 record.
 
+> **Implementation status.** The webhook subscription model
+> (`Subscription` aggregate, `RoutingPolicy`, `RetryPolicy`,
+> `DeliveryAttempt`, `DeadLetter`) is **registered and queryable in
+> the current build**, but the production HTTP webhook *sender* is
+> not yet wired — only an in-process `MockWebhookSender` ships. That
+> means you can register, list, and revoke subscriptions, but live
+> deliveries do not yet leave the platform. HMAC signing and the
+> headers described below are forward-looking design (ADR 0014
+> outbox + Notification context) that consumers should code against;
+> they are not yet emitted by a production sender. Tracked in
+> `docs/MISSION_REPORT_DDD_MIGRATION.md` and the Notification
+> context's open questions.
+
 ### Register a webhook subscription
 
 ```bash
@@ -618,32 +715,71 @@ curl -s -X POST http://localhost:3001/api/v1/webhooks \
   -H 'Content-Type: application/json' \
   -d '{
     "url": "https://crm.example.com/hooks/gui-lop",
-    "signingSecret": "shared-secret-known-only-to-CRM-and-us",
-    "filters": {
+    "filter": {
       "eventTypes": ["workflow.completed", "workflow.failed"]
     }
   }' | jq
 ```
 
-The platform stores the signing secret hashed and remembers the URL
-plus filter.
+The request body field is **`filter`** (singular), not `filters`. The
+response is:
 
-### What your endpoint receives
+```json
+{
+  "id": "…",
+  "subscriberKind": "webhook",
+  "subscriberRef": "…",
+  "channel": "webhook",
+  "address": { "channel": "webhook", "value": "https://crm.example.com/hooks/gui-lop" },
+  "filter": { "eventTypes": [], "workflowIds": [] },
+  "isActive": true,
+  "createdAt": "…",
+  "lastActiveAt": null
+}
+```
 
-Each event is delivered as a `POST` with the standard envelope:
+> **Current bug to be aware of.** The `RegisterWebhook` use case
+> currently does **not** propagate the request body's
+> `filter.eventTypes` / `filter.workflowIds` into the saved
+> subscription (you can see the stored `filter` comes back with empty
+> arrays). Until that's wired, every webhook subscription receives
+> every event the routing policy lets through. Tracked as a
+> Notification-context follow-up.
+
+### List, revoke, dead-letters
+
+```bash
+# List your subscriptions.
+curl -s http://localhost:3001/api/v1/subscriptions -H "Authorization: Bearer $TOKEN" | jq
+# { "items": [ {…} ] }
+
+# Unsubscribe.
+curl -s -X DELETE "http://localhost:3001/api/v1/subscriptions/$SUBSCRIPTION_ID" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Inspect dead letters (admin).
+curl -s http://localhost:3001/api/v1/dead-letters -H "Authorization: Bearer $ADMIN_TOKEN" | jq
+# { "items": [] }
+```
+
+### What your endpoint will eventually receive (design)
+
+Each event will be delivered as a `POST` with the standard envelope:
 
 ```json
 { "type": "workflow.completed", "version": 1, "payload": { … }, "occurredAt": "…" }
 ```
 
-Headers include:
+Planned headers (not yet emitted by the current sender):
+
 - `X-GUI-LOP-Event-Id` — unique per delivery (dedupe on this).
 - `X-GUI-LOP-Signature` — HMAC-SHA-256 over a `<timestamp>.<body>`
-  string using your signing secret. Verify before trusting the body.
+  string using a per-subscription signing secret. Verify before
+  trusting the body.
 - `X-GUI-LOP-Timestamp` — used as the HMAC input; reject if more than
   five minutes off your clock.
 
-### Delivery semantics
+### Delivery semantics (planned)
 
 - **At-least-once** — your endpoint may be called twice with the
   same `X-GUI-LOP-Event-Id`. Dedupe on it.
@@ -672,12 +808,15 @@ Your role doesn't include the permission. Either ask an admin for a
 scoped grant (Use Case 10) or — if you are the admin — promote your
 own role. Admins implicitly hold every permission.
 
+### "I got a 404 with `code: "STEP_NOT_PENDING"` on respond."
+
+The step has already been resolved (by you or another reviewer; first
+valid response wins). Refresh your inbox; the pending step is gone.
+
 ### "I got a 409 on respond."
 
-Either: (a) the step has already been resolved by another reviewer
-(first valid response wins), or (b) you sent a different body with a
-previously-used `Idempotency-Key`. In case (a), refresh your inbox.
-In case (b), use a fresh idempotency key.
+You sent a different request body with a previously-used
+`Idempotency-Key`. Use a fresh idempotency key.
 
 ### "I got a 429."
 
