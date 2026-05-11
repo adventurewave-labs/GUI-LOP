@@ -1,31 +1,53 @@
 # README Validation Report
 
-**Date (UTC):** 2026-05-11T22:10:31Z
-**Branch:** `claude/create-adr-ddd-docs-bZodK`
-**Commit at validation time:** `42b412d` (preceding the report commit)
+**Last updated (UTC):** 2026-05-11T22:21:30Z
+**Branch:** `claude/create-adr-ddd-docs-bZodK` (slated for merge to `main`)
 **Environment:** Node v22.22.2, npm 10.9.7, Linux 6.18.5
-**Scope:** Every command documented in `README.md` was executed against
-a fresh server in this same working tree.
+**Scope:** Every command documented in `README.md` is executed against a
+fresh server with in-memory adapters and the result captured below.
+
+This report has been refreshed twice:
+
+- **Pass 1 (2026-05-11T22:10Z, commit `42b412d`)** — surfaced 6 issues, all
+  fixed in `42b412d` ("docs(readme) + fix").
+- **Pass 2 (2026-05-11T22:21Z)** — re-ran the full walk against the
+  post-fix code; surfaced 2 additional issues:
+  - `/api/v1/dashboards/active-workflows` (and sibling analytics
+    endpoints) crashed with `Cannot read properties of null (reading
+    'query')` in in-memory mode because the query services dereferenced
+    a `null` pg pool. **Fixed in this pass** — see
+    [Pass 2 Fixes](#pass-2-fixes).
+  - The `POST /api/v1/auth/api-keys` response body returns the key
+    fields at the top level (`{id, plaintextKey, …}`) rather than
+    wrapped in `{success, data}` like sibling endpoints. **Noted, not
+    fixed** — it's a stylistic inconsistency, not a correctness bug.
 
 ## Executive Summary
 
-| Step                                              | Result |
-| ------------------------------------------------- | ------ |
-| `npm install` (verified present)                  | PASS   |
-| Backend startup via `npm run dev`                 | PASS   |
-| `/health`                                         | PASS   |
-| `POST /api/v1/auth/register`                      | PASS   |
-| `POST /api/v1/auth/login`                         | PASS   |
-| `GET /api/v1/workflows/templates`                 | PASS   |
-| Full workflow lifecycle (create → execute → respond → completed) | PASS |
-| `npx jest --config jest.backend.config.js`        | 560 / 560 PASS across 75 suites |
-| `npm run test:contracts`                          | 148 skipped (Docker-gated, expected in sandbox) |
-| `npm run bench`                                   | 25 / 25 SLOs PASS |
-| `npm run lint:arch`                               | 0 errors, exit 0 |
-| `npm run typecheck`                               | placeholder message (no TS files yet) |
+| Step                                              | Pass 1 | Pass 2 |
+| ------------------------------------------------- | ------ | ------ |
+| `npm install` (verified present)                  | PASS   | PASS   |
+| Backend startup via `npm run dev`                 | PASS   | PASS   |
+| `/health`                                         | PASS   | PASS   |
+| `POST /api/v1/auth/register`                      | PASS   | PASS   |
+| `POST /api/v1/auth/login`                         | PASS   | PASS   |
+| `GET /api/v1/workflows/templates`                 | PASS (3 templates) | PASS (3 templates) |
+| Workflow lifecycle (create → execute → respond → completed) | PASS | PASS |
+| `GET /api/v1/auth/me`                             | —      | PASS   |
+| `POST /api/v1/auth/api-keys` (mint)               | —      | PASS (shape note) |
+| `GET /api/v1/auth/api-keys` (list)                | —      | PASS   |
+| `GET /api/v1/dashboards/active-workflows`         | —      | **was crash, fixed → PASS** |
+| `GET /api/v1/analytics/workflows`                 | —      | PASS (post-fix) |
+| `GET /api/v1/analytics/users/:id`                 | —      | PASS (post-fix) |
+| `npx jest --config jest.backend.config.js`        | 560 / 560 PASS / 75 suites | 560 / 560 PASS / 75 suites |
+| `npm run test:contracts`                          | 148 skipped (Docker-gated) | 148 skipped (Docker-gated) |
+| `npm run bench`                                   | 25 / 25 SLOs PASS | not re-run (no perf-relevant changes) |
+| `npm run lint:arch`                               | 0 errors, exit 0 | 0 errors, exit 0 |
+| `npm run typecheck`                               | placeholder | placeholder |
 
-**Six bugs surfaced and fixed during the walk-through; all corrections
-landed in commit `42b412d`.** See [Bugs Found](#bugs-found-and-fixed)
+**Six bugs surfaced and fixed in pass 1 (commit `42b412d`); one
+correctness bug fixed in pass 2 (this commit); one stylistic
+inconsistency noted but not fixed.** See [Bugs Found](#bugs-found-and-fixed)
 for details.
 
 ---
@@ -437,8 +459,10 @@ Placeholder; no TS files exist in the project.
 
 ## Bugs Found and Fixed
 
-The walk-through surfaced six real bugs in the documentation and
-build/run scripts. All were corrected in commit `42b412d`.
+### Pass 1 fixes (commit `42b412d`)
+
+The first walk-through surfaced six real bugs in the documentation
+and build/run scripts.
 
 1. **README used `templateKey` in the create-workflow payload.** The
    endpoint accepts `template` or `template_key`. README and
@@ -461,6 +485,46 @@ build/run scripts. All were corrected in commit `42b412d`.
    found` because the project is pure ESM JS and `tsconfig.json`
    includes only `.ts` files (of which there are none). The script
    is now a clear placeholder message documenting future intent.
+
+### Pass 2 fixes
+
+A second walk-through against the post-pass-1 code surfaced one
+correctness bug and one stylistic inconsistency.
+
+7. **`/api/v1/dashboards/active-workflows` crashed** in in-memory
+   mode with `Cannot read properties of null (reading 'query')`. The
+   query services (`GetActiveWorkflowsQuery`,
+   `GetWorkflowAnalyticsQuery`, `GetUserActivityQuery`) dereferenced
+   the pg pool without checking it was wired. **Fixed** — all three
+   query services now early-return `[]` when the pool is null. The
+   sibling `/api/v1/analytics/*` endpoints share the fix.
+
+   Before:
+   ```
+   $ curl /api/v1/dashboards/active-workflows -H "Authorization: Bearer …"
+   {"error":"internal_error","message":"Unexpected error"}
+   # server log: unhandled request error: Cannot read properties of null (reading 'query')
+   ```
+
+   After:
+   ```
+   $ curl /api/v1/dashboards/active-workflows -H "Authorization: Bearer …"
+   {"items":[]}
+   $ curl /api/v1/analytics/workflows -H "Authorization: Bearer …"
+   {"items":[]}
+   $ curl /api/v1/analytics/users/<id> -H "Authorization: Bearer …"
+   {"items":[]}
+   ```
+
+8. **`POST /api/v1/auth/api-keys` response shape inconsistency.**
+   The mint endpoint returns key fields at the top level
+   (`{id, userId, name, permissions, expiresAt, createdAt, plaintextKey}`)
+   instead of wrapping them in `{success, data}` like sibling
+   workflow endpoints. **Noted, not fixed** — it's stylistic, not a
+   correctness issue, and changing the envelope is a breaking API
+   change. Callers should accept the flat shape on POST and look
+   under `.apiKeys` on GET (same module returns `{apiKeys: [...]}`
+   for the list endpoint).
 
 ---
 
