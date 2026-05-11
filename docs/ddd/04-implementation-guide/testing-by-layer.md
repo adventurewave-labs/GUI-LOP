@@ -75,12 +75,61 @@ Forbidden in this layer:
 - **Coverage target.** Contract suites cover every method of every
   port and every documented edge case (concurrency, missing rows,
   TTL expiry).
-- **Where it lives.** `tests/contracts/<port>.spec.ts`. The same
-  spec is parameterised across adapter implementations.
+- **Where it lives.** `tests/contracts/<context>/<port>.contract.test.js`.
+  The same spec is parameterised across adapter implementations
+  via `describe.each([['in-memory'], ['postgres']])`.
 
 Why both: ensures the in-memory adapter is a faithful test double,
 not a fiction. If the in-memory and Postgres adapters diverge,
 the bug shows up here, not in production.
+
+### Running the contract suite
+
+The contract tests live behind their own Jest config because they're
+slow (3-5 s container startup per file) and need a longer timeout:
+
+```bash
+# Local run — boots one Postgres 15 + one Redis 7 container per file.
+npm run test:contracts
+
+# Watch mode for iterative development.
+npm run test:contracts:watch
+
+# CI runs the suite informational/non-blocking via
+# .github/workflows/contracts.yml.
+```
+
+#### Docker-availability auto-skip
+
+Testcontainers requires a live Docker daemon. Many sandboxes (and
+some CI agents) don't expose `/var/run/docker.sock`. To keep the suite
+ergonomic in those environments, every contract `describe` block is
+wrapped in `describeIfDocker(name, fn)` from
+`tests/contracts/_helpers/docker-available.js`:
+
+- If Docker **is** available (a socket at `/var/run/docker.sock` or an
+  explicit `DOCKER_HOST` env var), the suite runs normally.
+- If Docker is **not** available, the surrounding `describe` is
+  replaced with `describe.skip(...)`, the block title is suffixed with
+  `[skipped: docker unavailable]`, and a one-shot console notice is
+  printed so the reason is visible in the log.
+
+This means a Docker-less `npm run test:contracts` reports the suite as
+"passed, all skipped" rather than failing on container start. CI has
+Docker available, so the auto-skip never kicks in on GitHub Actions.
+
+#### Fixture layout
+
+- `tests/contracts/_helpers/docker-available.js` — `describeIfDocker`
+  + `isDockerAvailable()`.
+- `tests/contracts/_helpers/apply-migrations.js` — runs every file
+  under `database/migrations/` against the testcontainer pool.
+- `tests/contracts/_helpers/cleanup.js` — `truncateAll(pool)` between
+  tests for isolation.
+- `tests/contracts/_fixtures/postgres.js` — `startPostgres()` returns
+  `{ pool, getPool, url, truncate, cleanup }`.
+- `tests/contracts/_fixtures/redis.js` — `startRedis()` returns
+  `{ client, pub, sub, getRedis, flush, cleanup }`.
 
 ## Integration / API Tests
 

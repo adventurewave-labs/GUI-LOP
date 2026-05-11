@@ -109,14 +109,22 @@ the backlog from iteration 1. Pushed commits:
 
 ### Remaining backlog (iteration 3 candidates)
 
-One item remains unaddressed:
-
-- **Real Postgres / Redis integration tests** under testcontainers.
-  Currently only unit + in-memory integration coverage. Bench can
-  also be re-run against Postgres. Deferred from iteration 2 because
-  it touches every context (high collision risk with parallel work).
+All iteration-2 deferred items now resolved.
 
 Resolved in iteration 3:
+
+- ~~**Real Postgres / Redis integration tests** under testcontainers.
+  Currently only unit + in-memory integration coverage. Bench can
+  also be re-run against Postgres. Deferred from iteration 2 because
+  it touches every context (high collision risk with parallel work).~~
+  Done — adapter contract suites under
+  `tests/contracts/<context>/*.contract.test.js`, one per port per
+  bounded context plus the shared-kernel Outbox + the Redis-backed
+  TokenBlacklist / EventPublisher / rate-limit primitives. Run via
+  `npm run test:contracts`; the suite auto-skips cleanly when Docker
+  is unavailable (`tests/contracts/_helpers/docker-available.js`).
+  CI workflow `.github/workflows/contracts.yml` is informational and
+  non-blocking until it stabilises.
 
 - ~~**Real AI provider ACL** (ADR 0023):~~ Done. `AIProvider` and
   `ClassificationService` ports plus OpenAI and Anthropic adapters
