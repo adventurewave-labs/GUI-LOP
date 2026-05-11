@@ -43,6 +43,29 @@ const SCHEMA = {
    * - 200 keeps throughput high while bounding per-tick memory.
    */
   OUTBOX_BATCH_SIZE: { type: 'number', default: 200 },
+
+  /* -------- AI Provider ACL (ADR 0023) -------- */
+  /**
+   * Which AI vendor adapter the UI Generation context uses.
+   *   - `stub`     : in-memory deterministic; default; no API key required.
+   *   - `openai`   : OpenAI Chat Completions adapter.
+   *   - `anthropic`: Anthropic Messages adapter (claude-haiku-4-5 default).
+   * When set to a real vendor, `AI_API_KEY` becomes required at bootstrap.
+   */
+  AI_PROVIDER: { type: 'string', default: 'stub', enum: ['stub', 'openai', 'anthropic'] },
+  /**
+   * API key for the active AI provider. Validated by the bootstrap (we keep
+   * `required: false` here so the in-memory/stub default boots without it).
+   */
+  AI_API_KEY: { type: 'string', required: false, secret: true },
+  /** Optional override of the vendor base URL (proxy, gateway, mock server). */
+  AI_BASE_URL: { type: 'string', required: false },
+  /** Optional override of the vendor model id. */
+  AI_MODEL: { type: 'string', required: false },
+  /** Per-call timeout enforced via AbortController. Default 30s. */
+  AI_TIMEOUT_MS: { type: 'number', default: 30000 },
+  /** Number of retries (initial try not counted). Default 2. */
+  AI_MAX_RETRIES: { type: 'number', default: 2 },
 };
 
 function coerce(name, raw, spec) {

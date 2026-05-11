@@ -109,16 +109,21 @@ the backlog from iteration 1. Pushed commits:
 
 ### Remaining backlog (iteration 3 candidates)
 
-Two items remain unaddressed:
+One item remains unaddressed:
 
 - **Real Postgres / Redis integration tests** under testcontainers.
   Currently only unit + in-memory integration coverage. Bench can
   also be re-run against Postgres. Deferred from iteration 2 because
   it touches every context (high collision risk with parallel work).
-- **Real AI provider ACL** (ADR 0023): port and stub are in place,
-  no concrete vendor adapter yet. Lowest-priority item; the
-  `StubUIGenerationService` works for everything except live
-  generation.
+
+Resolved in iteration 3:
+
+- ~~**Real AI provider ACL** (ADR 0023):~~ Done. `AIProvider` and
+  `ClassificationService` ports plus OpenAI and Anthropic adapters
+  shipped at `src/backend/contexts/ui-generation/infrastructure/ai/`,
+  composed with retry / circuit-breaker / telemetry / PII-scrubbing in
+  a shared `BaseAIAdapter`. `AI_PROVIDER` / `AI_API_KEY` env vars
+  select the vendor; `stub` remains the default.
 
 A small follow-up flagged by the workflow agent for iteration 3:
 
@@ -148,8 +153,9 @@ The following items from the iteration-1 backlog are now done:
 - ~~**Outbox lag metric** in `/health`.~~ Done (`e23be41`).
 - ~~**Forwarder for in-memory mode.**~~ Done (`e23be41`).
 - ~~**Production Helm/K8s manifests.**~~ Done (`835f06d`).
-- **Real AI provider ACL** (ADR 0023): port and stub are in place,
-  no concrete vendor adapter yet.
+- ~~**Real AI provider ACL** (ADR 0023):~~ Done (iteration 3). OpenAI
+  and Anthropic adapters at
+  `src/backend/contexts/ui-generation/infrastructure/ai/`.
 - **Production Helm/K8s manifests** (ADR 0020): infrastructure
   directory exists; chart needs to be updated to call the new
   bootstrap entry (`src/backend/bootstrap/index.js`).

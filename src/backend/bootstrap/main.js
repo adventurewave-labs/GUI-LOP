@@ -96,7 +96,7 @@ export async function bootstrap(envOverride) {
 
   const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger });
 
-  const ui = wireUIGeneration({ pool, clock, idGen, logger });
+  const ui = wireUIGeneration({ pool, clock, idGen, logger, config });
 
   // Wire workflow without an advancer first; we'll fold that in for human-interaction.
   const workflow = await wireWorkflowOrchestration({
