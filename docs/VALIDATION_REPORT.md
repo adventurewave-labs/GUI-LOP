@@ -1,3 +1,10 @@
+# Documentation Validation Report
+
+> Covers two docs: `README.md` and `docs/USE_CASES.md`. Both have
+> been walked end-to-end and corrected. The README portion of this
+> report covers the first three passes; the USE_CASES.md walk
+> follows in [§ USE_CASES.md Validation](#use_casesmd-validation).
+
 # README Validation Report
 
 **Last updated (UTC):** 2026-05-11T22:21:30Z
@@ -543,3 +550,94 @@ modification:
 - The full workflow lifecycle reaches `completed` in dev mode.
 
 The branch is ready for review and merge.
+
+---
+
+# USE_CASES.md Validation
+
+**Date (UTC):** 2026-05-11T22:40Z
+**Branch:** `claude/validate-use-cases`
+**Scope:** every command in `docs/USE_CASES.md` executed against a
+fresh in-memory server. Where a use case can't be fully exercised in
+the current build (e.g. real webhook delivery), the doc is corrected
+to say so plainly rather than describe aspirational behaviour as if
+it shipped.
+
+## Per-use-case outcome
+
+| #   | Use case                                | Outcome | Notes |
+| --- | --------------------------------------- | ------- | ----- |
+| 1   | Sign in and get an access token         | PASS    | All four sub-steps (register, login, refresh, /me) returned the documented shapes. |
+| 2   | Submit a workflow that needs a human    | PASS *  | Doc had to be corrected: walkthrough now registers an admin user (regular users have `workflow:create` but not the scoped `workflow:execute@<id>`). |
+| 3   | Review and approve a pending step       | PASS *  | Doc claimed a fresh idempotency key after a closed step returns `409`; actual response is `404` with `code: "STEP_NOT_PENDING"`. Corrected. |
+| 4   | Reject or modify a response             | **FAIL → corrected** | Doc claimed `reject` ends the workflow as `failed`. Actual: the engine records the reject but still completes the workflow. Same for `modify`. Doc rewritten with a prominent behavioural-note callout and a pointer to Use Case 5 for halting. |
+| 5   | Cancel a stuck workflow                 | PASS    | Workflow transitions to `cancelled` exactly as documented. |
+| 6   | Operator dashboard                      | PASS    | All three endpoints (`/dashboards/active-workflows`, `/analytics/workflows`, `/analytics/users/:id`) return `{"items":[]}` cleanly in dev mode (after the iteration-3 null-pool fix on `main`). |
+| 7   | Real-time UI updates via WebSocket      | **FAIL → corrected** | Doc claimed `?token=…` query-param auth; backend's `principalFromUpgrade` is a dev shim that reads `x-user-id` header. Browsers can't set arbitrary upgrade headers, so the SPA path is forward-looking. Doc rewritten with explicit implementation-status callout, plus a note that a bare WS connection isn't auto-subscribed — events flow only to matching `Subscription`s. |
+| 8   | Audit a completed workflow              | PASS *  | Endpoints return the expected envelopes (`{workflowId, items}` for `/audit/workflows/:id`, `{aggregateType, aggregateId, events, logs}` for `/audit/aggregates/...`, `{id, url, generatedAt, events, logs}` for exports). Trail is empty in dev mode (no Postgres); doc now says so. |
+| 9   | Publish a new workflow template         | PASS    | `loan-approval` template published; appears in templates list immediately. Response: `{success: true, data: {key, version, status: "published"}}`. |
+| 10  | Administer users, roles, permissions    | PASS *  | All five endpoints (list, grant, revoke, deactivate, reactivate) work. List response is `{users, pagination}`, not `{users}` flat — doc corrected. |
+| 11  | Mint an API key for a CI/CD job         | PASS    | Full mint → use → list → revoke → post-revoke-401 cycle works. Mint response shape (flat, not enveloped) called out explicitly in the corrected doc. |
+| 12  | Receive workflow events on a webhook    | **PARTIAL → corrected** | Subscription registers (201); `filter.eventTypes` and `filter.workflowIds` from the request body are silently dropped by the use case (stored arrays come back empty). The production webhook sender is **not implemented** — only `MockWebhookSender`. Doc rewritten with an "Implementation status" callout listing what works today vs the planned design. |
+
+\* PASS after a doc correction.
+
+## Bugs Found and Fixed in USE_CASES.md
+
+Eight distinct issues, all fixed in this pass:
+
+1. **Permission scoping not flagged.** UC2 walkthrough used a regular
+   `user` role; that role can `create` workflows but not `execute`
+   them (`workflow:execute@<id>` is scoped per workflow). Doc now
+   registers an admin and explicitly notes the scoping rule.
+2. **UC3 wrong status code.** Doc said "respond again with a fresh
+   idempotency key → 409"; actual is `404` with
+   `code: "STEP_NOT_PENDING"`. Corrected in both UC3 and the FAQ.
+3. **UC4 `reject` doesn't halt the workflow.** Doc claimed terminal
+   status `failed`. Actual: workflow runs through remaining steps and
+   ends `completed`. Doc rewritten with a behavioural-note callout
+   and a redirect to Use Case 5 (cancel) for "stop everything".
+4. **UC4 `modify` description over-promised.** Doc implied the
+   modified payload threads into automated downstream steps as an
+   override; in reality the modify payload is recorded on the
+   response but the engine just continues. Wording softened to match
+   reality.
+5. **UC7 WebSocket auth.** Doc said `ws://…/ws/v1?token=$ACCESS`;
+   reality is the bootstrap reads `x-user-id` header (dev shim). No
+   `/ws/v1` route exists; bare `ws://localhost:3001/` is the path.
+   Doc rewritten with an implementation-status callout.
+6. **UC7 events don't flow on a bare connection.** Doc implied
+   connecting was enough to start receiving events. The Notification
+   context routes events through matching `Subscription` records; a
+   bare WS doesn't auto-subscribe. Added an explicit
+   "Subscribe before you'll see events" subsection.
+7. **UC10 list-users shape.** Doc used `.users[]`; actual response
+   is `{users, pagination}` with pagination metadata. Corrected.
+8. **UC12 webhook gaps.** Three problems combined:
+   - Body field name is `filter` (singular), not `filters`.
+   - `signingSecret` field is silently ignored by `RegisterWebhook`.
+   - Production webhook sender is unimplemented (only `MockWebhookSender`
+     ships); the `X-GUI-LOP-*` headers and HMAC scheme are
+     forward-looking design.
+   Doc rewritten with an "Implementation status" callout up front and
+   the body of the use case clearly marks what's live vs planned.
+
+## Test + Verification After the Patch
+
+```bash
+$ npx jest --config jest.backend.config.js
+Test Suites: 75 passed, 75 total
+Tests:       560 passed, 560 total
+```
+
+No code changes in this pass — only documentation. The backend test
+suite is unchanged.
+
+## Conclusion
+
+`USE_CASES.md` now matches the platform's actual behaviour. Where the
+build has not yet caught up to the design (webhook delivery, WS JWT
+auth, reject → fail semantics), the document says so plainly with a
+pointer to the tracker. This is the third corrective pass over the
+docs and should be the last one with this volume of fixes — the
+remaining gaps are tracked as platform follow-ups, not doc bugs.
