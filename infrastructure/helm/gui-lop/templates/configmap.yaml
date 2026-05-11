@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gui-lop.configMapName" . }}
+  labels:
+    {{- include "gui-lop.labels" . | nindent 4 }}
+data:
+  {{- /*
+       Non-secret 12-factor config (ADR 0022). Values are stringified so the
+       container's env block can reference them directly. Secrets live in the
+       Secret resource.
+  */}}
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

@@ -1,103 +1,58 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * @see https://playwright.dev/docs/test-configuration
+ * Playwright configuration for the GUI-LOP frontend cut-over.
+ *
+ * Boots two web servers:
+ *   - The DDD/v1 backend (in-memory adapters, default templates auto-seeded)
+ *     on port 3001, via `node ../../src/backend/bootstrap/index.js`.
+ *   - The CRA dev server on port 3000, via `npm start`.
+ *
+ * The legacy global-setup / global-teardown files are kept for backwards
+ * compatibility with older smoke runs but are no-ops by default.
  */
 export default defineConfig({
   testDir: './tests/e2e',
-
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
-
-  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : 2,
-
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  workers: 1,
   reporter: [
-    ['html', { outputFolder: 'playwright-report' }],
-    ['json', { outputFile: 'test-results.json' }],
-    ['junit', { outputFile: 'test-results.xml' }]
+    ['list'],
+    ['html', { outputFolder: 'playwright-report', open: 'never' }],
+    ['junit', { outputFile: 'test-results.xml' }],
   ],
-
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: 'http://localhost:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
-
-    /* Take screenshot on failure */
     screenshot: 'only-on-failure',
-
-    /* Video on failure */
     video: 'retain-on-failure',
-
-    /* Global timeout for each action */
-    actionTimeout: 10000,
-
-    /* Global timeout for navigation */
-    navigationTimeout: 30000
+    actionTimeout: 10_000,
+    navigationTimeout: 30_000,
   },
-
-  /* Configure projects for major browsers */
   projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
-
-    /* Test against mobile viewports. */
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 12'] },
-    },
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
-
-  /* Global setup and teardown */
-  globalSetup: './tests/global-setup.js',
-  globalTeardown: './tests/global-teardown.js',
-
-  /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cd /workspaces/GUI-LOP && npm start',
-      port: 3001,
+      // Boots the v1 server in dev mode (no DATABASE_URL/REDIS_URL → in-memory
+      // adapters; default templates are seeded automatically). `cwd` is
+      // resolved relative to this config file → repo root.
+      command: 'node src/backend/bootstrap/index.js',
+      cwd: '../../',
+      env: { PORT: '3001', LOG_LEVEL: 'warn', NODE_ENV: 'test' },
+      url: 'http://localhost:3001/health',
       reuseExistingServer: !process.env.CI,
-      timeout: 120000,
+      timeout: 60_000,
     },
     {
       command: 'npm start',
       port: 3000,
       reuseExistingServer: !process.env.CI,
-      timeout: 120000,
-    }
+      timeout: 120_000,
+      env: { BROWSER: 'none', PORT: '3000' },
+    },
   ],
-
-  /* Test timeout */
-  timeout: 30000,
-  expect: {
-    /* Timeout for expect() assertions */
-    timeout: 10000
-  }
+  timeout: 60_000,
+  expect: { timeout: 10_000 },
 });

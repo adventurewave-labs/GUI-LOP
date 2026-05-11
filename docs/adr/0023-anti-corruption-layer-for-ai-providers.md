@@ -82,6 +82,28 @@ Cross-cutting concerns are added by composition:
 - Contract tests run against a recorded fixture per provider.
 - A weekly synthetic call validates each provider in production.
 
+### Concrete Implementation
+
+The UI Generation context ships the ACL at
+`src/backend/contexts/ui-generation/infrastructure/ai/` with two real
+vendors and a stub:
+
+- `openai/openai-provider.js` — OpenAI Chat Completions adapter.
+- `anthropic/anthropic-provider.js` — Anthropic Messages adapter
+  (default model `claude-haiku-4-5`).
+- `stub/stub-provider.js` — deterministic in-memory adapter, default in
+  dev/test, no API key required.
+
+Shared cross-cutting concerns are composed by `base-ai-adapter.js` via
+`retry.js`, `circuit-breaker.js`, `telemetry.js`, and `pii-scrubber.js`.
+Errors are translated into the taxonomy defined in `domain-errors.js`
+(`AIProviderUnavailable`, `AIQuotaExceeded`, `AIInvalidRequest`,
+`AIBadResponse`).
+
+The active vendor is selected by `AI_PROVIDER` in the environment;
+`wire-ui-generation.js` fails fast at bootstrap when a real vendor is
+selected without `AI_API_KEY`.
+
 ## References
 
 - Vaughn Vernon, *Implementing DDD*, ch. 13 (Integrating Bounded

@@ -1,84 +1,14 @@
 /**
- * Babel configuration for GUI-LOP Frontend
- * Optimized for performance and bundle size
+ * Babel configuration for GUI-LOP Frontend.
+ *
+ * Kept intentionally lean: CRA (`react-scripts`) brings its own Babel
+ * configuration via `babel-preset-react-app`; this file only adds an
+ * extra-narrow override path for tools that load Babel directly
+ * (e.g. workbox-build during the production bundle step).
  */
 
 module.exports = {
   presets: [
-    [
-      '@babel/preset-env',
-      {
-        targets: {
-          browsers: ['> 0.25%', 'not dead', 'not ie 11']
-        },
-        modules: false,
-        useBuiltIns: 'usage',
-        corejs: 3,
-        debug: process.env.NODE_ENV === 'development'
-      }
-    ],
-    [
-      '@babel/preset-react',
-      {
-        runtime: 'automatic',
-        development: process.env.NODE_ENV === 'development',
-        importSource: {
-          '@emotion/react': {
-            sourceMap: false,
-            autoLabel: 'never'
-          }
-        }
-      }
-    ]
+    require.resolve('babel-preset-react-app'),
   ],
-  plugins: [
-    // Remove console.log in production
-    process.env.NODE_ENV === 'production' && [
-      'transform-remove-console',
-      {
-        exclude: ['error', 'warn']
-      }
-    ],
-
-    // Tree shaking support
-    '@babel/plugin-syntax-dynamic-import',
-
-    // Optimize imports
-    [
-      'babel-plugin-import',
-      {
-        libraryName: 'antd',
-        libraryDirectory: 'es',
-        style: true
-      },
-      'antd'
-    ],
-
-    // Code splitting
-    '@babel/plugin-transform-runtime',
-
-    // Prop types optimization
-    process.env.NODE_ENV === 'production' && [
-      'babel-plugin-transform-react-remove-prop-types',
-      {
-        removeImport: true
-      }
-    ]
-  ].filter(Boolean),
-
-  env: {
-    development: {
-      plugins: [
-        // Fast refresh for development
-        'react-refresh/babel'
-      ]
-    },
-    production: {
-      plugins: [
-        // Additional production optimizations
-        'babel-plugin-transform-react-constant-elements',
-        'babel-plugin-transform-react-inline-elements'
-      ]
-    }
-  }
 };

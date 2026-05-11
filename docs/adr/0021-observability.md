@@ -35,6 +35,15 @@ operation, not bolted on later.
   - p95 API latency for workflow reads: < 250 ms.
   - Outbox lag p95: < 5 s.
   - WebSocket message delivery p99: < 1 s.
+  - `auth.login` p95: < 100 ms. **Note (2026-05-10):** the login hot path
+    is bcrypt-bound; the SLO assumes a work factor of 10 OR a
+    worker-thread offload at factor 12. The platform now provides both:
+    `BcryptPasswordHasher` dispatches `hash`/`compare` to a worker pool
+    (`bcrypt-worker.js`, size = `max(2, cpus-1)`) so factor 12 in
+    production never blocks the event loop, while the benchmark suite
+    pins `BCRYPT_WORK_FACTOR=10` to validate the SLO on commodity dev
+    hardware. Tests get `BCRYPT_WORK_FACTOR_TEST` (default 4) so the
+    suite stays fast and deterministic.
 - Each SLO has an associated burn-rate alert.
 
 ## Alternatives Considered

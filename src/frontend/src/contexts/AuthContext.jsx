@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { authAPI } from '../services/api';
 import { tokenStorage } from '../utils/tokenStorage';
+import { accessTokenStore } from '../services/api/client.js';
 
 // Authentication state shape
 const initialState = {
@@ -203,6 +204,7 @@ export const AuthProvider = ({ children }) => {
 
       if (response.success) {
         tokenStorage.setAccessToken(response.data.accessToken);
+        accessTokenStore.set(response.data.accessToken);
         dispatch({
           type: AUTH_ACTIONS.REFRESH_SUCCESS,
           payload: { user: response.data.user },
@@ -231,6 +233,7 @@ export const AuthProvider = ({ children }) => {
 
         // Store tokens
         tokenStorage.setTokens(accessToken, refreshToken);
+        accessTokenStore.set(accessToken);
 
         dispatch({
           type: AUTH_ACTIONS.LOGIN_SUCCESS,
@@ -263,6 +266,7 @@ export const AuthProvider = ({ children }) => {
 
         // Store tokens
         tokenStorage.setTokens(accessToken, refreshToken);
+        accessTokenStore.set(accessToken);
 
         dispatch({
           type: AUTH_ACTIONS.REGISTER_SUCCESS,
@@ -293,6 +297,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Clear tokens regardless of API call success
       tokenStorage.clearTokens();
+      accessTokenStore.clear();
       dispatch({ type: AUTH_ACTIONS.LOGOUT });
     }
   }, []);

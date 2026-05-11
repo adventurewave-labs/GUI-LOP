@@ -1,0 +1,13 @@
+# Patterns to ignore when packaging the chart.
+.DS_Store
+.git/
+.gitignore
+.idea/
+.vscode/
+*.tgz
+*.bak
+*.swp
+.editorconfig
+.travis.yml
+.gitlab-ci.yml
+OWNERS

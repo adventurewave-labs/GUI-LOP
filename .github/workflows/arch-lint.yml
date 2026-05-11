@@ -1,0 +1,37 @@
+name: arch-lint
+
+# Enforces the four-layer hexagonal boundary rules from
+# `.dependency-cruiser.cjs`. Runs on every PR and push to main.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: arch-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-cruiser:
+    name: dependency-cruiser
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # dependency-cruiser is intentionally NOT in the dependency tree
+      # (it's a build-time-only tool). Use npx with a pinned version so the
+      # workflow stays deterministic.
+      - name: Run architecture lint
+        run: npx --yes -p dependency-cruiser@16 depcruise --config .dependency-cruiser.cjs src/backend

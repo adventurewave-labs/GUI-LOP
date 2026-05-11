@@ -1,0 +1,93 @@
+name: contracts
+
+# Adapter contract tests — real Postgres + Redis via GitHub Actions
+# service containers. Informational / non-blocking until it stabilises;
+# the existing `ci` workflow remains the required merge check (see
+# repo branch-protection settings).
+#
+# Runs on PRs to `main` and pushes to `main` / `claude/**`.
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - "claude/**"
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-tests:
+    name: adapter contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Marked informational: a red check here should be investigated but
+    # does NOT block merge per the iteration-3 plan.
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: contracts
+          POSTGRES_USER: contracts
+          POSTGRES_PASSWORD: contracts
+        ports:
+          - 5432:5432
+        # Wait for Postgres to be ready before the job's steps run.
+        options: >-
+          --health-cmd "pg_isready -U contracts -d contracts"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Direct connection URLs (used by tests if they fall back to
+      # service-bound connections rather than spinning up testcontainers).
+      DATABASE_URL: postgresql://contracts:contracts@localhost:5432/contracts
+      REDIS_URL: redis://localhost:6379
+      # The testcontainers-node package autodetects Docker via the
+      # standard socket; on GitHub-hosted runners docker.sock is exposed
+      # and tests can also boot their own containers if preferred.
+      NODE_ENV: test
+      JWT_SECRET: ci-test-secret-not-used-in-prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run contract test suites
+        run: npm run test:contracts
+
+      - name: Upload contract-test artefacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-test-logs
+          path: |
+            **/jest-*.log
+            **/contracts-*.log
+          if-no-files-found: ignore
+          retention-days: 7

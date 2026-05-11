@@ -150,6 +150,81 @@ interface UIGenerationService {
   parameters so a user can request a regenerate if unhappy.
 - **Cost.** AI strategies cost money; we cache by spec+context hash.
 
+## AI Provider ACL
+
+ADR 0023 mandates an Anti-Corruption Layer between the domain and any
+external AI provider. The concrete implementation lives at
+`src/backend/contexts/ui-generation/infrastructure/ai/`.
+
+### Port
+
+- `application/ports/ai-provider.js` — `AIProvider` with three methods:
+  - `generateUI({ spec, context, strategyHints }): Promise<UIDocumentDraft>`
+    returns a JSON layout + `Field[]` description that matches the
+    `UIDocument`'s content interest. Vendors NEVER return raw HTML.
+  - `classify({ input, labels, options? }): Promise<ClassificationResult>`
+    is the generic classifier entry point.
+  - `healthCheck(): Promise<{ ok, latencyMs, model }>` for liveness.
+- `application/ports/classification-service.js` —
+  `ClassificationService` is a thin wrapper around `AIProvider.classify`
+  for contexts that only need classification.
+
+### Adapters
+
+| Vendor    | Path                                                        | Notes                                          |
+| --------- | ----------------------------------------------------------- | ---------------------------------------------- |
+| Stub      | `infrastructure/ai/stub/stub-provider.js`                   | Deterministic; default for dev/test.           |
+| OpenAI    | `infrastructure/ai/openai/openai-provider.js`               | `POST /v1/chat/completions`, JSON-mode.        |
+| Anthropic | `infrastructure/ai/anthropic/anthropic-provider.js`         | `POST /v1/messages`, model `claude-haiku-4-5`. |
+
+All real adapters use the global `fetch` (Node 18+). No vendor SDK is
+imported. Each extends `BaseAIAdapter`, which composes:
+
+- `retry.js` — exponential backoff with full jitter; per-call timeout
+  via `AbortController`.
+- `circuit-breaker.js` — CLOSED / OPEN / HALF_OPEN; opens on N
+  consecutive provider faults; only provider-class errors trip it.
+- `telemetry.js` — emits one structured log per call with
+  `{ provider, model, op, durationMs, tokenUsage?, error? }`.
+- `pii-scrubber.js` — regex-based redaction of emails, phone numbers,
+  and Luhn-valid card numbers. Defence-in-depth only — for compliance
+  workloads use a managed redactor.
+
+### Error Taxonomy
+
+All adapters translate vendor failures into:
+
+- `AIProviderUnavailable` — auth, network, 5xx.
+- `AIQuotaExceeded` — 429 / rate limit.
+- `AIInvalidRequest` — vendor-rejected request shape (400 / 404 / 422).
+- `AIBadResponse` — body fails JSON parse or `UIDocumentDraft` schema.
+
+Defined in `infrastructure/ai/domain-errors.js`, all extending the
+shared-kernel `DomainError`.
+
+### Switching Providers
+
+Set in the environment (validated by `config-loader.js`):
+
+```
+AI_PROVIDER=stub | openai | anthropic   # default stub
+AI_API_KEY=...                          # required when not stub
+AI_BASE_URL=...                         # optional override
+AI_MODEL=...                            # optional override
+AI_TIMEOUT_MS=30000                     # default 30s
+AI_MAX_RETRIES=2                        # default 2
+```
+
+`wire-ui-generation.js` reads the config, picks the adapter, and fails
+fast at boot if `AI_API_KEY` is missing for a real vendor.
+
+### When the AI Path is Taken
+
+`GenerateUIForStepCommand` routes through `aiProvider.generateUI(...)`
+when the input carries `strategyHint: 'ai-assisted'`. Otherwise the
+deterministic `LayoutComposer` path runs as before. Failure on the AI
+path emits `ui.generation_failed` with the AI error name in the payload.
+
 ## Open Questions
 
 - **Live preview** during template authoring: out of scope for v1

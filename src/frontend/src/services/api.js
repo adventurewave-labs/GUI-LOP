@@ -1,91 +1,106 @@
-import axios from 'axios';
-import { authAPI } from './auth';
-import { tokenStorage } from '../utils/tokenStorage';
+/**
+ * Backwards-compatibility shim.
+ *
+ * The real implementation now lives under `./api/` (per-context modules).
+ * This file keeps the historical `apiClient` / `api` / `authAPI` /
+ * `tokenStorage` / `createAuthenticatedWebSocket` exports working so any
+ * remaining call-sites compile and tests that mock `'../services/api'`
+ * still find the symbols they expect — but the implementations now talk to
+ * `/api/v1/*` and the new versioned WebSocket envelope.
+ *
+ * New code should import from `./api/index.js` (or the per-context
+ * modules) and `./websocket/client.js` directly.
+ */
 
-// API base configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
+import { request, accessTokenStore, ApiError, apiBaseUrl } from './api/client.js';
+import { authApi } from './api/auth.js';
+import { workflowsApi } from './api/workflows.js';
+import { inboxApi } from './api/inbox.js';
+import { tokenStorage as _tokenStorage } from '../utils/tokenStorage.js';
 
-// Create axios instance
-export const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  withCredentials: true, // Important for httpOnly cookies
-});
+export { ApiError, accessTokenStore, apiBaseUrl };
+export const tokenStorage = _tokenStorage;
 
-// Request interceptor to add access token
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = tokenStorage.getAccessToken();
+/* -------------------- legacy `api` / `apiClient` surface -------------------- */
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    // Add request timestamp for debugging
-    config.metadata = { startTime: new Date() };
-
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor to handle token refresh
-apiClient.interceptors.response.use(
-  (response) => {
-    // Calculate request duration for debugging
-    const duration = new Date() - response.config.metadata.startTime;
-    response.config.metadata.duration = duration;
-
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
-
-    // If error is 401 (Unauthorized) and we haven't already tried to refresh
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-
-      try {
-        // Attempt to refresh the token
-        const response = await authAPI.refreshToken();
-
-        if (response.success) {
-          const { accessToken } = response.data;
-          tokenStorage.setAccessToken(accessToken);
-
-          // Retry the original request with new token
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-          return apiClient(originalRequest);
-        } else {
-          // Refresh failed, clear tokens and redirect to login
-          tokenStorage.clearTokens();
-          window.location.href = '/login';
-          return Promise.reject(error);
-        }
-      } catch (refreshError) {
-        // Refresh failed completely
-        tokenStorage.clearTokens();
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+function legacyEnvelope(promise) {
+  return promise
+    .then((data) => ({ success: true, data, status: 200, headers: {} }))
+    .catch((err) => {
+      if (err instanceof ApiError) {
+        return {
+          success: false,
+          error: err.message,
+          status: err.status,
+          message: err.message,
+          code: err.code,
+          data: err.body,
+        };
       }
-    }
+      return {
+        success: false,
+        error: err && err.message ? err.message : 'Network error',
+        status: null,
+        data: null,
+      };
+    });
+}
 
-    // Handle other HTTP errors
-    if (error.response?.status >= 500) {
-      console.error('Server error:', error.response.data);
-      // You could implement a global error notification here
-    }
+export const api = {
+  get: (url, config = {}) =>
+    legacyEnvelope(request(url, { method: 'GET', query: config.params })),
+  post: (url, data = {}, config = {}) =>
+    legacyEnvelope(request(url, { method: 'POST', body: data, headers: config.headers })),
+  put: (url, data = {}, config = {}) =>
+    legacyEnvelope(request(url, { method: 'PUT', body: data, headers: config.headers })),
+  patch: (url, data = {}, config = {}) =>
+    legacyEnvelope(request(url, { method: 'PATCH', body: data, headers: config.headers })),
+  delete: (url, config = {}) =>
+    legacyEnvelope(request(url, { method: 'DELETE', headers: config.headers })),
+};
 
-    return Promise.reject(error);
+export const apiClient = api;
+export default api;
+
+/* -------------------- legacy `authAPI` surface -------------------- */
+
+export const authAPI = {
+  login: (credentials) => legacyEnvelope(authApi.login(credentials)),
+  register: (userData) => legacyEnvelope(authApi.register(userData)),
+  logout: () => legacyEnvelope(authApi.logout()),
+  refreshToken: () => legacyEnvelope(authApi.refresh()),
+  getCurrentUser: () => legacyEnvelope(authApi.me()),
+  changePassword: (data) => legacyEnvelope(authApi.changePassword(data)),
+};
+
+/* -------------------- legacy WebSocket factory -------------------- */
+
+export const createAuthenticatedWebSocket = (urlOrPath = '/ws/v1') => {
+  const token = accessTokenStore.get();
+  if (!token) throw new Error('No access token available for WebSocket connection');
+
+  let urlString;
+  if (urlOrPath.startsWith('ws://') || urlOrPath.startsWith('wss://')) {
+    urlString = urlOrPath;
+  } else if (urlOrPath.startsWith('http://')) {
+    urlString = `ws://${urlOrPath.slice('http://'.length)}`;
+  } else if (urlOrPath.startsWith('https://')) {
+    urlString = `wss://${urlOrPath.slice('https://'.length)}`;
+  } else {
+    const base = apiBaseUrl
+      .replace(/^https/, 'wss')
+      .replace(/^http/, 'ws')
+      .replace(/\/$/, '');
+    urlString = `${base}${urlOrPath.startsWith('/') ? '' : '/'}${urlOrPath}`;
   }
-);
 
-// API response formatter
+  const url = new URL(urlString);
+  url.searchParams.set('token', token);
+  return new WebSocket(url.toString());
+};
+
+/* -------------------- formatters kept for older imports -------------------- */
+
 export const formatAPIResponse = (response) => ({
   success: true,
   data: response.data,
@@ -93,79 +108,9 @@ export const formatAPIResponse = (response) => ({
   headers: response.headers,
 });
 
-// API error formatter
-export const formatAPIError = (error) => {
-  if (error.response) {
-    // Server responded with error status
-    return {
-      success: false,
-      error: error.response.data.error || error.response.data.message || 'Server error',
-      status: error.response.status,
-      data: error.response.data,
-    };
-  } else if (error.request) {
-    // Request was made but no response received
-    return {
-      success: false,
-      error: 'Network error. Please check your connection.',
-      status: null,
-      data: null,
-    };
-  } else {
-    // Something else happened in setting up the request
-    return {
-      success: false,
-      error: error.message || 'An unexpected error occurred',
-      status: null,
-      data: null,
-    };
-  }
-};
-
-// Generic API request wrapper
-export const apiRequest = async (config) => {
-  try {
-    const response = await apiClient(config);
-    return formatAPIResponse(response);
-  } catch (error) {
-    return formatAPIError(error);
-  }
-};
-
-// HTTP method helpers
-export const api = {
-  get: (url, config = {}) => apiRequest({ method: 'GET', url, ...config }),
-  post: (url, data = {}, config = {}) => apiRequest({ method: 'POST', url, data, ...config }),
-  put: (url, data = {}, config = {}) => apiRequest({ method: 'PUT', url, data, ...config }),
-  patch: (url, data = {}, config = {}) => apiRequest({ method: 'PATCH', url, data, ...config }),
-  delete: (url, config = {}) => apiRequest({ method: 'DELETE', url, ...config }),
-};
-
-// WebSocket factory with authentication
-export const createAuthenticatedWebSocket = (url, options = {}) => {
-  const token = tokenStorage.getAccessToken();
-
-  if (!token) {
-    throw new Error('No access token available for WebSocket connection');
-  }
-
-  // Create WebSocket URL with token as query parameter
-  const wsUrl = new URL(url);
-  wsUrl.searchParams.append('token', token);
-
-  const ws = new WebSocket(wsUrl.toString());
-
-  // Add authentication to WebSocket options
-  const wsOptions = {
-    ...options,
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  };
-
-  return ws;
-};
-
-// Export default api client for direct usage
-export default apiClient;
+export const formatAPIError = (error) => ({
+  success: false,
+  error: error?.message ?? 'An unexpected error occurred',
+  status: error?.status ?? null,
+  data: error?.body ?? null,
+});

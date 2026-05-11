@@ -216,3 +216,14 @@ Reads use the views `active_workflows` and `workflow_analytics`.
   shape? Default: no — instance is bound to its template version.
 - Sub-workflows (a step that itself is a workflow): not modelled
   yet; backlog.
+
+### Resolved
+
+- ~~`AdvanceWorkflowUseCase` ignored `{stepId, response}` so dev-mode
+  workflows parked on a human step never resumed to `completed`.~~
+  Resolved in iteration 3: the use case now calls
+  `workflow.applyHumanResponse(stepId, response, now)` before
+  re-running the engine when a response is supplied; absent that, it
+  falls back to the prior behaviour (external/scheduler re-entry).
+  Covered by `src/backend/contexts/workflow-orchestration/__tests__/application/advance-workflow.test.js`
+  and `tests/integration/workflow-completion.test.js`.

@@ -1,217 +1,60 @@
 /**
- * React App Unit Tests
- * Tests for React components and frontend logic
+ * Smoke tests for the v1 App shell.
+ *
+ * The previous tests were pinned to the legacy `simple-server` integration
+ * (the old App auto-fetched `/api/workflows/templates` and opened a
+ * WebSocket on mount). The new App is route-driven: it only fetches data
+ * once a route is mounted, so these tests simply verify the shell renders
+ * and the unauthenticated user lands on `/login`.
  */
 
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import App from '../src/App.jsx';
 
-// Mock WebSocket for testing
-global.WebSocket = jest.fn(() => ({
-  addEventListener: jest.fn(),
-  send: jest.fn(),
-  close: jest.fn(),
-  readyState: 1 // OPEN
-}));
+// Mock the WebSocket so the v1 client (lazily created via the workflow events
+// hook) doesn't try to open a real socket if a feature route mounts.
+global.WebSocket = jest.fn(function FakeWS() {
+  this.send = jest.fn();
+  this.close = jest.fn();
+  this.readyState = 0;
+});
 
-// Mock fetch for API calls
-global.fetch = jest.fn();
+// Mock fetch (App's HealthBadge calls /health on mount).
+global.fetch = jest.fn(() =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ status: 'ok' }),
+    text: () => Promise.resolve(JSON.stringify({ status: 'ok' })),
+  }),
+);
 
-describe('App Component Tests', () => {
+import App from '../../src/App.jsx';
+
+describe('App shell (v1)', () => {
   beforeEach(() => {
-    // Reset mocks
     fetch.mockClear();
-    console.log = jest.fn();
-    console.error = jest.fn();
+    localStorage.clear();
   });
 
   test('renders without crashing', () => {
     render(<App />);
-    // Component should render without throwing an error
+    // Brand title rendered by the header
+    expect(screen.getByText('GUI-LOP')).toBeInTheDocument();
   });
 
-  test('displays initial loading state', () => {
+  test('polls /health on the v1 base URL', async () => {
     render(<App />);
-    // Should show some kind of loading or initial content
-    const body = document.querySelector('body');
-    expect(body).toBeInTheDocument();
-  });
-
-  test('handles server health check', async () => {
-    const mockHealthResponse = {
-      ok: true,
-      json: () => Promise.resolve({
-        status: 'ok',
-        message: 'GUI-LOP Server is running'
-      })
-    };
-
-    fetch.mockResolvedValue(mockHealthResponse);
-
-    render(<App />);
-
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('http://localhost:3001/health');
+      expect(fetch).toHaveBeenCalledWith(expect.stringMatching(/\/health$/));
     });
   });
 
-  test('handles server errors gracefully', async () => {
-    const mockErrorResponse = {
-      ok: false,
-      status: 500
-    };
-
-    fetch.mockResolvedValue(mockErrorResponse);
-
+  test('unauthenticated visit lands on /login', async () => {
     render(<App />);
-
     await waitFor(() => {
-      // Should handle error without crashing
-      const body = document.querySelector('body');
-      expect(body).toBeInTheDocument();
+      expect(screen.getByTestId('login-page')).toBeInTheDocument();
     });
-  });
-
-  test('loads workflow templates', async () => {
-    const mockHealthResponse = {
-      ok: true,
-      json: () => Promise.resolve({
-        status: 'ok',
-        message: 'GUI-LOP Server is running'
-      })
-    };
-
-    const mockTemplatesResponse = {
-      ok: true,
-      json: () => Promise.resolve({
-        templates: [
-          {
-            id: 'data-analysis',
-            name: 'Data Analysis Workflow',
-            description: 'Test workflow'
-          }
-        ]
-      })
-    };
-
-    fetch
-      .mockResolvedValueOnce(mockHealthResponse)
-      .mockResolvedValueOnce(mockTemplatesResponse);
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('http://localhost:3001/api/workflows/templates');
-    });
-  });
-
-  test('handles WebSocket connection', () => {
-    render(<App />);
-
-    // Should attempt to create WebSocket connection
-    expect(global.WebSocket).toHaveBeenCalled();
-  });
-
-  test('handles user interactions', async () => {
-    fetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        status: 'ok',
-        message: 'GUI-LOP Server is running'
-      })
-    });
-
-    render(<App />);
-
-    // Wait for component to load
-    await waitFor(() => {
-      const body = document.querySelector('body');
-      expect(body).toBeInTheDocument();
-    });
-
-    // Look for any interactive elements
-    const buttons = document.querySelectorAll('button, [role="button"]');
-
-    if (buttons.length > 0) {
-      // Test clicking first button
-      fireEvent.click(buttons[0]);
-
-      // Should handle click without error
-      const bodyAfterClick = document.querySelector('body');
-      expect(bodyAfterClick).toBeInTheDocument();
-    }
-  });
-});
-
-describe('Utility Functions', () => {
-  test('should validate workflow data', () => {
-    // Test utility functions if they exist
-    const mockWorkflow = {
-      id: 'test-workflow',
-      template: 'data-analysis',
-      status: 'created'
-    };
-
-    expect(mockWorkflow.id).toBeTruthy();
-    expect(mockWorkflow.template).toBeTruthy();
-    expect(mockWorkflow.status).toBeTruthy();
-  });
-
-  test('should handle API responses', () => {
-    const mockResponse = {
-      workflow_id: 'test-id',
-      status: 'created',
-      created_at: new Date().toISOString()
-    };
-
-    expect(mockResponse.workflow_id).toBe('test-id');
-    expect(mockResponse.status).toBe('created');
-    expect(mockResponse.created_at).toBeTruthy();
-  });
-});
-
-describe('Component Integration', () => {
-  test('should handle workflow creation flow', async () => {
-    const mockHealthResponse = {
-      ok: true,
-      json: () => Promise.resolve({ status: 'ok' })
-    };
-
-    const mockCreateResponse = {
-      ok: true,
-      json: () => Promise.resolve({
-        workflow_id: 'new-workflow-id',
-        status: 'created'
-      })
-    };
-
-    fetch
-      .mockResolvedValueOnce(mockHealthResponse)
-      .mockResolvedValueOnce(mockCreateResponse);
-
-    render(<App />);
-
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith('http://localhost:3001/health');
-    });
-  });
-
-  test('should handle WebSocket events', () => {
-    const mockWs = {
-      addEventListener: jest.fn(),
-      send: jest.fn(),
-      close: jest.fn(),
-      readyState: 1
-    };
-
-    global.WebSocket = jest.fn(() => mockWs);
-
-    render(<App />);
-
-    expect(mockWs.addEventListener).toHaveBeenCalledWith('open', expect.any(Function));
-    expect(mockWs.addEventListener).toHaveBeenCalledWith('message', expect.any(Function));
-    expect(mockWs.addEventListener).toHaveBeenCalledWith('close', expect.any(Function));
   });
 });

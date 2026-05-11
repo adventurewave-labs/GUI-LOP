@@ -1,0 +1,26 @@
+apiVersion: v2
+name: gui-lop
+description: Generative UI & Human-in-the-Loop Orchestration Platform — DDD bootstrap deployment chart (ADR 0020).
+type: application
+
+# version: chart version (SemVer)
+version: 0.1.0
+
+# appVersion: the upstream application version. Track repo tags.
+appVersion: "1.0.0"
+
+home: https://github.com/your-org/GUI-LOP
+sources:
+  - https://github.com/your-org/GUI-LOP
+
+maintainers:
+  - name: GUI-LOP Platform Team
+
+keywords:
+  - hitl
+  - workflow
+  - ddd
+  - orchestration
+
+# Helm 3.x is required (apiVersion: v2).
+kubeVersion: ">=1.24.0-0"
