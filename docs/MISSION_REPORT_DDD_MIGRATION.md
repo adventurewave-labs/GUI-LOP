@@ -122,14 +122,20 @@ Two items remain unaddressed:
 
 A small follow-up flagged by the workflow agent for iteration 3:
 
-- **`AdvanceWorkflow` doesn't yet apply the human response.** Dev-
+- ~~**`AdvanceWorkflow` doesn't yet apply the human response.** Dev-
   mode workflows paused on a human step never resume to `completed`
   because `AdvanceWorkflowUseCase.execute(...)` ignores the
   `stepId`/`response` arguments the in-process `WorkflowAdvancer`
   passes. Should call `workflow.applyHumanResponse(stepId, response, now)`
-  before re-running the engine. Tracked in
-  `docs/ddd/03-bounded-contexts/workflow-orchestration.md`'s open
-  questions.
+  before re-running the engine.~~ **Done** (iteration 3, this
+  commit): `AdvanceWorkflowUseCase` now applies the human response
+  to the aggregate before re-running the engine; the in-process
+  `WorkflowAdvancer` adapter already forwarded `{stepId, response}`
+  so no wiring change was needed. Covered by new unit tests in
+  `src/backend/contexts/workflow-orchestration/__tests__/application/advance-workflow.test.js`
+  and a new end-to-end integration test in
+  `tests/integration/workflow-completion.test.js` that asserts the
+  broadcaster observes `workflow.completed`.
 
 ### Original known follow-ups (iteration 1, mostly resolved)
 

@@ -19,6 +19,7 @@ export default {
     '<rootDir>/tests/integration/human-interaction-routes.test.js',
     '<rootDir>/tests/integration/health-endpoint.test.js',
     '<rootDir>/tests/integration/inmemory-event-forwarding.test.js',
+    '<rootDir>/tests/integration/workflow-completion.test.js',
     // Per-context unit tests live next to the code (DDD layout).
     '<rootDir>/src/backend/**/__tests__/**/*.test.js',
     // Phase 4-6 placed test fixtures under tests/backend/contexts.
