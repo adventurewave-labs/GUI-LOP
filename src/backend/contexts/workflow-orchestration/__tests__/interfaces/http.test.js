@@ -17,7 +17,6 @@ import { InMemoryWorkflowTemplateRepository } from '../../infrastructure/persist
 import { StubAutomatedStepRunner } from '../../infrastructure/step-runners/automated-step-runner.js';
 import { StubExternalStepRunner } from '../../infrastructure/step-runners/external-step-runner.js';
 import { createWorkflowRouter } from '../../interfaces/http/workflow-router.js';
-import { createLegacyWorkflowRouter } from '../../interfaces/http/legacy-router.js';
 import { makeClock, makeIds } from '../helpers/test-fixtures.js';
 
 function buildApp() {
@@ -56,7 +55,6 @@ function buildApp() {
   const app = express();
   app.use(express.json());
   app.use('/api/v1/workflows', router);
-  app.use('/api/workflows', createLegacyWorkflowRouter(router));
   return { app, templates, workflows };
 }
 
@@ -138,15 +136,5 @@ describe('workflow router', () => {
     const res = await request(app).post(`/api/v1/workflows/${id}/cancel`).send({ reason: 'never mind' });
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('cancelled');
-  });
-
-  it('legacy /api/workflows/templates routes to v1', async () => {
-    const { app } = buildApp();
-    await request(app).post('/api/v1/workflows/templates').send({
-      key: 'demo', name: 'Demo', steps: [{ name: 'A', kind: 'automated' }],
-    });
-    const res = await request(app).get('/api/workflows/templates');
-    expect(res.status).toBe(200);
-    expect(res.body.data.templates).toHaveLength(1);
   });
 });

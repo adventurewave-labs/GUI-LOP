@@ -10,11 +10,8 @@ export default {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
 
-  // Test files: legacy explicit set + new bounded-context tests.
+  // Test files: bounded-context tests + system-level integration tests.
   testMatch: [
-    '<rootDir>/tests/backend/server.test.js',
-    '<rootDir>/tests/backend/simple-server.test.js',
-    '<rootDir>/tests/integration/full-workflow.test.js',
     '<rootDir>/tests/integration/bootstrap-smoke.test.js',
     '<rootDir>/tests/integration/human-interaction-routes.test.js',
     '<rootDir>/tests/integration/health-endpoint.test.js',

@@ -1,26 +1,22 @@
 /**
  * Redis rate-limit-store contract suite.
  *
- * NOTE (deviation): the GUI-LOP DDD codebase does not yet ship a
- * dedicated `RateLimitStore` port + adapter pair — rate limiting
- * today lives in the legacy `src/backend/services/rate-limit-service.js`
- * (in-process Map) and the `rate-limit-redis` express middleware
- * driver. There is therefore no DDD adapter to test against.
+ * NOTE: the DDD codebase does not yet ship a dedicated
+ * `RateLimitStore` port + adapter pair. The legacy in-process
+ * rate-limit service was removed in Phase 7 of the migration.
  *
- * To still earn the testcontainers coverage we drive Redis directly
- * using the same primitives a future adapter will use:
+ * To still earn testcontainers coverage we drive Redis directly
+ * using the primitives a future adapter will use:
  *
  *   - INCR + EXPIRE for a fresh window key.
  *   - INCR for an existing-window key (no TTL reset).
  *   - Window roll: after TTL expiry the counter resets.
  *
- * If/when a `RedisRateLimitStore` adapter lands under
- * `src/backend/contexts/identity-and-access/infrastructure/cache/` the
- * `describe.each([...adapters])` block below should be expanded to
- * call its `hit(key, windowMs, max)` method directly. Until then,
- * these assertions document the contract Redis itself satisfies and
- * guarantee the cluster behaves correctly when a future adapter is
- * wired in.
+ * When a `RedisRateLimitStore` adapter lands under
+ * `src/backend/contexts/identity-and-access/infrastructure/cache/`,
+ * the `describe.each([...adapters])` block below should be expanded
+ * to call its `hit(key, windowMs, max)` method directly. Until then,
+ * these assertions document the contract Redis itself satisfies.
  */
 
 import { describeIfDocker } from '../_helpers/docker-available.js';

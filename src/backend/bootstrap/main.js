@@ -238,9 +238,6 @@ export async function bootstrap(envOverride) {
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
   app.use('/api/v1', identity.authMiddleware, notification.router);
 
-  // Legacy alias for the simple-server `/api/workflows/*` shape.
-  app.use('/api/workflows', identity.authMiddleware, workflow.legacyRouter);
-
   // Liveness + dependency-status probe (ADR 0021 — Observability).
   app.get('/health', async (_req, res) => {
     let dbStatus = pool ? 'unknown' : 'disabled';

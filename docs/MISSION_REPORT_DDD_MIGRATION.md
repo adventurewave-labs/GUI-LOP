@@ -4,7 +4,41 @@
 **Range (iteration 1):** docs commit `5cecab8` → `e816f43`
 **Range (iteration 2):** `08dcc5b` → `e23be41`
 **Range (iteration 3):** `13296a9` → `dcbab3b`
+**Range (iteration 4 — Phase 7 cleanup):** `417da9a` → final
 **Date:** 2026-05-10
+
+## Iteration 4 — Phase 7 cleanup (final)
+
+The original migration plan's Phase 7 is now complete. Inline single-
+session work (no parallel agents — small, surgical).
+
+- **Deleted** `src/backend/simple-server.js`, `database-server.js`,
+  `enhanced-server.js`, `enhanced-auth-middleware.js`, plus the
+  legacy `middleware/`, `services/`, `models/`, `routes/`, `utils/`,
+  `config/`, `tests/` trees under `src/backend/`.
+- **Deleted** `legacy-router.js` and its mount in `bootstrap/main.js`
+  + its export from `wire-workflow-orchestration.js` + the
+  alias-only test case in the workflow HTTP test.
+- **Deleted** the legacy test files that exercised the deleted code:
+  `tests/backend/{server,simple-server,websocket}.test.js`,
+  `tests/integration/full-workflow.test.js`, and seven legacy
+  `tests/security/*.test.js` files. The DDD-era security coverage
+  lives in the contexts' own `__tests__/` and the testcontainers
+  contract suite.
+- **Updated** `package.json` — `main`, `start`, `dev` now point at
+  `src/backend/bootstrap/index.js`.
+- **Updated** `jest.backend.config.js` testMatch — removed deleted
+  paths; kept the per-context `__tests__/**` and the integration
+  suites.
+- **Strict dep-cruiser** — added two new rules:
+  - `no-cross-context-imports` — one bounded context may not import
+    from another; cross-context coupling goes through ports.
+  - `no-legacy-resurrection` — any attempt to recreate the deleted
+    `src/backend/{middleware,services,…}` paths fails CI.
+- **Mission test count:** 560 / 560 across 75 suites (was 561 / 75
+  before deletion; -1 net is the alias-only test case that no longer
+  has anything to assert).
+- **Benchmarks:** 25 / 25 SLOs still PASS — no regression.
 
 ## Headline
 

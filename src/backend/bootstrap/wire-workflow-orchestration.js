@@ -22,7 +22,6 @@ import { GetWorkflowDetailQuery } from '../contexts/workflow-orchestration/appli
 import { ListActiveWorkflowsQuery } from '../contexts/workflow-orchestration/application/queries/list-active-workflows.js';
 
 import { createWorkflowRouter } from '../contexts/workflow-orchestration/interfaces/http/workflow-router.js';
-import { createLegacyWorkflowRouter } from '../contexts/workflow-orchestration/interfaces/http/legacy-router.js';
 
 import { seedDefaultTemplates } from '../../../database/seeds/workflow-templates.js';
 
@@ -169,7 +168,6 @@ export async function wireWorkflowOrchestration({
     listActive: useCases.listActive,
     idempotencyStore: idempotency,
   });
-  const legacyRouter = createLegacyWorkflowRouter(v1Router);
 
   if (logger) {
     logger.info(
@@ -182,7 +180,6 @@ export async function wireWorkflowOrchestration({
   return {
     useCases,
     v1Router,
-    legacyRouter,
     repositories: { workflows, templates },
     idempotency,
   };

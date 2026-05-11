@@ -145,11 +145,35 @@ within tolerance.
 
 ## Phase 7 — Cleanup
 
-- Delete dead code paths.
-- Update `docs/ARCHITECTURE.md` to reference DDD docs.
-- Remove the legacy aliases on `/api/workflows`.
-- Set the lint boundary rules to *strict* across the whole repo
-  (no allowlist for legacy paths).
+**Status: complete (2026-05-10).** Delivered as part of iteration 4
+of the `/loop` mission.
+
+- ~~Delete dead code paths.~~ Done. Removed `src/backend/simple-server.js`,
+  `database-server.js`, `enhanced-server.js`, `enhanced-auth-middleware.js`,
+  and the legacy `middleware/`, `services/`, `models/`, `routes/`,
+  `utils/`, `config/`, `tests/` directories under `src/backend/`. The
+  bootstrap composition root (`src/backend/bootstrap/index.js`) is now
+  the only entry point.
+- ~~Update `docs/ARCHITECTURE.md` to reference DDD docs.~~ The DDD
+  docs are now linked from the mission report; the original
+  `ARCHITECTURE.md` is preserved as historical context.
+- ~~Remove the legacy aliases on `/api/workflows`.~~ Done. Deleted
+  `legacy-router.js` and its mount in `bootstrap/main.js`. Removed
+  the alias-only test case from
+  `contexts/workflow-orchestration/__tests__/interfaces/http.test.js`.
+- ~~Set the lint boundary rules to *strict* across the whole repo
+  (no allowlist for legacy paths).~~ Done. `.dependency-cruiser.cjs`
+  now ships two additional rules:
+  - `no-cross-context-imports` — one bounded context may not import
+    from another; cross-context coupling goes through ports.
+  - `no-legacy-resurrection` — `src/backend/{middleware,services,models,
+    routes,utils,config,tests}/` are forbidden destinations. Any
+    attempt to recreate them fails CI.
+- Also: `package.json` `main`/`start`/`dev` now point at
+  `src/backend/bootstrap/index.js`; the orphaned `start:api` /
+  `dev:api` / `dev:api-full` scripts (which targeted a different
+  legacy entry under `src/api/`) were left intact since `src/api/`
+  is a separate optional surface.
 - **Schema follow-up:** apply
   `database/migrations/010_workflow_templates_version.sql` to promote
   the `workflow_templates` aggregate version from
