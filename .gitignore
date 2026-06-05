@@ -18,7 +18,8 @@ lerna-debug.log*
 
 # Package manager lock files - keep one based on preference
 # yarn.lock
-package-lock.json
+# package-lock.json is committed: CI runs `npm ci`, which requires it, and it
+# guarantees deterministic, reproducible installs for releases.
 
 # ==========================================
 # BUILD OUTPUTS AND DISTRIBUTIONS
@@ -133,6 +134,7 @@ coverage/
 .coverage/
 junit.xml
 test-results/
+test-results.xml
 playwright-report/
 .blob-storage/
 *.lcov
