@@ -32,7 +32,7 @@ For the why and how, read:
 ### Install
 
 ```bash
-git clone https://github.com/marcuspat/GUI-LOP.git
+git clone https://github.com/adventurewave-labs/GUI-LOP.git
 cd GUI-LOP
 npm install
 cd src/frontend && npm install && cd ../..
