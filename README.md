@@ -1,5 +1,11 @@
 # GUI-LOP: Generative UI & Human-in-the-Loop Orchestration Platform
 
+[![ci](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/ci.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/ci.yml)
+[![contracts](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/contracts.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/contracts.yml)
+[![arch-lint](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/arch-lint.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/arch-lint.yml)
+[![bench](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/bench.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/bench.yml)
+[![docker](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/docker.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/docker.yml)
+
 A platform for orchestrating workflows that interleave automated steps with
 human decision points. Built as a domain-driven backend (6 bounded
 contexts, hexagonal architecture, transactional outbox) with a React SPA
