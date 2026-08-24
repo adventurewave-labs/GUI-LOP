@@ -47,7 +47,7 @@ export default {
   },
 
   // Module name mapping for ES modules
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },
 
