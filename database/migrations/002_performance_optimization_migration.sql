@@ -6,8 +6,14 @@
 -- Migration: Apply all performance optimizations in order
 -- This migration applies all the performance optimization scripts
 -- in the correct order to minimize conflicts and ensure dependencies are met
-
-BEGIN;
+--
+-- NOTE: deliberately NOT wrapped in BEGIN/COMMIT. Several of the
+-- included scripts (02_advanced_indexing.sql among them) use
+-- `CREATE INDEX CONCURRENTLY`, which Postgres refuses to run inside a
+-- transaction block ("CREATE INDEX CONCURRENTLY cannot run inside a
+-- transaction block"). Every statement below is already idempotent
+-- (IF NOT EXISTS / ON CONFLICT DO NOTHING / CREATE OR REPLACE), so
+-- running them un-transacted is safe to re-run on failure.
 
 -- Create migration tracking table if not exists
 CREATE TABLE IF NOT EXISTS performance_migration_log (
@@ -181,8 +187,6 @@ BEGIN
         )
     );
 END $$;
-
-COMMIT;
 
 \echo '=================================================='
 \echo 'GUI-LOP Performance Optimization Migration Completed'
