@@ -15,6 +15,10 @@
  *
  * Files containing the `\i` psql meta-command are special-cased: we
  * read the included path relative to the repo root and inline it.
+ * Any other backslash meta-command (`\echo`, `\timing`, …) is a
+ * psql-only directive with no SQL equivalent — node-postgres has no
+ * concept of it, so those lines are dropped rather than sent to the
+ * server (they'd otherwise surface as "syntax error at or near \").
  *
  * Statements that throw with these codes are tolerated and logged:
  *   - `42710` duplicate_object (CREATE TYPE on rerun, …)
@@ -40,23 +44,43 @@ const MIGRATIONS_DIR = path.join(REPO_ROOT, 'database', 'migrations');
 
 const TOLERATED_CODES = new Set(['42710', '42P07', '42701', '42P06', '42P17']);
 
+/**
+ * Strip psql-only backslash meta-commands (`\echo`, `\timing`, …) from
+ * a block of SQL, inlining `\i <path>` includes along the way. Pg has
+ * no concept of these commands — psql intercepts them client-side —
+ * so leaving them in trips a syntax error the moment they reach
+ * `client.query()`.
+ */
+async function stripPsqlMetaCommands(raw, { inlineRelativeTo }) {
+  const lines = raw.split(/\r?\n/);
+  const out = [];
+  for (const line of lines) {
+    const includeMatch = line.match(/^\s*\\i\s+(.+?)\s*$/);
+    if (includeMatch) {
+      const includePath = path.join(inlineRelativeTo, includeMatch[1]);
+      const includedRaw = await fs.readFile(includePath, 'utf8');
+      // eslint-disable-next-line no-await-in-loop
+      const includedClean = await stripPsqlMetaCommands(includedRaw, {
+        inlineRelativeTo,
+      });
+      out.push(includedClean);
+      continue;
+    }
+    // Any other line starting (after leading whitespace) with a
+    // backslash is a psql meta-command (\echo, \timing, \set, …) —
+    // not valid SQL. Drop it.
+    if (/^\s*\\\S/.test(line)) {
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join('\n');
+}
+
 async function readMigration(filename) {
   const abs = path.join(MIGRATIONS_DIR, filename);
   const raw = await fs.readFile(abs, 'utf8');
-  // Inline `\i path/to.sql` (a psql meta-command pg can't execute itself).
-  const lines = raw.split(/\r?\n/);
-  const inlined = [];
-  for (const line of lines) {
-    const m = line.match(/^\s*\\i\s+(.+?)\s*$/);
-    if (m) {
-      const includePath = path.join(REPO_ROOT, m[1]);
-      // eslint-disable-next-line no-await-in-loop
-      inlined.push(await fs.readFile(includePath, 'utf8'));
-    } else {
-      inlined.push(line);
-    }
-  }
-  return inlined.join('\n');
+  return stripPsqlMetaCommands(raw, { inlineRelativeTo: REPO_ROOT });
 }
 
 /**
