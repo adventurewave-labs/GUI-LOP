@@ -16,9 +16,10 @@ pnpm-debug.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
-# Package manager lock files - keep one based on preference
-# yarn.lock
-package-lock.json
+# Package manager lock files - keep one based on preference.
+# package-lock.json IS tracked: npm ci / actions/setup-node's npm cache
+# require it, and CI installs with `npm ci` against the root package.json.
+yarn.lock
 
 # ==========================================
 # BUILD OUTPUTS AND DISTRIBUTIONS

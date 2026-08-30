@@ -81,7 +81,7 @@ ON events(created_at DESC, workflow_id, event_type)
 WHERE created_at > NOW() - INTERVAL '7 days';
 
 -- Event data JSON index for structured queries
-CREATE INDEX CONCONNECTLY IF NOT EXISTS idx_events_data_gin
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_events_data_gin
 ON events USING gin(event_data);
 
 -- ---- Workflow Steps Performance Indexes ----
