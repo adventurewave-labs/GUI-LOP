@@ -22,6 +22,7 @@
  */
 
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
+import { accessTokenRevocation } from '../../application/services/access-token-revocation.js';
 import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
 
 const MAX_TOKEN_LEN = 8192;
@@ -98,9 +99,8 @@ export function makeWsPrincipalResolver({
         }
         const claims = await tokenIssuer.verifyAccess(raw);
         if (!claims?.sub) return null;
-        if (claims.jti && tokenBlacklist && (await tokenBlacklist.isBlacklisted(claims.jti))) {
-          return null;
-        }
+        // Revoked token or revoked session (logout elsewhere, refresh reuse).
+        if (await accessTokenRevocation(claims, tokenBlacklist)) return null;
         return {
           id: claims.sub,
           role: claims.role,

@@ -17,6 +17,7 @@ import { PgSessionRepository } from '../contexts/identity-and-access/infrastruct
 import { PgGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-grants-repository.js';
 import { PgRoleRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-role-repository.js';
 import { PgApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-api-key-repository.js';
+import { withAccessTokenRevocation } from '../contexts/identity-and-access/application/services/access-token-revocation.js';
 import { InMemoryTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/inmemory-token-blacklist.js';
 import { RedisTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/redis-token-blacklist.js';
 import { BcryptPasswordHasher } from '../contexts/identity-and-access/infrastructure/crypto/bcrypt-password-hasher.js';
@@ -117,7 +118,7 @@ export function buildAuthLimiters(create) {
 
 export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter }) {
   const userRepository = pool ? new PgUserRepository(pool) : new InMemoryUserRepository();
-  const sessionRepository = pool
+  const sessionStore = pool
     ? new PgSessionRepository(pool)
     : new InMemorySessionRepository();
   const roleRepository = pool ? new PgRoleRepository(pool) : new InMemoryRoleRepository();
@@ -130,6 +131,11 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
   const tokenBlacklist = redis
     ? new RedisTokenBlacklist(redis)
     : new InMemoryTokenBlacklist();
+  // Revoking a session (logout, refresh-token reuse, …) also revokes every
+  // access token already issued for it, for one access-token lifetime.
+  const sessionRepository = withAccessTokenRevocation(sessionStore, tokenBlacklist, {
+    accessTtlSeconds: config?.JWT_ACCESS_TTL_SECONDS ?? 15 * 60,
+  });
   const passwordHasher = new BcryptPasswordHasher({ rounds: config.BCRYPT_WORK_FACTOR });
   const tokenIssuer = new JwtTokenIssuer({ secret: config.JWT_SECRET });
   const outbox = new IdentityInMemoryOutbox();

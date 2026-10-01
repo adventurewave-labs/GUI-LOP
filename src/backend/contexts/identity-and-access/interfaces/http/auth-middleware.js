@@ -1,5 +1,6 @@
 // @ts-check
 import { sendError } from './error-mapper.js';
+import { accessTokenRevocation } from '../../application/services/access-token-revocation.js';
 import { setContextField } from '../../../../shared-kernel/infrastructure/request-context.js';
 import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
 import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
@@ -65,10 +66,9 @@ export function makeAuthMiddleware({
           throw new UnauthorisedError('JWT verifier not configured');
         }
         const claims = await tokenIssuer.verifyAccess(raw);
-        if (claims.jti && tokenBlacklist) {
-          const denied = await tokenBlacklist.isBlacklisted(claims.jti);
-          if (denied) throw new UnauthorisedError('Token has been revoked');
-        }
+        const revoked = await accessTokenRevocation(claims, tokenBlacklist);
+        if (revoked === 'token') throw new UnauthorisedError('Token has been revoked');
+        if (revoked === 'session') throw new UnauthorisedError('Session has been revoked');
         principal = {
           userId: claims.sub,
           role: claims.role,
