@@ -1,7 +1,7 @@
 /**
  * ids.test.js — malformed ids never reach Postgres uuid columns.
  */
-import { isUuid } from '../ids.js';
+import { isUuid, idValue } from '../ids.js';
 import { PgWorkflowRepository } from '../../../contexts/workflow-orchestration/infrastructure/persistence/pg-workflow-repository.js';
 import { PgUIDocumentRepository } from '../../../contexts/ui-generation/infrastructure/persistence/pg-ui-document-repository.js';
 
@@ -16,6 +16,27 @@ describe('isUuid', () => {
     [42, false],
   ])('%p → %p', (v, want) => {
     expect(isUuid(v)).toBe(want);
+  });
+
+  test('accepts id value objects wrapping a UUID (regression: ApiKeyId lookups returned null)', () => {
+    expect(isUuid({ value: '3f2b8c1e-9d4a-4e7b-8c2d-1a2b3c4d5e6f' })).toBe(true);
+    expect(isUuid({ value: 'wf-1' })).toBe(false);
+    expect(isUuid({ value: 7 })).toBe(false);
+    expect(idValue({ value: 'x' })).toBe('x');
+    expect(idValue('y')).toBe('y');
+  });
+});
+
+describe('Pg repositories pass the primitive id for value objects', () => {
+  test('api key findById(ApiKeyId) queries with the string', async () => {
+    const seen = [];
+    const pool = { query: async (_sql, params) => { seen.push(params); return { rows: [] }; } };
+    const { PgApiKeyRepository } = await import('../../../contexts/identity-and-access/infrastructure/persistence/pg-api-key-repository.js');
+    const { PgUserRepository } = await import('../../../contexts/identity-and-access/infrastructure/persistence/pg-user-repository.js');
+    const id = { value: '3f2b8c1e-9d4a-4e7b-8c2d-1a2b3c4d5e6f' };
+    await new PgApiKeyRepository(pool).findById(id);
+    await new PgUserRepository(pool).findById(id);
+    expect(seen).toEqual([[id.value], [id.value]]);
   });
 });
 

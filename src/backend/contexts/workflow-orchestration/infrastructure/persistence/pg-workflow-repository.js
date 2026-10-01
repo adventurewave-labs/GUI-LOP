@@ -1,6 +1,6 @@
 import { WorkflowConflictError } from '../../domain/errors.js';
 import { Workflow } from '../../domain/workflow/workflow.js';
-import { isUuid } from '../../../../shared-kernel/infrastructure/ids.js';
+import { isUuid, idValue } from '../../../../shared-kernel/infrastructure/ids.js';
 
 /**
  * Postgres-backed `WorkflowRepository`.
@@ -16,6 +16,7 @@ export class PgWorkflowRepository {
 
   async findById(id) {
     if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
+    id = idValue(id); // accept id value objects as well as strings
     const { rows: wfRows } = await this._pool.query(
       `SELECT id, template_id, template_key, status, context, config, ui_url,
               ui_components, created_by, created_at, started_at,
@@ -176,6 +177,7 @@ export class PgWorkflowRepository {
 
   async status(id) {
     if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
+    id = idValue(id); // accept id value objects as well as strings
     const { rows } = await this._pool.query(
       'SELECT status, version FROM workflows WHERE id = $1',
       [id],

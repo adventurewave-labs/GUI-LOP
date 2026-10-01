@@ -9,7 +9,24 @@
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** @param {unknown} v @returns {v is string} */
+/**
+ * Unwrap an id value object (`{ value: string }`, e.g. `ApiKeyId`, `UserId`)
+ * to its primitive; strings and anything else pass through unchanged.
+ * @param {unknown} v
+ */
+export function idValue(v) {
+  return v && typeof v === 'object' && typeof (/** @type {any} */ (v).value) === 'string'
+    ? /** @type {any} */ (v).value
+    : v;
+}
+
+/**
+ * True for a UUID string or an id value object wrapping one. Accepting
+ * value objects matters: domain code passes `ApiKeyId` etc. straight to
+ * `findById`, and rejecting them would turn every lookup into "not found".
+ * @param {unknown} v
+ */
 export function isUuid(v) {
-  return typeof v === 'string' && UUID_RE.test(v);
+  const s = idValue(v);
+  return typeof s === 'string' && UUID_RE.test(s);
 }

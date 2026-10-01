@@ -40,7 +40,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 ## Backlog (priority order)
 
-- [ ] **13c. Last 11 contract failures** (run: `CONTRACTS_DATABASE_URL=… CONTRACTS_REDIS_URL=… npm run test:contracts`). All but the Redis trio fail identically on the **in-memory** adapters → test/fixture bugs, not infra: ApiKeyRepository ×5 (`isUsable` on null aggregate; hash-collision fixture), WorkflowTemplateRepository `activeOnly` ×2 (TemplateKey 2-100 char fixture), DeliveryAttempt in-memory ordering ×1, RedisEventPublisher pub/sub ×3 (duplicate()/subscribe ordering). Then drop `continue-on-error` in contracts.yml.
+- [x] **13c. Last 11 contract failures** (`SHA13C`). Three were **production bugs**: (1) **Redis cross-pod fan-out never delivered** — with injected clients (the prod wiring) the `message` listener was never attached; (2) my loop-13b `isUuid()` guard rejected id value objects, so `findById(ApiKeyId)` returned null — guard now unwraps VOs and all 9 Pg sites pass the primitive; (3) in-memory delivery attempts ignored the ordering contract. Rest were fixtures (identical secret bytes → hash UNIQUE clash; 1-char TemplateKeys). **Contracts 137 → 148/148**, contracts.yml now blocking. Backend 748 → 754.
 - [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
 - [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.
 

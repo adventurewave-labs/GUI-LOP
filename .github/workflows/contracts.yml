@@ -27,9 +27,8 @@ jobs:
     name: adapter contract tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Marked informational: a red check here should be investigated but
-    # does NOT block merge per the iteration-3 plan.
-    continue-on-error: true
+    # Blocking since SOTA round 2 loop 1: all 148 contracts pass on real
+    # Postgres + Redis, so a red check here is a real regression.
 
     services:
       postgres:
