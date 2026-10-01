@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * RegisterWebhook — convenience command around Subscribe with channel='webhook'.
  */

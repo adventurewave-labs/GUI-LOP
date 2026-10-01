@@ -1,0 +1,104 @@
+# SOTA Improvement Loop — GUI-LOP
+
+Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an agent** — Triple-Gate applies.
+
+## Loop contract (every iteration)
+
+1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
+2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/` (or `npm run test:coverage:backend`) + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)) + `npm run typecheck` 0 errors. Check every gate by **exit code**.
+4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
+5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
+6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.
+
+## Done
+
+- [x] **L0 — WebSocket auth + HTTP hardening.** WS upgrades now require a verified JWT/API key (`?token=`, `Authorization`, or `Sec-WebSocket-Protocol: bearer,<t>`); forged `X-User-Id` → 401 (was full account takeover of any user's event stream). Dev escape hatch `WS_ALLOW_HEADER_AUTH` refused in production. Helmet (API CSP `default-src 'none'`), validated + echoed `X-Request-Id`, `TRUST_PROXY`, server `headersTimeout`/`requestTimeout`/`keepAliveTimeout` (LB-aligned), `/livez` + `/readyz` (bounded 800 ms dep probes, 503 while draining), body-parser 400/413 no longer surface as 500. Probes in Helm/K8s/Dockerfile repointed. +34 tests.
+
+- [x] **1. Graceful drain** (`8b215f5`). SIGTERM → `/readyz` 503 + `Connection: close` while still serving for `SHUTDOWN_DRAIN_DELAY_MS` → stop outbox/watchers → WS 1001 → HTTP close with idle sweep + force-close at deadline → release pools. Fixed `ws-server.close()` leaving live sockets open. Helm/compose grace periods aligned. In-flight shutdown 2.0 s → 0.24 s. 583 → 589 tests.
+- [x] **2. Request-scoped context** (`10a6905`). AsyncLocalStorage per request (`request_id`, `user_id`, `auth_via`) auto-injected into every log line; recursive credential redaction in the logger; `http_request` access log with bounded route template, status, duration, 499 on abort, never the query string. 589 → 602 tests.
+- [x] **3. W3C Trace Context** (`8adb9cf`). Dependency-free spec-compliant `traceparent`/`tracestate` handling; inbound traces continued with a new server span, invalid headers start a fresh trace; `trace_id`/`span_id` on every log line; `traceresponse` header (CORS-exposed); AI adapters propagate on outbound calls. OTel SDK deferred (propagator-compatible). 602 → 624 tests.
+- [x] **4. Prometheus `/metrics`** (`c18a472`). prom-client per-bootstrap registry: RED histogram by route template, in-flight, outbox pending/age, WS connections, AI latency/outcome/tokens/circuit state, default runtime metrics. Timing-safe `METRICS_TOKEN` guard, fails closed in prod. Staging Prometheus scrape target now resolves. 624 → 633 tests.
+- [x] **5. Real lint** (`cfba7dc`). ESLint 9 flat config (`@eslint/js` + `n` + `security`), `npm run lint` at zero warnings, CI job. Lint surfaced two real vulns, both fixed with tests: **path traversal in `LocalFsStorage`** and **ReDoS-prone `EMAIL_RE`** in the PII scrubber. 633 → 642 tests.
+- [x] **6. Node LTS** (`16d7bc6`). Off EOL Node 18 → **Node 24 LTS** everywhere (Docker ×6, devcontainer, `.nvmrc`, workflows); `engines >=22.12`; CI backend matrix [22, 24]. Full suite verified on both. Tests unchanged at 642 (runtime-only change).
+- [x] **7. Supply chain** (`efda201`). Prod advisories 7 (3 high) → 0; unused `uuid` dropped. All Actions SHA-pinned; least-privilege `permissions` everywhere; CodeQL; `npm audit` prod gate + dependency-review; CycloneDX SBOM in docker.yml; Dependabot (npm ×2, actions, docker). Policy test locks it in. 642 → 659 tests. *Deferred:* build provenance attestation needs a registry push first.
+- [x] **8a. CI red-check triage** (`bf23d98`). CodeQL caught a **polynomial ReDoS in Bearer parsing** (`/^Bearer\s+(.+)$/i`, pre-existing in auth middleware) → linear `parseBearer()` everywhere. Actions bumped to Node-24 majors (still SHA-pinned). dependency-review non-blocking until the repo enables Dependency graph. Contract tests red on `main` too (pre-existing → #13).
+- [x] **8. WebSocket hardening II** (`51170fc`). **Realtime delivery was broken in prod wiring** (in-memory test double registered with real sockets → `TypeError` on every push) — fixed with `WsBroadcaster`, E2E-proven. Idle-timer bug fixed. Path lock, Origin allow-list (CSWSH), per-user cap (429), maxPayload (1009), 4001 on token expiry, backpressure (1013). 659 → 684 tests.
+- [x] **9. Frontend WS subprotocol auth** (`473769e`). Token moved from `?token=` to `Sec-WebSocket-Protocol: bearer,<token>`; `user_id` param dropped; 4001 → `onTokenExpired()` + immediate reconnect. Server pins negotiation to `bearer` (default would echo a misordered token). Frontend service tests now run in CI. Backend 684 → 686; frontend WS 6 → 12.
+- [x] **10. Rate limiting** (`b8cf08b`). Was per-pod memory, per-IP only, `/register` + `/password` unlimited, global config unenforced. Now Redis-backed factory (draft-7 headers, IPv6 /64, hashed identifiers), per-account failed-login limit, register/password limits, auth fail-closed, general `/api/v1` budget (defaults 600/min). Also fixed a boot-time crash path (unhandled `SCRIPT LOAD` rejection with Redis down). 686 → 708 tests.
+- [x] **11. RFC 9457** (`8bede0b`). One middleware turns every ≥400 JSON response into `application/problem+json` (`type`/`title`/`status`/`detail`/`instance` + `code`, `request_id`) while preserving all three legacy context envelopes as extension members — non-breaking, no router edits. 708 → 721 tests.
+- [x] **12. AI adapter SOTA** (`ce7ccc7`). Anthropic forced tool use + OpenAI `json_schema` structured outputs from one shared JSON Schema (validator kept); prompt caching on the static prefix; `AI_MODEL_CLASSIFY` tier; label-set enforcement. Fixed two loop-4 telemetry bugs: vendor adapters dropped `onTelemetry`, and token counters read the wrong keys. Offline tests only. 721 → 729 tests.
+- [x] **13. Contract tests run for real** (`8d20b19`). Exposed that **production migrations never worked**: `migrate.js` crashed at import (bad default export), used `require` in ESM, split SQL on bare `;`, couldn't do `\i` or `CONCURRENTLY`, and ignored `DATABASE_URL`; migration 002 (6.5k lines) never applied anywhere; 008 index invalid. Lexer-correct shared splitter, runner fixed, 002 neutralised (unreferenced), verified on fresh PG (idempotent). Contracts 16 → 121/148 on real infra; CI uses service containers. Backend 729 → 739.
+- [x] **13b. Contract failures — real bugs** (`3d9be2d`). **Dead letters were lost in prod** (003/006 `dead_letters` shape collision; every insert failed) → migration 011 converges both histories. **Malformed ids 500'd** (22P02 from uuid columns) → `isUuid()` guard in 8 Pg repos → null/404. Fixtures moved to deterministic UUIDs. Contracts 121 → 137/148. Backend 739 → 748.
+- [x] **15. Final CI pass** (`93bce82`). Fixed ESLint `no-dupe-keys` (problem-details) and CodeQL missing-rate-limit (auth router standalone defaults). *Lesson:* verify lint by exit code, not by grepping output.
+
+## Status at end of 6-hour run (2026-10-01)
+
+- 15 loops, 31 commits on `claude/sota-loop` → PR #11 (draft, **not merged** — Triple-Gate).
+- Backend tests **549 → 748**; frontend WS tests 6 → 12 (now in CI); contracts 0 → **137/148** on real Postgres 16 + Redis.
+- Open items below are ordered by impact.
+
+## Backlog (priority order)
+
+- [x] **13c. Last 11 contract failures** (`9c30a2b`). Three were **production bugs**: (1) **Redis cross-pod fan-out never delivered** — with injected clients (the prod wiring) the `message` listener was never attached; (2) my loop-13b `isUuid()` guard rejected id value objects, so `findById(ApiKeyId)` returned null — guard now unwraps VOs and all 9 Pg sites pass the primitive; (3) in-memory delivery attempts ignored the ordering contract. Rest were fixtures (identical secret bytes → hash UNIQUE clash; 1-char TemplateKeys). **Contracts 137 → 148/148**, contracts.yml now blocking. Backend 748 → 754.
+- [x] **14. Type safety** (`4e5fc1f`). Real `npm run typecheck` (strict `tsc` over `// @ts-check` files; all 35 shared-kernel + bootstrap modules opted in, policy-tested); CI step now blocking. `AppConfig` type derived from the config SCHEMA. 49 → 0 errors, mostly stale JSDoc — but one **real bug**: the human-interaction user directory hardcoded `permissions: []`, so any step with `requiredPermissions` was unanswerable by everyone; now composes role perms + grants (+ scopes) like identity's AuthorisationService. Backend 754 → 759.
+- [x] **14b. Grants persistence** (`a628b57`). Migration 009 created `user_permissions` for exactly this but no adapter was ever written, so production used the in-memory repo: **direct grants vanished on restart and differed per pod**. New `PgGrantsRepository` (idempotent insert on the partial unique index, soft revoke keeps the audit trail, `granted_by` now recorded from the admin principal), wired whenever a pool exists. New grants contract suite (11 tests, both adapters). Contracts 148 → 159; backend 759 → 760.
+- [x] **14b-2. Admin eligibility** (decided 2026-10-01: "whatever is best" → consistent with identity). Admins now satisfy `requiredPermissions`/`scope` on human steps; `requiredRole` stays exact; a scoped API key bounds admins and non-admins alike (ceiling now reaches eligibility, not just authorisation).
+- [x] **CodeQL js/regex-injection (high)** on `ValidationRule` pattern check: server no longer builds a RegExp from AI input — parsed with `@eslint-community/regexpp`, and nested unbounded quantifiers (`(a+)+`, ReDoS in the browser) are now rejected.
+- [x] **14c. Widen @ts-check** (`d5fe1c1`). Every context's `application` + `interfaces` layer opted in (149 modules total, 43 → 0 errors, policy-tested). Small bug: `UIGenerationFailed` silently dropped `reason`.
+- [x] **14c-sec. API key scope was never enforced** (`5caab81`) — **security**. Found by 14c: keys carry a permission list that nothing read, so a `workflow:read` key could do anything its owner could, mint itself an unscoped key, and hit admin endpoints if the owner was admin. Now a ceiling (intersection with the owner's permissions, admins bounded too); scoped keys refused on admin + key-management routes; empty list still inherits the owner (no breakage). E2E-tested. Backend 760 → 767.
+- [x] **15. Coverage + mutation gates** (`aed1851`). Per-context coverage ratchet on every CI leg (floors 1pt under baseline; total 80.9% lines / 66.0% branches; weakest audit-and-analytics 62/43); breach verified to fail. Stryker on the domain layers: **baseline 57.4%** (human-interaction 63.4, notification 61.3, identity 57.4, ui-generation 54.6, workflow-orchestration 53.2), `break: 55`; weekly + on-demand + `mutation`-labelled PRs (~30 min). Policy-tested.
+- [x] **15b. Raise the floors — audit-and-analytics** (`a5e4fe9`). Branches 43 → 66.5%, lines 62 → 70, functions 73 → 90; floor ratcheted. Two bugs surfaced: in-memory audit/event stores compared Date vs ISO string (ranged queries returned nothing, ordering wrong); routers passed `?limit=-1` (→ 500) / `?limit=10000000` (unbounded scan) straight to SQL — now clamped. Backend 771 → 796.
+- [x] **15c. Mutation — workflow-orchestration validators/policy** (`14db1c5`). execution-policy 50 → 96.8%, context 40 → 88.9%, step-validation 46.9 → 85.3%, template-version 25.8 → 84.6%. Three validation bugs: `required` ignored without `properties`; unknown schema types matched anything; `TemplateVersion.of('2abc') === 2`. Backend 796 → 846.
+- [x] **15d. Mutation — ui-generation + re-baseline** (`0e04e50`). ui-generation 54.6 → 84.8%; workflow-orchestration 53.2 → 67.4%; **all domains 57.4 → 65.2%**, `break` 55 → 63. Fixes: AI-supplied `ValidationRule` values were never checked (bad `minLength`, uncompilable/oversized `pattern`, empty `enum` reached the browser); `Layout` only shallow-frozen. Backend 846 → 880. Remaining weakest: identity-and-access 57.4, notification 61.3 (later loop if time).
+
+### Round 2 candidates (added 2026-10-01; **audit first** — if the repo already does it properly, tick it as "already present" with evidence and move on)
+
+- [x] **16. SPA token refresh** (`a815f08`). Three refresh paths (401 handler, AuthContext timer via `authApi.refresh()`, nothing for WS 4001) collapsed into one single-flight `refreshAccessToken()`; WS client defaults `onTokenExpired` to it. Bug: a failed refresh made the WS client reconnect-spin on 4001 — now backs off. API client tests (8) never ran in CI — now do (jsdom). Frontend 12 → 25.
+- [x] **17. Refresh-token reuse detection** (`55791de`). Rotation already existed; replay of a superseded token now **revokes the whole session** (`refresh_token_history`, migration 012) and emits `session.refresh_token_reused`; rotation is compare-and-set (concurrent refresh → 409, not a silent overwrite). E2E + contract-tested on real PG. Contracts 159 → 165, backend 880 → 884. *Known limit:* already-issued access tokens for a revoked session live until expiry (15 min).
+- [x] **17b. Session-bound access tokens** (`bebdb5a`). Revoking a session (logout, refresh reuse) now writes `sid:<id>` to the token blacklist for one access-token lifetime via a repository decorator; HTTP middleware + WS upgrades reject revoked `sid`s. Fixed: logout used to leave the session's tokens in other tabs alive for up to 15 min. Backend 884 → 892.
+- [x] **18. Idempotency-Key** (`108e7fe`). One shared-kernel middleware (IETF draft) replaces two in-memory copies; Postgres-backed across replicas (migration 013 `scope_key`). Fixed: per-pod keys (retry on another replica re-executed), no in-flight guard (now 409 + Retry-After), 5xx cached forever, workflow keys scoped by route *template* (replayed A's response for B). Mismatch now 422. Contracts 165 → 173, backend 892 → 915.
+- [x] **18b. Integration tests in the gate** (`f40da07`). 4 of 5 `tests/integration` files never ran in CI; 2 were red since round-1 loop 8 (registered a callback where `WsBroadcaster` needs a socket-like object, so every envelope was dropped). Fixed; the gate now runs the whole directory (policy-tested). Full lifecycle event sequence verified end to end. Backend 915 → 927.
+- [x] **19. Optimistic concurrency over HTTP** (`5d554da`). Strong version ETag on `GET /workflows/:id` (+304), `If-Match` on execute/cancel → 412 with `current_version`; version checked inside the use case after load (no TOCTOU). Unconditional requests unchanged (428 deliberately not enforced — opt-in). CORS now exposes `ETag`, `Idempotent-Replayed`, `Retry-After`, `RateLimit*` (were invisible to the SPA). Backend 927 → 943. *Next:* templates (publish/deprecate) and the SPA sending If-Match.
+- [x] **20. Outbox robustness** (`a6e558a`). **Production bug:** with Postgres the consumer called `fetchPending()`, which the Pg adapter lacked — every tick threw and the outbox was **never drained** (no webhook/email/cross-pod notification ever left a Postgres deployment). Also: `markFailed` set a terminal status nothing retried (one transient error lost the event). Now lease-based `SKIP LOCKED` claim, exponential backoff + full jitter, dead-letter after 10 attempts, crashed-consumer lease reclaim (migration 014). Real-PG contract suite. Contracts 173 → 179.
+- [ ] **21. DB session safety.** `statement_timeout`, `idle_in_transaction_session_timeout`, `application_name`, pool sizing/config + pool metrics.
+- [ ] **22. OpenAPI 3.1.** Single spec for `/api/v1`, served at `/api/v1/openapi.json`, and a contract test that validates real responses against it (no drift).
+- [ ] **23. Password policy (NIST SP 800-63B rev4).** Min 8/15, max ≥64, no composition rules, blocklist of common/breached passwords (offline list, no API calls), Unicode NFKC.
+- [ ] **24. Tamper-evident audit log.** Hash-chained audit entries + verifier, so deletion/edit of history is detectable.
+- [ ] **25. SPA security headers.** nginx CSP (nonce/strict-dynamic or hashed), `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, HSTS in the frontend image; test the config.
+- [ ] **26. OTel SDK (opt-in).** OTLP trace export behind `OTEL_EXPORTER_OTLP_ENDPOINT`, reusing the W3C context from loop 3; no-op when unset.
+
+## Round 2 schedule
+
+15 loops, ~24 min apart, 2026-10-01 12:15Z → 17:51Z. Same contract and rules; first unchecked item each loop. **Background processes do not survive between turns** — (re)start Postgres/Redis at the start of every loop that runs contracts. Local contract infra: Postgres 16 on `:55432` (`postgresql://contracts@127.0.0.1:55432/postgres`), Redis on `:56379`.
+
+## Status at end of round 2 (2026-10-01)
+
+- 15 loops on `claude/sota-loop` → PR #11; branch is 68 commits ahead of `main`, 0 behind, merges cleanly.
+- Backend tests 748 → **958**; frontend services 12 → **25**; contracts 148 → **179/179** on real Postgres 16 + Redis; typecheck 0 errors over 149 modules; mutation 57.4% → **65.2%** (break 63).
+- Production bugs fixed this round: Postgres outbox never drained (no notifications ever left a PG deployment); Redis cross-pod fan-out never attached; API-key scopes never enforced (security); grants lost on restart; refresh-token replay undetected; logout left access tokens alive 15 min; idempotency per-pod / cached 5xx / wrong scope; lost updates on workflows; validation accepted unknown types, ignored `required`, and unchecked AI rule values; CodeQL regex-injection on AI patterns.
+- Decisions recorded: admin eligibility (14b-2) → consistent with identity; Railway staging approved for round 3.
+- Not production-ready yet — round 3 (below) covers DB timeouts, password policy, SPA headers, prod-mode smoke, staging, load baseline, runbook.
+
+## Production-readiness round (round 3, scheduled 2026-10-01)
+
+Goal: close the gaps between "tests green" and "safe to run for real users". Same loop contract and rules (never merge to `main`, no paid API calls, gates by exit code, restart Postgres `:55432` / Redis `:56379` each loop). Items 21–26 above are carried into this list; tick them in place **and** here.
+
+- [ ] **P1. DB session safety** (= item 21).
+- [ ] **P2. Password policy** (= item 23).
+- [ ] **P3. SPA security headers** (= item 25).
+- [ ] **P4. Production-mode boot smoke.** `NODE_ENV=production` boot against fresh local PG + Redis: migrations from zero, required-env fail-closed, `/livez` `/readyz` `/metrics`, register → login → workflow → human step → outbox actually drains (row reaches `dispatched`). One script (`scripts/smoke.mjs`), runnable against any base URL, wired into CI.
+- [ ] **P5. Load baseline.** Load script (autocannon or k6, whichever installs offline) for the hot paths; record p50/p95/p99 + error rate locally; write SLOs and the numbers into `docs/`. Find and fix the first bottleneck if one shows.
+- [ ] **P6. Production config audit.** Every secret/required env refuses defaults in production; dangerous dev flags refused; config documented in one table (`.env.example` in sync, policy-tested).
+- [ ] **P7. Backup / restore + migration drill.** `pg_dump` → restore → app boots and contracts pass; forward-only migration policy written down; idempotent re-run verified.
+- [ ] **P8. OpenAPI 3.1** (= item 22).
+- [ ] **P9. If-Match everywhere it matters.** Template publish/deprecate conditional; SPA sends `If-Match` on workflow execute/cancel and handles 412 by re-reading.
+- [ ] **P10. Go-live checklist + runbook.** `docs/RUNBOOK.md`: deploy, rollback, rotate secrets, drain outbox / replay dead letters, common alerts; Prometheus alert rules (5xx rate, p99, outbox age, dead letters, readyz) checked in and lint-tested.
+- [ ] **P11. Tamper-evident audit log** (= item 24).
+- [ ] **P12. OTel SDK, opt-in** (= item 26).
+- [ ] **P13. Mutation — identity (57.4) + notification (61.3).**
+- [ ] **P-staging. Railway staging deploy — approved by Marcus 2026-10-01.** Do right after P4 (smoke script exists): project `gui-lop-staging` with Postgres + Redis, deploy `claude/sota-loop`/`main`, run smoke + load against it, verify the outbox drains. Staging only; no custom domain, no paid AI keys.
+
+### Round 3 schedule
+
+15 loops, ~24 min apart, 2026-10-01 18:15Z → 23:51Z. Loops 1–14: first unchecked P-item. Loop 15: wrap-up (status block, PR #11 description, final report). Nothing is merged.

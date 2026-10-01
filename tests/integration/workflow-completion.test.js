@@ -76,7 +76,8 @@ describe('workflow completion via human response (DDD bootstrap, no Postgres)', 
     await booted.ctx.notification.repositories.subscriptionRepository.save(sub);
     booted.ctx.notification.transports.websocketBroadcaster.register(
       'wf-completion-conn',
-      async (envelope) => { received.push(envelope); },
+      // WsBroadcaster takes a socket-like object (send(string)), not a callback.
+      { send: (payload) => received.push(JSON.parse(payload)), bufferedAmount: 0 },
       { subscriberRef: userId },
     );
   });

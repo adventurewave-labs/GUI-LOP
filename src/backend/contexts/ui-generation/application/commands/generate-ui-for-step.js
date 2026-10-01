@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * GenerateUIForStep — implements the cross-context port that
  * Workflow Orchestration calls when a step is reached and a UI is needed.

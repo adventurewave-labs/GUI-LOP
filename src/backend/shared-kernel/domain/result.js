@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Result<T, E> — explicit success/failure container used across the domain.
  * Avoids exceptions for expected failure paths (validation, not-found, conflict).

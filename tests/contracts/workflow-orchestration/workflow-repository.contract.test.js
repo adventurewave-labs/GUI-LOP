@@ -11,6 +11,7 @@
  * does the same with a guarded `UPDATE … WHERE id = ? AND version = ?`.
  */
 
+import { randomUUID } from 'node:crypto';
 import { describeIfDocker } from '../_helpers/docker-available.js';
 import { startPostgres } from '../_fixtures/postgres.js';
 import { InMemoryWorkflowRepository } from '../../../src/backend/contexts/workflow-orchestration/infrastructure/persistence/inmemory-workflow-repository.js';
@@ -36,13 +37,15 @@ function buildTemplate() {
   return t;
 }
 
-function buildWorkflow({ id = 'wf-1' } = {}) {
+function buildWorkflow({ id = '0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */ } = {}) {
   const wf = Workflow.createFromTemplate({
+    // Production passes the UUID idGen (create-workflow.js); workflow_steps.id is UUID.
+    stepIdGen: { next: () => randomUUID() },
     id,
     template: buildTemplate(),
     context: { invoiceId: 'INV-001', amount: 1200 },
     now: FIXED_NOW,
-    actor: { type: 'user', id: 'u-1' },
+    actor: { type: 'user', id: 'bdad738e-8558-4c3f-8d3d-8debc6916bc2' /* u-1 */ },
   });
   wf.pullEvents();
   return wf;
@@ -81,9 +84,9 @@ describeIfDocker('WorkflowRepository contract', () => {
     test('save then findById round-trips the aggregate', async () => {
       const wf = buildWorkflow();
       await repo.save(wf);
-      const loaded = await repo.findById('wf-1');
+      const loaded = await repo.findById('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */);
       expect(loaded).not.toBeNull();
-      expect(loaded.id).toBe('wf-1');
+      expect(loaded.id).toBe('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */);
       expect(loaded.templateKey).toBe('invoice-approval');
       expect(loaded.templateVersion).toBe(1);
       expect(loaded.steps).toHaveLength(2);
@@ -97,10 +100,10 @@ describeIfDocker('WorkflowRepository contract', () => {
     test('save persists transitions and status changes', async () => {
       const wf = buildWorkflow();
       await repo.save(wf);
-      const reloaded = await repo.findById('wf-1');
+      const reloaded = await repo.findById('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */);
       reloaded.start(FIXED_NOW, { actor: { type: 'system' } });
       await repo.save(reloaded);
-      const after = await repo.findById('wf-1');
+      const after = await repo.findById('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */);
       expect(after.status).toBe(WorkflowStatus.RUNNING);
       expect(after.transitions.length).toBeGreaterThanOrEqual(1);
       expect(after.transitions[0].to).toBe(WorkflowStatus.RUNNING);
@@ -110,8 +113,8 @@ describeIfDocker('WorkflowRepository contract', () => {
     test('stale save throws WorkflowConflictError', async () => {
       const wf = buildWorkflow();
       await repo.save(wf);              // version 0 -> 1
-      const a = await repo.findById('wf-1'); // a.version === 1
-      const b = await repo.findById('wf-1'); // b.version === 1
+      const a = await repo.findById('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */); // a.version === 1
+      const b = await repo.findById('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */); // b.version === 1
       a.start(FIXED_NOW);
       await repo.save(a);               // commits at version 2
       // b is now stale; touching+saving must throw.
@@ -122,7 +125,7 @@ describeIfDocker('WorkflowRepository contract', () => {
     test('status(id) returns the narrow read shape', async () => {
       const wf = buildWorkflow();
       await repo.save(wf);
-      const status = await repo.status('wf-1');
+      const status = await repo.status('0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */);
       expect(status).toMatchObject({ status: WorkflowStatus.CREATED });
       expect(status.version).toBeGreaterThanOrEqual(1);
     });

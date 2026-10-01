@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Subscribe command — creates a new active Subscription and persists it.
  */

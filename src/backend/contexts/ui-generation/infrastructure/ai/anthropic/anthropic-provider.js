@@ -1,9 +1,20 @@
 /**
  * anthropic-provider.js — Anthropic Messages API adapter for the AI ACL.
  *
- * Uses `fetch` directly (no vendor SDK). Default model is
- * `claude-haiku-4-5` — the smallest, fastest member of the Claude 4.x
- * family (Opus 4.7 / Sonnet 4.6 / Haiku 4.5).
+ * Uses `fetch` directly (no vendor SDK). Default model `claude-haiku-4-5`
+ * (fast/cheap tier); override with AI_MODEL, and AI_MODEL_CLASSIFY for the
+ * classification op.
+ *
+ * Structured output: generation and classification use *forced tool use*
+ * (`tool_choice: { type: 'tool' }`) with a JSON Schema `input_schema`, so the
+ * model emits a typed `tool_use` block instead of free text that has to be
+ * JSON.parse'd. A plain-text JSON fallback remains for proxies/gateways that
+ * strip tools. The validator still runs on every response.
+ *
+ * Prompt caching: the static prefix (tool definition + system prompt) is
+ * marked `cache_control: ephemeral`. Anthropic only caches prefixes above a
+ * model-specific minimum token count, so the effect depends on prompt size;
+ * `cacheRead` / `cacheWrite` in token usage show whether it engaged.
  *
  * Maps the same operations as the OpenAI adapter to Anthropic's
  * `/v1/messages` endpoint and translates errors into the AI domain error
@@ -16,6 +27,7 @@
  *   - HTTP 5xx, fetch failure → AIProviderUnavailable
  *   - Bad JSON / schema fail  → AIBadResponse
  */
+import { outboundTraceHeaders } from '../../../../../shared-kernel/infrastructure/trace-context.js';
 import { BaseAIAdapter } from '../base-ai-adapter.js';
 import {
   AIBadResponse,
@@ -23,7 +35,22 @@ import {
   AIProviderUnavailable,
   AIQuotaExceeded,
 } from '../domain-errors.js';
-import { validateUIDocumentDraft } from '../ui-document-draft-schema.js';
+import {
+  validateUIDocumentDraft,
+  UI_DOCUMENT_DRAFT_JSON_SCHEMA,
+  classificationJsonSchema,
+  normaliseUsage,
+} from '../ui-document-draft-schema.js';
+
+const EPHEMERAL = Object.freeze({ type: 'ephemeral' });
+const UI_TOOL = Object.freeze({
+  name: 'emit_ui_document',
+  description: 'Emit the generated UI document draft.',
+  input_schema: UI_DOCUMENT_DRAFT_JSON_SCHEMA,
+  cache_control: EPHEMERAL,
+});
+const CLASSIFY_SYSTEM = 'Classify the input into one of the given labels. '
+  + 'Call emit_classification with label, confidence (0-1) and optional per-label scores.';
 
 const SYSTEM_PROMPT = [
   'You are a UI generator. Given a JSON UI specification and context,',
@@ -50,10 +77,12 @@ export class AnthropicProvider extends BaseAIAdapter {
    * @param {object} [opts.circuitBreakerOptions]
    * @param {object} [opts.logger]
    * @param {number} [opts.maxTokens]
+   * @param {string} [opts.classifyModel]  Model for classify (defaults to `model`).
    */
   constructor(opts) {
     super({
       logger: opts?.logger,
+      onTelemetry: opts?.onTelemetry,
       retry: opts?.retry,
       circuitBreakerOptions: opts?.circuitBreakerOptions,
       scrubPii: opts?.scrubPii,
@@ -62,6 +91,7 @@ export class AnthropicProvider extends BaseAIAdapter {
     this._apiKey = opts.apiKey;
     this._baseUrl = (opts.baseUrl ?? 'https://api.anthropic.com').replace(/\/+$/, '');
     this._model = opts.model ?? 'claude-haiku-4-5';
+    this._classifyModel = opts.classifyModel ?? this._model;
     this._maxTokens = opts.maxTokens ?? 2048;
     this._fetch = opts.fetch ?? globalThis.fetch;
     if (typeof this._fetch !== 'function') {
@@ -76,7 +106,9 @@ export class AnthropicProvider extends BaseAIAdapter {
     const body = {
       model: this._model,
       max_tokens: this._maxTokens,
-      system: SYSTEM_PROMPT,
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: EPHEMERAL }],
+      tools: [UI_TOOL],
+      tool_choice: { type: 'tool', name: UI_TOOL.name },
       messages: [
         {
           role: 'user',
@@ -85,31 +117,23 @@ export class AnthropicProvider extends BaseAIAdapter {
       ],
     };
     const data = await this._post('/v1/messages', body, signal);
-    const text = extractText(data);
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new AIBadResponse('Anthropic returned non-JSON content', { text: truncate(text, 256) });
-    }
-    const draft = validateUIDocumentDraft(parsed);
-    const usage = data.usage
-      ? {
-          prompt: data.usage.input_tokens ?? 0,
-          completion: data.usage.output_tokens ?? 0,
-          total: (data.usage.input_tokens ?? 0) + (data.usage.output_tokens ?? 0),
-        }
-      : undefined;
+    const draft = validateUIDocumentDraft(extractStructured(data, UI_TOOL.name));
+    const usage = normaliseUsage(data.usage);
     return { ...draft, ...(usage ? { tokenUsage: usage } : {}) };
   }
 
   async _callClassify({ input, labels, options, signal }) {
+    const tool = {
+      name: 'emit_classification',
+      description: 'Emit the classification result.',
+      input_schema: classificationJsonSchema(labels),
+    };
     const body = {
-      model: this._model,
+      model: this._classifyModel,
       max_tokens: 256,
-      system:
-        'Classify the input. Respond with JSON of the form '
-        + '{ "label": string, "confidence": number, "scores": {label: number} }. JSON only.',
+      system: CLASSIFY_SYSTEM,
+      tools: [tool],
+      tool_choice: { type: 'tool', name: tool.name },
       messages: [
         {
           role: 'user',
@@ -118,13 +142,12 @@ export class AnthropicProvider extends BaseAIAdapter {
       ],
     };
     const data = await this._post('/v1/messages', body, signal);
-    const text = extractText(data);
-    let parsed;
-    try { parsed = JSON.parse(text); } catch {
-      throw new AIBadResponse('Anthropic classify returned non-JSON');
-    }
-    if (typeof parsed.label !== 'string' || typeof parsed.confidence !== 'number') {
+    const parsed = extractStructured(data, tool.name);
+    if (typeof parsed?.label !== 'string' || typeof parsed?.confidence !== 'number') {
       throw new AIBadResponse('Anthropic classify missing label/confidence');
+    }
+    if (Array.isArray(labels) && labels.length > 0 && !labels.includes(parsed.label)) {
+      throw new AIBadResponse('Anthropic classify returned a label outside the allowed set', { label: parsed.label });
     }
     return parsed;
   }
@@ -146,6 +169,8 @@ export class AnthropicProvider extends BaseAIAdapter {
       res = await this._fetch(`${this._baseUrl}${path}`, {
         method: 'POST',
         headers: {
+          // W3C trace propagation (no-op outside a request).
+          ...outboundTraceHeaders(),
           'Content-Type': 'application/json',
           'x-api-key': this._apiKey,
           'anthropic-version': ANTHROPIC_VERSION,
@@ -179,6 +204,22 @@ export class AnthropicProvider extends BaseAIAdapter {
     } catch (err) {
       throw new AIBadResponse(`Anthropic returned malformed JSON: ${err?.message ?? err}`);
     }
+  }
+}
+
+/**
+ * Prefer the forced `tool_use` block's typed input; fall back to a JSON text
+ * block (gateways that strip tools, or recorded fixtures).
+ */
+function extractStructured(data, toolName) {
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  const tool = blocks.find((b) => b?.type === 'tool_use' && b.name === toolName);
+  if (tool && tool.input && typeof tool.input === 'object') return tool.input;
+  const text = extractText(data);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new AIBadResponse('Anthropic returned non-JSON content', { text: truncate(text, 256) });
   }
 }
 

@@ -1,5 +1,5 @@
 # Multi-stage production Dockerfile for GUI-LOP
-FROM node:18-alpine AS base
+FROM node:24-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -23,7 +23,7 @@ RUN npm ci
 RUN npm run build
 
 # Production stage
-FROM node:18-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 
 # Install dumb-init for proper signal handling

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * pg-outbox-repository — Postgres adapter for the Outbox port.
  * Implements enqueue/pickBatch/markDispatched/markFailed against the
@@ -24,17 +25,52 @@ const PICK_BATCH_SQL = `
 
 const MARK_DISPATCHED_SQL = `
   UPDATE outbox
-  SET status = 'dispatched', dispatched_at = NOW()
+  SET status = 'dispatched', dispatched_at = NOW(), locked_until = NULL
   WHERE id = ANY($1::uuid[])
 `;
 
+// Lease-based claim (migration 014): marks up to $1 ready rows as leased for
+// $2 ms and returns them. SKIP LOCKED keeps concurrent consumers disjoint;
+// the lease (not an open transaction) protects the row during delivery, and
+// an expired lease (crashed consumer) makes it claimable again.
+const CLAIM_SQL = `
+  UPDATE outbox o
+  SET locked_until = NOW() + ($2::text || ' milliseconds')::interval
+  WHERE o.id IN (
+    SELECT id FROM outbox
+    WHERE status = 'pending'
+      AND next_attempt_at <= NOW()
+      AND (locked_until IS NULL OR locked_until < NOW())
+    ORDER BY occurred_at ASC
+    FOR UPDATE SKIP LOCKED
+    LIMIT $1
+  )
+  RETURNING o.id, o.event_id, o.event_type, o.event_version, o.aggregate_id,
+            o.aggregate_type, o.payload, o.occurred_at, o.correlation_id, o.retry_count
+`;
+
+// Retry with exponential backoff + full jitter (delay = rand * min(cap,
+// base * 2^attempt)); after max attempts the row is dead-lettered. The old
+// version set a terminal 'failed' status that nothing ever retried.
 const MARK_FAILED_SQL = `
   UPDATE outbox
-  SET status = 'failed',
-      retry_count = retry_count + 1,
-      last_error = $2
+  SET retry_count = retry_count + 1,
+      last_error = $2,
+      locked_until = NULL,
+      status = CASE WHEN retry_count + 1 >= $3 THEN 'dead_letter' ELSE 'pending' END,
+      next_attempt_at = NOW() + ((
+        $6::float8 * LEAST($5::float8, $4::float8 * power(2, retry_count))
+      )::text || ' milliseconds')::interval
   WHERE id = $1
+  RETURNING status, retry_count
 `;
+
+export const OUTBOX_RETRY_DEFAULTS = Object.freeze({
+  maxAttempts: 10,
+  baseDelayMs: 1000,
+  maxDelayMs: 15 * 60 * 1000,
+  leaseMs: 30_000,
+});
 
 // MIN(occurred_at) is cheap thanks to the partial index on status='pending'
 // shipped in 003_outbox_and_idempotency.sql. Returns NULL when there are no
@@ -106,24 +142,58 @@ export function createPgOutboxRepository(pool) {
     },
 
     /**
-     * Mark a batch of outbox rows as dispatched.
-     * @param {string[]} ids
+     * Claim up to `batchSize` deliverable rows under a lease — the API the
+     * OutboxConsumer uses. (It used to call this on the Pg adapter, which
+     * didn't have it: every tick threw and the outbox never drained.)
+     * @param {{ batchSize?: number, leaseMs?: number }} [opts]
      */
-    async markDispatched(ids) {
-      if (!Array.isArray(ids) || ids.length === 0) return;
-      await pool.query(MARK_DISPATCHED_SQL, [ids]);
+    async fetchPending({ batchSize = 25, leaseMs = OUTBOX_RETRY_DEFAULTS.leaseMs } = {}) {
+      const size = Math.max(1, Math.min(Number(batchSize) || 25, 1000));
+      const { rows } = await pool.query(CLAIM_SQL, [size, String(Math.max(1, leaseMs))]);
+      return rows
+        .map((r) => ({
+          id: r.id,
+          eventId: r.event_id,
+          type: r.event_type,
+          version: r.event_version ?? 1,
+          aggregateId: r.aggregate_id,
+          aggregateType: r.aggregate_type,
+          payload: r.payload ?? {},
+          occurredAt: r.occurred_at instanceof Date ? r.occurred_at.toISOString() : r.occurred_at,
+          correlationId: r.correlation_id ?? null,
+          attempts: r.retry_count ?? 0,
+        }))
+        .sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)));
     },
 
     /**
-     * Mark a single row as failed; the publisher decides on dead-letter.
+     * Mark one row or a batch as dispatched.
+     * @param {string | string[]} ids
+     */
+    async markDispatched(ids) {
+      const list = Array.isArray(ids) ? ids : ids ? [ids] : [];
+      if (list.length === 0) return;
+      await pool.query(MARK_DISPATCHED_SQL, [list]);
+    },
+
+    /**
+     * Record a failed delivery: back off and retry, or dead-letter after
+     * `maxAttempts`. Returns the new state.
      * @param {string} id
      * @param {string} reason
+     * @param {{ maxAttempts?: number, baseDelayMs?: number, maxDelayMs?: number, random?: () => number }} [opts]
+     * @returns {Promise<{ status: 'pending' | 'dead_letter', attempts: number } | null>}
      */
-    async markFailed(id, reason) {
+    async markFailed(id, reason, opts = {}) {
       if (typeof id !== 'string' || !id) {
         throw new TypeError('Outbox.markFailed: id is required');
       }
-      await pool.query(MARK_FAILED_SQL, [id, String(reason ?? '').slice(0, 4000)]);
+      const o = { ...OUTBOX_RETRY_DEFAULTS, ...opts };
+      const rand = Math.min(1, Math.max(0, (o.random ?? Math.random)()));
+      const { rows } = await pool.query(MARK_FAILED_SQL, [
+        id, String(reason ?? '').slice(0, 4000), o.maxAttempts, o.baseDelayMs, o.maxDelayMs, rand,
+      ]);
+      return rows?.[0] ? { status: rows[0].status, attempts: rows[0].retry_count } : null;
     },
 
     /**

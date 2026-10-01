@@ -191,6 +191,18 @@ async function performRefresh() {
   return inFlightRefresh;
 }
 
+/**
+ * The one way to refresh the access token. Single-flight: concurrent callers
+ * (parallel 401s, the WebSocket client's 4001 handler, AuthContext's expiry
+ * timer) share one POST /auth/refresh. This matters once refresh tokens
+ * rotate: two parallel refreshes would spend the same token twice and the
+ * loser would log the user out.
+ * @returns {Promise<{ ok: boolean, data?: any }>}
+ */
+export function refreshAccessToken() {
+  return performRefresh();
+}
+
 function redirectToLogin() {
   if (typeof window === 'undefined') return;
   const here = `${window.location.pathname}${window.location.search}`;

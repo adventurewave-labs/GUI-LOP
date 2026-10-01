@@ -3,7 +3,7 @@
 # Optimized for development with hot reload
 # ==========================================
 
-FROM node:18-alpine
+FROM node:24-alpine
 
 # Install development dependencies
 RUN apk add --no-cache \

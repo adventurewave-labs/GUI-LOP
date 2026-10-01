@@ -1,9 +1,8 @@
 name: contracts
 
 # Adapter contract tests — real Postgres + Redis via GitHub Actions
-# service containers. Informational / non-blocking until it stabilises;
-# the existing `ci` workflow remains the required merge check (see
-# repo branch-protection settings).
+# service containers. Blocking: every adapter must honour its port's
+# contract against real infrastructure (159 tests as of 2026-10-01).
 #
 # Runs on PRs to `main` and pushes to `main` / `claude/**`.
 on:
@@ -15,6 +14,9 @@ on:
       - main
       - "claude/**"
 
+permissions:
+  contents: read
+
 concurrency:
   group: contracts-${{ github.ref }}
   cancel-in-progress: true
@@ -24,9 +26,8 @@ jobs:
     name: adapter contract tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Marked informational: a red check here should be investigated but
-    # does NOT block merge per the iteration-3 plan.
-    continue-on-error: true
+    # Blocking since SOTA round 2 loop 1: all 148 contracts pass on real
+    # Postgres + Redis, so a red check here is a real regression.
 
     services:
       postgres:
@@ -59,6 +60,10 @@ jobs:
       # service-bound connections rather than spinning up testcontainers).
       DATABASE_URL: postgresql://contracts:contracts@localhost:5432/contracts
       REDIS_URL: redis://localhost:6379
+      # Fixtures use the service containers directly (one throwaway
+      # database per suite) instead of booting testcontainers.
+      CONTRACTS_DATABASE_URL: postgresql://contracts:contracts@localhost:5432/contracts
+      CONTRACTS_REDIS_URL: redis://localhost:6379
       # The testcontainers-node package autodetects Docker via the
       # standard socket; on GitHub-hosted runners docker.sock is exposed
       # and tests can also boot their own containers if preferred.
@@ -67,12 +72,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
 
       - name: Install dependencies
@@ -83,7 +88,7 @@ jobs:
 
       - name: Upload contract-test artefacts on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: contract-test-logs
           path: |

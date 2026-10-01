@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-ui-generation.js — composition for the UI Generation context.
  *
@@ -31,8 +32,9 @@ import { createUIRouter } from '../contexts/ui-generation/interfaces/http/ui-rou
  * Build the configured AIProvider adapter or throw fast on misconfiguration.
  * @param {object} config
  * @param {object} [logger]
+ * @param {{ onTelemetry?: Function }} [extras]  metrics sink for AI calls
  */
-export function buildAIProvider(config, logger) {
+export function buildAIProvider(config, logger, { onTelemetry } = {}) {
   const providerName = config?.AI_PROVIDER ?? 'stub';
   const retry = {
     maxRetries: config?.AI_MAX_RETRIES ?? 2,
@@ -40,14 +42,16 @@ export function buildAIProvider(config, logger) {
   };
   const common = {
     logger,
+    onTelemetry,
     retry,
     baseUrl: config?.AI_BASE_URL || undefined,
     model: config?.AI_MODEL || undefined,
+    classifyModel: config?.AI_MODEL_CLASSIFY || undefined,
     apiKey: config?.AI_API_KEY || undefined,
   };
 
   if (providerName === 'stub') {
-    return new StubAIProvider({ logger });
+    return new StubAIProvider({ logger, onTelemetry });
   }
   if (!common.apiKey) {
     throw new Error(
@@ -66,6 +70,7 @@ export function wireUIGeneration({
   storageMode = 'in-memory',
   logger,
   config,
+  onAITelemetry,
 }) {
   const uiDocumentRepository = pool
     ? new PgUIDocumentRepository(pool)
@@ -76,6 +81,7 @@ export function wireUIGeneration({
   // Tiny sink that just collects emitted events; the bootstrap will replace
   // this with the shared outbox once the publisher is wired.
   const domainEventSink = {
+    /** @type {any[]} */
     events: [],
     async append(e) {
       this.events.push(e);
@@ -83,7 +89,9 @@ export function wireUIGeneration({
   };
 
   // AI provider ACL — selects vendor by config.AI_PROVIDER; defaults to stub.
-  const aiProvider = config ? buildAIProvider(config, logger) : new StubAIProvider({ logger });
+  const aiProvider = config
+    ? buildAIProvider(config, logger, { onTelemetry: onAITelemetry })
+    : new StubAIProvider({ logger, onTelemetry: onAITelemetry });
   const classificationService = new AIProviderClassificationService({ aiProvider });
 
   const useCases = {

@@ -1,4 +1,5 @@
 import { DeadLetterRepository } from '../../application/ports/dead-letter-repository.js';
+import { isUuid, idValue } from '../../../../shared-kernel/infrastructure/ids.js';
 
 function rowToRecord(r) {
   if (!r) return null;
@@ -38,6 +39,8 @@ export class PgDeadLetterRepository extends DeadLetterRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
+    id = idValue(id); // accept id value objects as well as strings
     const { rows } = await this._pool.query(
       `SELECT id, subscription_id, event_id, envelope, attempts, error, created_at
          FROM dead_letters WHERE id = $1`,

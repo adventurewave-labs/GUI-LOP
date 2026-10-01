@@ -62,6 +62,10 @@ export class Subscription {
     Object.freeze(this);
   }
 
+  /**
+   * @param {{ subscriberKind: string, subscriberRef: string, channel: any, address: any,
+   *   filter?: any, id?: string, now?: Date|string }} args  id/now default to a fresh UUID / now
+   */
   static create({
     subscriberKind,
     subscriberRef,

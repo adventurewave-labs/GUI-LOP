@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * OutboxConsumer — long-running poller that drains the outbox and feeds the
  * DeliverEvent command. Designed for deterministic testing: pass a frozen
@@ -20,7 +21,8 @@ export class OutboxConsumer {
     let processed = 0;
     for (const record of batch) {
       const event = {
-        eventId: record.id,
+        // Pg rows carry the domain event id separately from the outbox row id.
+        eventId: record.eventId ?? record.id,
         type: record.type,
         version: record.version ?? 1,
         aggregateId: record.aggregateId,
@@ -33,15 +35,23 @@ export class OutboxConsumer {
         if (result.isOk()) {
           await this._outbox.markDispatched(record.id);
         } else {
-          await this._outbox.markFailed(record.id, result.error?.message ?? 'unknown');
+          await this._failed(record, result.error?.message ?? 'unknown');
         }
       } catch (err) {
         this._logger.error('OutboxConsumer tick error', err);
-        await this._outbox.markFailed(record.id, err?.message ?? String(err));
+        await this._failed(record, err?.message ?? String(err));
       }
       processed += 1;
     }
     return processed;
+  }
+
+  /** @private */
+  async _failed(record, reason) {
+    const out = await this._outbox.markFailed(record.id, reason);
+    if (out && out.status === 'dead_letter') {
+      this._logger.warn?.(`outbox: event ${record.eventId ?? record.id} dead-lettered after ${out.attempts} attempts: ${reason}`);
+    }
   }
 
   /** Start the polling loop. Returns a stop function. */
@@ -76,6 +86,9 @@ export class OutboxConsumer {
 }
 
 /** Convenience factory matching the spec's `start({outboxPort, intervalMs})` shape. */
+/**
+ * @param {{ outboxPort?: any, deliverEventCommand?: any, intervalMs?: number, batchSize?: number, logger?: any }} [opts]
+ */
 export function start({ outboxPort, deliverEventCommand, intervalMs = 250, batchSize = 25, logger } = {}) {
   const consumer = new OutboxConsumer({ outboxPort, deliverEventCommand, batchSize, logger });
   const stop = consumer.start({ intervalMs });

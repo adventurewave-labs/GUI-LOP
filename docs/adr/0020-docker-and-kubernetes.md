@@ -21,7 +21,7 @@ and a `docker/` directory with environment-specific configs.
   Ingress; the frontend is built to static files and served by a CDN
   or NGINX.
 - **Image policy**:
-  - Multi-stage builds with `node:18-alpine` base.
+  - Multi-stage builds with `node:18-alpine` base. *(Amended 2026-10: `node:24-alpine` — Node 18 reached EOL Apr 2025; 24 is Active LTS. CI also tests the `engines` floor, Node 22.)*
   - Non-root user; read-only root filesystem where feasible.
   - Images tagged `:<git-sha>` (immutable) and `:env-{staging,prod}`
     (rolling).

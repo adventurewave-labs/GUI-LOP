@@ -9,7 +9,7 @@
  *     accessTokenStore + tokenStorage so other modules see them.
  */
 
-import { request, accessTokenStore } from './client.js';
+import { request, accessTokenStore, refreshAccessToken } from './client.js';
 import { tokenStorage } from '../../utils/tokenStorage.js';
 
 function persistFromAuthResponse(data) {
@@ -50,18 +50,16 @@ export const authApi = {
     return data;
   },
 
-  /** POST /api/v1/auth/refresh — public; takes refreshToken from storage. */
+  /**
+   * POST /api/v1/auth/refresh — public; takes refreshToken from storage.
+   * Goes through the client's single-flight refresh so it can never race the
+   * 401 handler or the WebSocket's 4001 handler.
+   */
   async refresh() {
-    const refreshToken = tokenStorage.getRefreshToken();
-    if (!refreshToken) throw new Error('No refresh token available');
-    const data = await request('/api/v1/auth/refresh', {
-      method: 'POST',
-      body: { refreshToken },
-      skipAuth: true,
-      skipRefresh: true,
-    });
-    persistFromAuthResponse(data);
-    return data;
+    if (!tokenStorage.getRefreshToken()) throw new Error('No refresh token available');
+    const out = await refreshAccessToken();
+    if (!out.ok) throw new Error('Token refresh failed');
+    return out.data;
   },
 
   /** POST /api/v1/auth/logout — requires bearer. */

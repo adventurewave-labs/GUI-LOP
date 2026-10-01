@@ -35,7 +35,7 @@ function envelope({
 }
 
 export class UIGenerated extends DomainEvent {
-  constructor({ documentId, workflowId, stepId, url, strategy, occurredAt, correlationId, actor }) {
+  constructor({ documentId, workflowId, stepId, url, strategy, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'ui.generated',
       aggregateId: documentId,
@@ -49,12 +49,14 @@ export class UIGenerated extends DomainEvent {
 }
 
 export class UIGenerationFailed extends DomainEvent {
-  constructor({ workflowId, stepId, error, occurredAt, correlationId, actor }) {
+  constructor({ workflowId, stepId, error, reason = undefined, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'ui.generation_failed',
       aggregateId: workflowId && stepId ? `${workflowId}:${stepId}` : undefined,
       aggregateType: 'UIDocument',
-      payload: { workflowId, stepId, error },
+      // `reason` (error class) was passed by GenerateUIForStep but silently
+      // dropped; additive payload field, absent when not supplied.
+      payload: { workflowId, stepId, error, ...(reason ? { reason } : {}) },
       occurredAt,
       correlationId,
       actor,

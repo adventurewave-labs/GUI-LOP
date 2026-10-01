@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Express middleware: ensure the authenticated principal has the
  * `admin` role. Must run AFTER `makeAuthMiddleware` populates
@@ -13,6 +14,15 @@ export function adminGuard(req, res, next) {
       success: false,
       code: 'unauthorised',
       message: 'authentication required',
+    });
+    return;
+  }
+  // A permission-scoped API key must not inherit its owner's admin powers.
+  if (principal.via === 'api-key' && Array.isArray(principal.permissions) && principal.permissions.length > 0) {
+    res.status(403).json({
+      success: false,
+      code: 'forbidden',
+      message: 'scoped API keys cannot use admin endpoints',
     });
     return;
   }

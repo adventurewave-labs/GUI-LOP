@@ -1,4 +1,5 @@
 import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
+// eslint-disable-next-line security/detect-unsafe-regex -- '-' separators make the repetition unambiguous
 const KEBAB_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 /**

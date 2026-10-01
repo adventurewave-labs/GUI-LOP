@@ -13,7 +13,11 @@ export class Layout {
     if (!ALL.has(kind)) throw new ValidationError(`Unknown layout kind: ${kind}`);
     if (!Array.isArray(regions)) throw new ValidationError('Layout.regions must be an array');
     this.kind = kind;
-    this.regions = Object.freeze(regions.map((r) => ({ ...r, fields: [...(r.fields ?? [])] })));
+    // Deep-freeze: region objects and their field lists used to stay mutable,
+    // so `layout.regions[0].fields.push(...)` changed a "frozen" value object.
+    this.regions = Object.freeze(
+      regions.map((r) => Object.freeze({ ...r, fields: Object.freeze([...(r.fields ?? [])]) })),
+    );
     Object.freeze(this);
   }
 
@@ -22,6 +26,6 @@ export class Layout {
   }
 
   toJSON() {
-    return { kind: this.kind, regions: this.regions.map((r) => ({ ...r })) };
+    return { kind: this.kind, regions: this.regions.map((r) => ({ ...r, fields: [...r.fields] })) };
   }
 }

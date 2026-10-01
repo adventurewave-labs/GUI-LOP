@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/api-key/api-key.js').ApiKey} ApiKey
  */

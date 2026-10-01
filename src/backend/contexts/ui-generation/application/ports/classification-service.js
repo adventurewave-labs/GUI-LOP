@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ClassificationService — application-level port that exposes classification
  * as a first-class capability, distinct from `AIProvider.classify`. The
@@ -19,7 +20,6 @@
  * one-class change.
  */
 export class ClassificationService {
-  // eslint-disable-next-line no-unused-vars
   async classify(_input) {
     throw new Error('ClassificationService.classify is abstract');
   }

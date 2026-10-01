@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Maps domain errors to HTTP responses for the Human Interaction context.
  */

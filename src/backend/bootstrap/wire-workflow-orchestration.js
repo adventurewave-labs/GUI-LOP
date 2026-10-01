@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-workflow-orchestration.js — composition for the Workflow context.
  */
@@ -8,6 +9,7 @@ import { PgWorkflowTemplateRepository } from '../contexts/workflow-orchestration
 import { CachedWorkflowTemplateRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/cached-workflow-template-repository.js';
 import { StubAutomatedStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/automated-step-runner.js';
 import { StubExternalStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/external-step-runner.js';
+import { PgHttpIdempotencyStore, InMemoryHttpIdempotencyStore } from '../shared-kernel/infrastructure/http-idempotency.js';
 import { InMemoryIdempotencyStore } from '../contexts/workflow-orchestration/application/ports/idempotency-store.js';
 
 import { PublishWorkflowTemplateUseCase } from '../contexts/workflow-orchestration/application/commands/publish-workflow-template.js';
@@ -42,6 +44,7 @@ class IdentityAuthorisationAdapter {
         userId: actor.id,
         permission: action,
         scope: resource?.id ?? null,
+        ceiling: actor.apiKeyPermissions ?? null,
       });
       return { allowed: true };
     } catch (err) {
@@ -81,6 +84,13 @@ class UIGenerationAdapter {
   }
 }
 
+/**
+ * @param {{
+ *   pool?: any, outbox?: any, clock: any, idGen: any,
+ *   identityAuthorisationService?: any, generateUIForStepCommand?: any,
+ *   logger?: any, eventSink?: any,
+ * }} deps  `eventSink` is only used by the in-memory adapters.
+ */
 export async function wireWorkflowOrchestration({
   pool,
   outbox,
@@ -167,6 +177,7 @@ export async function wireWorkflowOrchestration({
     getDetail: useCases.getDetail,
     listActive: useCases.listActive,
     idempotencyStore: idempotency,
+    httpIdempotencyStore: pool ? new PgHttpIdempotencyStore(pool) : new InMemoryHttpIdempotencyStore(),
   });
 
   if (logger) {

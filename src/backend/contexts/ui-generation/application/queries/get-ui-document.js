@@ -1,3 +1,4 @@
+// @ts-check
 export class GetUIDocumentQuery {
   constructor({ uiDocumentRepository }) {
     this._docs = uiDocumentRepository;

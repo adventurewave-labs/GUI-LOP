@@ -1,4 +1,5 @@
-import { ConflictError, DomainError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
+// @ts-check
+import { ConflictError, DomainError, ForbiddenError, NotFoundError, PreconditionFailedError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Map a domain or unknown error to an HTTP `(status, body)` pair.
  * Body shape mirrors the legacy server's envelope so existing
@@ -32,6 +33,12 @@ export function mapError(err) {
     return {
       status: 404,
       body: { success: false, message: err.message, code: err.code ?? 'NOT_FOUND' },
+    };
+  }
+  if (err instanceof PreconditionFailedError) {
+    return {
+      status: 412,
+      body: { success: false, message: err.message, code: 'PRECONDITION_FAILED', current_version: err.details?.currentVersion },
     };
   }
   if (err instanceof ConflictError) {

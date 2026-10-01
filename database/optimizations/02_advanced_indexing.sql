@@ -181,10 +181,13 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_workflows_high_priority
 ON workflows(created_at DESC, updated_at DESC)
 WHERE status = 'waiting_for_human';
 
--- Failed workflow analysis index
+-- Failed workflow analysis index.
+-- (Previously keyed on a non-existent `failed_at` column, which aborted
+-- migration 002 on every fresh database. Failed workflows stamp
+-- `completed_at` when they reach the terminal state.)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_workflows_failure_analysis
-ON workflows(template_key, failed_at DESC, status)
-WHERE status = 'failed' AND failed_at IS NOT NULL;
+ON workflows(template_key, completed_at DESC, status)
+WHERE status = 'failed';
 
 -- Recent user activity index
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_users_recent_activity

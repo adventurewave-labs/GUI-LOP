@@ -86,13 +86,13 @@ autoscaling:
 # Once /health/ready exists upstream, switch readinessProbe.httpGet.path.
 probes:
   liveness:
-    path: /health
+    path: /livez
     initialDelaySeconds: 15
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 3
   readiness:
-    path: /health
+    path: /readyz
     initialDelaySeconds: 5
     periodSeconds: 10
     timeoutSeconds: 5
@@ -106,9 +106,14 @@ config:
   LOG_LEVEL: info
   BCRYPT_WORK_FACTOR: "12"
   OUTBOX_BATCH_SIZE: "200"
-  RATE_LIMIT_WINDOW_MS: "900000"
-  RATE_LIMIT_MAX: "100"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX: "600"
   CORS_ORIGINS: "https://gui-lop.example.com"
+  # One LB/ingress hop in front of the pod → real client IP in req.ip.
+  TRUST_PROXY: "1"
+  # Graceful drain (keep SHUTDOWN_TIMEOUT_MS < terminationGracePeriodSeconds).
+  SHUTDOWN_DRAIN_DELAY_MS: "5000"
+  SHUTDOWN_TIMEOUT_MS: "25000"
 
 # IMPORTANT (ADR 0022):
 #   In production these MUST come from a real secrets manager (e.g.
@@ -123,6 +128,8 @@ secrets:
   JWT_SECRET: ""
   DATABASE_URL: ""
   REDIS_URL: ""
+  # Prometheus scrape token for GET /metrics (Authorization: Bearer).
+  METRICS_TOKEN: ""
 
 # Pre-install/pre-upgrade Job that runs `database/migrations/migrate.js`.
 # Uses the same image as the API. Disable for in-memory dev installs.
@@ -139,6 +146,8 @@ migrations:
       memory: 512Mi
 
 # Honour ADR 0020's 30-second drain budget.
+# Must exceed config.SHUTDOWN_TIMEOUT_MS (25s) so the app finishes draining
+# before the kubelet sends SIGKILL.
 terminationGracePeriodSeconds: 30
 
 # PodDisruptionBudget — keep at least one replica during voluntary disruptions.

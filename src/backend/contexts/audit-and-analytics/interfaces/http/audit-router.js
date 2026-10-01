@@ -1,4 +1,6 @@
+// @ts-check
 import express from 'express';
+import { parsePaging } from './paging.js';
 
 export function createAuditRouter({
   getWorkflowTrailQuery,
@@ -56,7 +58,7 @@ function parseRange(q) {
   return {
     from: q.from,
     to: q.to,
-    limit: parseInt(q.limit, 10) || undefined,
-    offset: parseInt(q.offset, 10) || undefined
+    // Stores default to 1000 rows; never forward negative/huge values.
+    ...parsePaging(q, { defaultLimit: 1000, maxLimit: 5000 }),
   };
 }

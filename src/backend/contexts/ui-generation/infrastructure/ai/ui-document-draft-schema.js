@@ -100,3 +100,117 @@ export function tryParseDraft(text) {
     return null;
   }
 }
+
+/**
+ * JSON Schema for `UIDocumentDraft`, handed to vendors for constrained /
+ * structured decoding (Anthropic forced tool use, OpenAI `json_schema`).
+ * Mirrors `validateUIDocumentDraft`; the validator still runs on every
+ * response — never trust model output, even schema-constrained.
+ */
+export const UI_DOCUMENT_DRAFT_JSON_SCHEMA = Object.freeze({
+  type: 'object',
+  additionalProperties: false,
+  required: ['layout', 'fields'],
+  properties: {
+    layout: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'regions'],
+      properties: {
+        kind: { type: 'string', enum: [...LAYOUT_KINDS] },
+        regions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['name', 'fields'],
+            properties: {
+              name: { type: 'string', minLength: 1 },
+              fields: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        },
+      },
+    },
+    fields: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['id', 'label', 'type'],
+        properties: {
+          id: { type: 'string', minLength: 1 },
+          label: { type: 'string', minLength: 1 },
+          type: { type: 'string', enum: [...FIELD_TYPES] },
+          validations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['id', 'kind'],
+              properties: {
+                id: { type: 'string' },
+                kind: { type: 'string' },
+                params: { type: 'object' },
+              },
+            },
+          },
+          component: {
+            type: 'object',
+            required: ['name'],
+            properties: { name: { type: 'string' }, version: { type: 'string' } },
+          },
+          options: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['value', 'label'],
+              properties: { value: { type: 'string' }, label: { type: 'string' } },
+            },
+          },
+        },
+      },
+    },
+  },
+});
+
+/**
+ * JSON Schema for a classification result constrained to `labels`.
+ * @param {string[]} [labels]
+ */
+export function classificationJsonSchema(labels) {
+  const label = Array.isArray(labels) && labels.length > 0
+    ? { type: 'string', enum: labels.map(String) }
+    : { type: 'string' };
+  return {
+    type: 'object',
+    required: ['label', 'confidence'],
+    properties: {
+      label,
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+      scores: { type: 'object', additionalProperties: { type: 'number' } },
+    },
+  };
+}
+
+/**
+ * Normalise vendor usage into one shape for telemetry/metrics.
+ * @returns {{ prompt: number, completion: number, total: number,
+ *             cacheRead?: number, cacheWrite?: number } | undefined}
+ */
+export function normaliseUsage(u) {
+  if (!u || typeof u !== 'object') return undefined;
+  const prompt = Number(u.input_tokens ?? u.prompt_tokens ?? 0) || 0;
+  const completion = Number(u.output_tokens ?? u.completion_tokens ?? 0) || 0;
+  const cacheRead = Number(
+    u.cache_read_input_tokens ?? u.prompt_tokens_details?.cached_tokens ?? 0,
+  ) || 0;
+  const cacheWrite = Number(u.cache_creation_input_tokens ?? 0) || 0;
+  return {
+    prompt,
+    completion,
+    total: Number(u.total_tokens) || prompt + completion + cacheRead + cacheWrite,
+    ...(cacheRead ? { cacheRead } : {}),
+    ...(cacheWrite ? { cacheWrite } : {}),
+  };
+}

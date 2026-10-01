@@ -77,7 +77,7 @@ async function seedParents(pool) {
   );
 }
 
-function buildResponse({ id = 'resp-1', stepId = STEP_A, idempotencyKey = 'key-1' } = {}) {
+function buildResponse({ id = '286087fc-3e77-4ec2-8686-f998bf8cff72' /* resp-1 */, stepId = STEP_A, idempotencyKey = 'key-1' } = {}) {
   return HumanResponse.record({
     id,
     workflowId: WORKFLOW_A,
@@ -127,9 +127,9 @@ describeIfDocker('HumanResponseRepository contract', () => {
     test('save then findById round-trips', async () => {
       const r = buildResponse();
       await repo.save(r);
-      const found = await repo.findById('resp-1');
+      const found = await repo.findById('286087fc-3e77-4ec2-8686-f998bf8cff72' /* resp-1 */);
       expect(found).not.toBeNull();
-      expect(found.id).toBe('resp-1');
+      expect(found.id).toBe('286087fc-3e77-4ec2-8686-f998bf8cff72' /* resp-1 */);
       expect(found.action.value).toBe('approve');
       expect(found.payload.toJSON()).toEqual({ comment: 'lgtm' });
       expect(found.idempotencyKey).toBe('key-1');
@@ -137,22 +137,22 @@ describeIfDocker('HumanResponseRepository contract', () => {
     });
 
     test('findByIdempotencyKey returns the original row (dedupe)', async () => {
-      const r1 = buildResponse({ id: 'resp-1', idempotencyKey: 'idem-A' });
+      const r1 = buildResponse({ id: '286087fc-3e77-4ec2-8686-f998bf8cff72' /* resp-1 */, idempotencyKey: 'idem-A' });
       await repo.save(r1);
       const found = await repo.findByIdempotencyKey(WORKFLOW_A, STEP_A, 'idem-A');
       expect(found).not.toBeNull();
-      expect(found.id).toBe('resp-1');
+      expect(found.id).toBe('286087fc-3e77-4ec2-8686-f998bf8cff72' /* resp-1 */);
       // A different key returns null.
       expect(await repo.findByIdempotencyKey(WORKFLOW_A, STEP_A, 'idem-B')).toBeNull();
     });
 
     test('multiple responses on the same workflow but different steps coexist', async () => {
-      await repo.save(buildResponse({ id: 'resp-a', stepId: STEP_A, idempotencyKey: 'a' }));
-      await repo.save(buildResponse({ id: 'resp-b', stepId: STEP_B, idempotencyKey: 'b' }));
+      await repo.save(buildResponse({ id: '5bfe1712-26f7-475b-83c9-1284a347eee4' /* resp-a */, stepId: STEP_A, idempotencyKey: 'a' }));
+      await repo.save(buildResponse({ id: 'eb27d016-87a2-4970-80d7-14216b634ca4' /* resp-b */, stepId: STEP_B, idempotencyKey: 'b' }));
       const a = await repo.findFor(WORKFLOW_A, STEP_A);
       const b = await repo.findFor(WORKFLOW_A, STEP_B);
-      expect(a.id).toBe('resp-a');
-      expect(b.id).toBe('resp-b');
+      expect(a.id).toBe('5bfe1712-26f7-475b-83c9-1284a347eee4' /* resp-a */);
+      expect(b.id).toBe('eb27d016-87a2-4970-80d7-14216b634ca4' /* resp-b */);
     });
 
     test('findById returns null for missing id', async () => {

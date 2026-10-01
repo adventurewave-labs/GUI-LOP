@@ -9,9 +9,15 @@
 import { WebSocketBroadcaster } from '../../application/ports/websocket-broadcaster.js';
 
 export class WsBroadcaster extends WebSocketBroadcaster {
-  constructor({ eventPublisher } = {}) {
+  /**
+   * @param {object} [opts]
+   * @param {object} [opts.eventPublisher]   cross-instance fan-out (Redis pub/sub)
+   * @param {number} [opts.maxBufferedBytes] slow-consumer cutoff (default 1 MiB)
+   */
+  constructor({ eventPublisher, maxBufferedBytes = 1024 * 1024 } = {}) {
     super();
     this._publisher = eventPublisher ?? null;
+    this._maxBuffered = maxBufferedBytes;
     this._connections = new Map();
     this._byRef = new Map();
     this._unsubByRef = new Map();
@@ -68,6 +74,12 @@ export class WsBroadcaster extends WebSocketBroadcaster {
 
   _safeSend(ws, envelope) {
     try {
+      // Backpressure: a client that isn't draining its socket would make us
+      // buffer unbounded memory. Cut it off (1013 Try Again Later) instead.
+      if (ws && Number(ws.bufferedAmount) > this._maxBuffered) {
+        try { ws.close?.(1013, 'slow consumer'); } catch { /* ignore */ }
+        return;
+      }
       const payload = typeof envelope === 'string' ? envelope : JSON.stringify(envelope);
       if (ws && typeof ws.send === 'function') {
         ws.send(payload);

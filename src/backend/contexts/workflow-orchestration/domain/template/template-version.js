@@ -11,7 +11,10 @@ export class TemplateVersion {
   }
 
   static of(raw) {
-    const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : raw;
+    // Strings must be all digits: parseInt accepted '2abc' → 2 and '1.5' → 1.
+    const n = typeof raw === 'string'
+      ? (/^\s*\d+\s*$/.test(raw) ? Number(raw) : NaN)
+      : raw;
     if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
       throw new ValidationError(
         'TemplateVersion must be a positive integer',

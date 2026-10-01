@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * HTTP router for the Human Interaction bounded context.
  *

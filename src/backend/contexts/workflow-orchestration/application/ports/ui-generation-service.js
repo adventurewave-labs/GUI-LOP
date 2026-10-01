@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Port to the UI Generation context.
  *

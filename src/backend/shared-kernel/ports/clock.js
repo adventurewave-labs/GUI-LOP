@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Clock port — abstracts wall-clock time so domain code stays deterministic
  * and unit-testable. Implementations live in shared-kernel/infrastructure/.

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ExportComplianceData — produces a JSON archive of the audit/event trail for
  * a given aggregate, persisted via the object-storage port and returning the
@@ -15,6 +16,7 @@ export class ExportComplianceDataCommand {
     this._clock = clock;
   }
 
+  /** @param {{ aggregateType?: string, aggregateId?: string, range?: { from?: any, to?: any } }} [q] */
   async execute({ aggregateType, aggregateId, range } = {}) {
     const id = this._ids?.next?.() ?? randomUUID();
     const [events, logs] = await Promise.all([

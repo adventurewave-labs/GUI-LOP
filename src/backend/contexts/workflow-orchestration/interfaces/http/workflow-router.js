@@ -1,6 +1,8 @@
+// @ts-check
 import { Router } from 'express';
 import { expressErrorBoundary } from './error-mapper.js';
-import { withHttpIdempotency } from './idempotency.js';
+import { withHttpIdempotency, InMemoryHttpIdempotencyStore } from './idempotency.js';
+import { versionEtag, parseIfMatch, expectedVersions, notModified } from '../../../../shared-kernel/infrastructure/etag.js';
 
 /**
  * Build an Express router for the Workflow Orchestration HTTP API
@@ -21,9 +23,14 @@ export function createWorkflowRouter({
   getDetail,
   listActive,
   idempotencyStore,
+  httpIdempotencyStore,
   getActor = (req) => req.user ?? null,
 }) {
   const router = Router();
+  // HTTP-level Idempotency-Key store (shared-kernel semantics). Accepts the
+  // legacy option name when it already speaks the new interface.
+  const httpStore = httpIdempotencyStore
+    ?? (idempotencyStore && typeof idempotencyStore.begin === 'function' ? idempotencyStore : new InMemoryHttpIdempotencyStore());
 
   router.get('/templates', expressErrorBoundary(async (req, res) => {
     const out = await listTemplates.execute({
@@ -76,7 +83,7 @@ export function createWorkflowRouter({
   }));
 
   router.post('/', expressErrorBoundary(withHttpIdempotency({
-    store: idempotencyStore,
+    store: httpStore,
     route: 'POST /api/v1/workflows',
     handler: async (req, res) => {
       const actor = getActor(req);
@@ -103,20 +110,30 @@ export function createWorkflowRouter({
 
   router.get('/:id', expressErrorBoundary(async (req, res) => {
     const out = await getDetail.execute({ workflowId: req.params.id });
-    res.json({ success: true, data: { workflow: out } });
+    // Strong, version-based ETag: clients send it back in If-Match on
+    // execute/cancel to avoid acting on a stale view (lost update).
+    if (out && Number.isInteger(out.version)) {
+      const tag = versionEtag(out.version);
+      res.set('ETag', tag);
+      res.set('Cache-Control', 'private, no-cache');
+      if (notModified(req.get('If-None-Match'), tag)) return res.status(304).end();
+    }
+    return res.json({ success: true, data: { workflow: out } });
   }));
 
   router.post('/:id/execute', expressErrorBoundary(withHttpIdempotency({
-    store: idempotencyStore,
+    store: httpStore,
     route: 'POST /api/v1/workflows/:id/execute',
     handler: async (req, res) => {
       const actor = getActor(req);
       const out = await executeWorkflow.execute({
         actor,
         workflowId: req.params.id,
+        expectedVersions: expectedVersions(parseIfMatch(req.get('If-Match'))),
         idempotencyKey: req.header('Idempotency-Key'),
         correlationId: req.header('X-Correlation-Id'),
       });
+      if (Number.isInteger(out.version)) res.set('ETag', versionEtag(out.version));
       res.json({
         success: true,
         data: {
@@ -136,7 +153,9 @@ export function createWorkflowRouter({
       workflowId: req.params.id,
       reason: req.body.reason,
       correlationId: req.header('X-Correlation-Id'),
+      expectedVersions: expectedVersions(parseIfMatch(req.get('If-Match'))),
     });
+    if (Number.isInteger(out.version)) res.set('ETag', versionEtag(out.version));
     res.json({ success: true, data: out });
   }));
 

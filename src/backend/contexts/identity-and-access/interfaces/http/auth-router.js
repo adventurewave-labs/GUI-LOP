@@ -1,11 +1,9 @@
+// @ts-check
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { sendError } from './error-mapper.js';
 import { makeAuthMiddleware } from './auth-middleware.js';
-import {
-  InMemoryIdempotencyStore,
-  makeIdempotencyMiddleware,
-} from './idempotency-middleware.js';
+import { idempotency, InMemoryHttpIdempotencyStore } from '../../../../shared-kernel/infrastructure/http-idempotency.js';
 
 /**
  * Build the Express router for the Identity & Access context.
@@ -20,6 +18,13 @@ import {
  * Optional:
  *   idempotencyStore (defaults to in-memory)
  *   loginRateLimit / refreshRateLimit (override the per-IP limiters)
+ *   limiters: { loginIp, loginIdentifier, refresh, register, password }
+ *     — built by the shared-kernel rate-limiter factory in the composition
+ *     root (Redis-backed in production). Missing entries fall back to the
+ *     legacy in-memory per-IP limiters (login/refresh) or pass-through.
+ *
+ * @param {{ useCases?: any, tokenIssuer?: any, tokenBlacklist?: any, idempotencyStore?: any,
+ *   loginRateLimit?: Function, refreshRateLimit?: Function, limiters?: Record<string, Function> }} [deps]
  */
 export function buildAuthRouter({
   useCases,
@@ -28,23 +33,53 @@ export function buildAuthRouter({
   idempotencyStore,
   loginRateLimit,
   refreshRateLimit,
+  limiters = {},
 } = {}) {
   if (!useCases) throw new Error('useCases required');
   const router = Router();
 
   const requireAuth = makeAuthMiddleware({ tokenIssuer, tokenBlacklist });
-  const idemStore = idempotencyStore ?? new InMemoryIdempotencyStore();
-  const idem = makeIdempotencyMiddleware({ store: idemStore });
+  const idem = idempotency({ store: idempotencyStore ?? new InMemoryHttpIdempotencyStore() });
 
   // ADR 0015 — strict per-IP limits on login/refresh; auth fails closed.
-  const loginLimiter = loginRateLimit ?? rateLimit({
+  const passthrough = (_req, _res, next) => next();
+  const loginLimiter = loginRateLimit ?? limiters.loginIp ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'rate_limited', message: 'Too many login attempts' },
   });
-  const refreshLimiter = refreshRateLimit ?? rateLimit({
+  // Per-account failed-attempt budget: stops distributed credential
+  // stuffing against one identifier that per-IP limits can't see.
+  const loginIdentifierLimiter = limiters.loginIdentifier ?? passthrough;
+  // Standalone defaults are real limiters (not pass-through) so the router
+  // is never unthrottled when built without the composition-root factory.
+  const registerLimiter = limiters.register ?? rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Too many registrations' },
+  });
+  const passwordLimiter = limiters.password ?? rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    message: { error: 'rate_limited', message: 'Too many password change attempts' },
+  });
+  // Generic budget for authenticated, low-cost auth routes (/me, /logout).
+  const sessionLimiter = limiters.session ?? rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    message: { error: 'rate_limited', message: 'Too many requests' },
+  });
+  const refreshLimiter = refreshRateLimit ?? limiters.refresh ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
     standardHeaders: true,
@@ -52,7 +87,18 @@ export function buildAuthRouter({
     message: { error: 'rate_limited', message: 'Too many refresh attempts' },
   });
 
-  router.post('/register', idem, async (req, res) => {
+  // Router-wide baseline (defence in depth beneath the per-route limits and
+  // the global /api/v1 limiter). Direct express-rate-limit instance so
+  // static analysis (CodeQL js/missing-rate-limiting) can see it.
+  router.use(rateLimit({
+    windowMs: 60 * 1000,
+    limit: 300,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Too many requests' },
+  }));
+
+  router.post('/register', registerLimiter, idem, async (req, res) => {
     try {
       const out = await useCases.registerUser.execute(req.body ?? {});
       res.status(201).json(out);
@@ -61,7 +107,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/login', loginLimiter, async (req, res) => {
+  router.post('/login', loginLimiter, loginIdentifierLimiter, async (req, res) => {
     try {
       const out = await useCases.authenticateUser.execute({
         identifier: req.body?.identifier ?? req.body?.email ?? req.body?.username,
@@ -86,7 +132,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/logout', requireAuth, async (req, res) => {
+  router.post('/logout', requireAuth, sessionLimiter, async (req, res) => {
     try {
       await useCases.revokeSession.execute({
         sessionId: req.principal.sessionId,
@@ -98,7 +144,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/password', requireAuth, idem, async (req, res) => {
+  router.post('/password', requireAuth, passwordLimiter, idem, async (req, res) => {
     try {
       await useCases.changePassword.execute({
         userId: req.principal.userId,
@@ -111,7 +157,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.get('/me', requireAuth, async (req, res) => {
+  router.get('/me', requireAuth, sessionLimiter, async (req, res) => {
     try {
       const profile = await useCases.getUserProfile.execute({
         userId: req.principal.userId,

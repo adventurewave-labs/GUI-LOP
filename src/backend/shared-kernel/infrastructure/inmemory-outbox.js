@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * InMemoryOutbox — in-process implementation of the Outbox port for tests
  * and dev mode where there is no Postgres pool.

@@ -27,7 +27,7 @@ export class PgDeliveryAttemptRepository extends DeliveryAttemptRepository {
     const { rows } = await this._pool.query(
       `SELECT id, subscription_id, event_id, attempt_number, status, error, attempted_at
          FROM delivery_attempts WHERE event_id = $1
-         ORDER BY attempted_at`,
+         ORDER BY attempted_at, attempt_number`,
       [eventId]
     );
     return rows.map((r) => ({

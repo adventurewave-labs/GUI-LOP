@@ -1,3 +1,4 @@
+// @ts-check
 import { EngineActionType } from '../../domain/workflow/workflow-execution-policy.js';
 import {
   validateInput,

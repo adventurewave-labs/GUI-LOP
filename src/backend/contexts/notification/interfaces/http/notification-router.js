@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * notification-router.js — Express router for notification & realtime endpoints.
  *

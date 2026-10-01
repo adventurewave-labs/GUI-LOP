@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * GetWorkflowAnalytics — reads from the existing `workflow_analytics` view.
  * Falls back gracefully if the view is missing in test environments.

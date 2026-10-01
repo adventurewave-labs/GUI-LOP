@@ -6,11 +6,14 @@
  */
 
 import fs from 'fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { db, dbHelpers } from '../config/database.js';
+import { splitSqlStatements, requiresNoTransaction, expandPsqlMetaCommands } from '../utils/sql-splitter.js';
 
 const __filename = fileURLToPath(import.meta.url);
+const REPO_ROOT = path.resolve(path.dirname(__filename), '..', '..');
 const __dirname = path.dirname(__filename);
 
 const MIGRATIONS_TABLE = 'schema_migrations';
@@ -80,8 +83,8 @@ class MigrationRunner {
    * Calculate checksum for migration content
    */
   calculateChecksum(content) {
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(content).digest('hex');
+    // (was `require('crypto')` — a ReferenceError in this ES module)
+    return createHash('sha256').update(content).digest('hex');
   }
 
   /**
@@ -135,28 +138,33 @@ class MigrationRunner {
     try {
       console.log(`⬆️  Executing migration: ${migration.filename}`);
 
-      // Start transaction
-      await db.transaction(async (client) => {
-        // Split migration content into individual statements
-        const statements = migration.content
-          .split(';')
-          .map(stmt => stmt.trim())
-          .filter(stmt => stmt && !stmt.startsWith('--'));
-
-        // Execute each statement
-        for (const statement of statements) {
-          if (statement.trim()) {
-            await client.query(statement);
-          }
-        }
-
-        // Record migration execution
-        const executionTime = Date.now() - startTime;
-        await client.query(`
+      // Lexer-correct split: the previous `.split(';')` broke on semicolons
+      // inside strings / dollar-quoted PL/pgSQL bodies, and dropped any
+      // statement that merely *started* with a `--` comment.
+      // psql `\\i <file>` includes are inlined (001 includes the base
+      // schema); other psql meta-commands (\\echo, \\timing, …) are dropped.
+      const sql = await expandPsqlMetaCommands(migration.content, { baseDir: REPO_ROOT });
+      const statements = splitSqlStatements(sql);
+      const record = (client) => client.query(`
           INSERT INTO ${MIGRATIONS_TABLE} (filename, checksum, execution_time_ms)
           VALUES ($1, $2, $3)
-        `, [migration.filename, migration.checksum, executionTime]);
-      });
+        `, [migration.filename, migration.checksum, Date.now() - startTime]);
+
+      if (requiresNoTransaction(statements)) {
+        // e.g. CREATE INDEX CONCURRENTLY — illegal inside a transaction.
+        // Such migrations must be written idempotently (IF NOT EXISTS).
+        for (const statement of statements) {
+          await db.query(statement);
+        }
+        await record(db);
+      } else {
+        await db.transaction(async (client) => {
+          for (const statement of statements) {
+            await client.query(statement);
+          }
+          await record(client);
+        });
+      }
 
       const executionTime = Date.now() - startTime;
       console.log(`✅ Migration ${migration.filename} executed successfully (${executionTime}ms)`);
@@ -332,4 +340,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { MigrationRunner };
-export default migrationRunner;
+// Previously `export default migrationRunner;` — a binding local to main(),
+// which threw "migrationRunner is not defined" at import time and made
+// every `node database/migrations/migrate.js …` invocation fail.
+export default MigrationRunner;

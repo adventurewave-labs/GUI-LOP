@@ -13,8 +13,8 @@ describe('loadConfig', () => {
     expect(cfg.JWT_ACCESS_TTL_SECONDS).toBe(900);
     expect(cfg.JWT_REFRESH_TTL_SECONDS).toBe(604800);
     expect(cfg.BCRYPT_WORK_FACTOR).toBe(12);
-    expect(cfg.RATE_LIMIT_WINDOW_MS).toBe(900000);
-    expect(cfg.RATE_LIMIT_MAX).toBe(100);
+    expect(cfg.RATE_LIMIT_WINDOW_MS).toBe(60000);
+    expect(cfg.RATE_LIMIT_MAX).toBe(600);
     expect(cfg.CORS_ORIGINS).toEqual(['http://localhost:3000']);
     expect(cfg.LOG_LEVEL).toBe('info');
     expect(cfg.OUTBOX_BATCH_SIZE).toBe(200);

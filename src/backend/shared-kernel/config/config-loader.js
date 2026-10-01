@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * config-loader — single, schema-validated entry point for environment config
  * (ADR 0022). The only place in the codebase permitted to read process.env.
@@ -14,7 +15,7 @@ export class ConfigError extends Error {
 }
 
 /** Schema entries: type, optional default, required flag, parser. */
-const SCHEMA = {
+const SCHEMA = /** @type {const} */ ({
   NODE_ENV: { type: 'string', default: 'development' },
   PORT: { type: 'number', default: 3001 },
   DATABASE_URL: { type: 'string', required: false },
@@ -30,8 +31,14 @@ const SCHEMA = {
    * worker-thread pool so factor 12 doesn't block the event loop.
    */
   BCRYPT_WORK_FACTOR_TEST: { type: 'number', default: 4 },
-  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 900000 },
-  RATE_LIMIT_MAX: { type: 'number', default: 100 },
+  /**
+   * General /api/v1 budget per client IP (ADR 0015). Previously declared
+   * but never enforced; defaults sized for an interactive SPA (10 req/s
+   * sustained) rather than the old 100 per 15 min, which would throttle
+   * normal dashboard use. Auth routes carry their own stricter limits.
+   */
+  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 60000 },
+  RATE_LIMIT_MAX: { type: 'number', default: 600 },
   CORS_ORIGINS: { type: 'csv', default: 'http://localhost:3000' },
   LOG_LEVEL: { type: 'string', default: 'info', enum: ['debug', 'info', 'warn', 'error'] },
   /**
@@ -62,11 +69,82 @@ const SCHEMA = {
   AI_BASE_URL: { type: 'string', required: false },
   /** Optional override of the vendor model id. */
   AI_MODEL: { type: 'string', required: false },
+  /** Optional cheaper/faster model for the classify op (defaults to AI_MODEL). */
+  AI_MODEL_CLASSIFY: { type: 'string', required: false },
   /** Per-call timeout enforced via AbortController. Default 30s. */
   AI_TIMEOUT_MS: { type: 'number', default: 30000 },
   /** Number of retries (initial try not counted). Default 2. */
   AI_MAX_RETRIES: { type: 'number', default: 2 },
-};
+
+  /* -------- HTTP server hardening -------- */
+  /**
+   * Allow the legacy `X-User-Id` header to authenticate WebSocket upgrades.
+   * Dev-only escape hatch; refused at load time when NODE_ENV=production.
+   * Default false: upgrades must carry a verifiable access token.
+   */
+  WS_ALLOW_HEADER_AUTH: { type: 'boolean', default: false },
+  /** Live WebSocket connections allowed per principal (429 beyond). */
+  WS_MAX_CONNECTIONS_PER_USER: { type: 'number', default: 10 },
+  /** Max inbound WebSocket frame size; larger frames close with 1009. */
+  WS_MAX_PAYLOAD_BYTES: { type: 'number', default: 65536 },
+  /** Max time to receive the full request headers (slowloris guard). */
+  HTTP_HEADERS_TIMEOUT_MS: { type: 'number', default: 15000 },
+  /** Max time to receive the full request (headers + body). */
+  HTTP_REQUEST_TIMEOUT_MS: { type: 'number', default: 30000 },
+  /**
+   * Idle keep-alive timeout. Must exceed the upstream LB idle timeout
+   * (AWS ALB default 60s) to avoid sporadic 502s on reused sockets.
+   */
+  HTTP_KEEPALIVE_TIMEOUT_MS: { type: 'number', default: 65000 },
+  /**
+   * Express `trust proxy` setting. `false` (default) | `true` | hop count
+   * (e.g. `1`) | CSV of subnets. Required behind an LB for correct req.ip
+   * (rate limiting, audit trail).
+   */
+  TRUST_PROXY: { type: 'string', default: 'false' },
+
+  /* -------- metrics -------- */
+  /** Expose Prometheus metrics at GET /metrics. */
+  METRICS_ENABLED: { type: 'boolean', default: true },
+  /**
+   * Bearer token required to scrape /metrics. When unset, /metrics is
+   * open in non-production and 404 in production (fail closed).
+   */
+  METRICS_TOKEN: { type: 'string', required: false, secret: true },
+
+  /* -------- graceful shutdown -------- */
+  /**
+   * After SIGTERM, keep serving while /readyz reports 503 so the LB /
+   * kube-proxy removes this endpoint before we stop accepting. Must be
+   * ≥ endpoint-propagation latency (~2-5s on most clusters).
+   */
+  SHUTDOWN_DRAIN_DELAY_MS: { type: 'number', default: 5000 },
+  /**
+   * Hard deadline for the whole shutdown sequence. Must be below the pod's
+   * terminationGracePeriodSeconds (default 30s) or SIGKILL wins.
+   */
+  SHUTDOWN_TIMEOUT_MS: { type: 'number', default: 25000 },
+});
+
+/**
+ * Value type for one schema entry.
+ * @template S
+ * @typedef {S extends { type: 'number' } ? number
+ *   : S extends { type: 'boolean' } ? boolean
+ *   : S extends { type: 'csv' } ? string[]
+ *   : S extends { enum: readonly (infer E)[] } ? E
+ *   : string} ConfigValue
+ */
+
+/**
+ * The loaded configuration, derived from SCHEMA so the type cannot drift
+ * from the loader: entries with a default or `required: true` are always
+ * present; optional entries without a default may be `null`.
+ * @typedef {{ readonly [K in keyof typeof SCHEMA]:
+ *   (typeof SCHEMA)[K] extends { default: any } | { required: true }
+ *     ? ConfigValue<(typeof SCHEMA)[K]>
+ *     : ConfigValue<(typeof SCHEMA)[K]> | null }} AppConfig
+ */
 
 function coerce(name, raw, spec) {
   if (raw === undefined || raw === null || raw === '') {
@@ -109,6 +187,12 @@ function coerceValue(name, raw, spec) {
       }
       return n;
     }
+    case 'boolean': {
+      const v = String(raw).trim().toLowerCase();
+      if (['true', '1', 'yes', 'on'].includes(v)) return true;
+      if (['false', '0', 'no', 'off'].includes(v)) return false;
+      throw new ConfigError(`Env var ${name} must be a boolean`, { name, value: raw });
+    }
     case 'csv': {
       return String(raw)
         .split(',')
@@ -124,9 +208,12 @@ function coerceValue(name, raw, spec) {
  * Load + validate config from a source object (defaults to process.env).
  * Returns a frozen plain object. Throws ConfigError on any problem.
  * @param {NodeJS.ProcessEnv | Record<string,string|undefined>} [env]
+ * @returns {AppConfig}
  */
 export function loadConfig(env = process.env) {
+  /** @type {Record<string, any>} */
   const out = {};
+  /** @type {any[]} */
   const errors = [];
   for (const [name, spec] of Object.entries(SCHEMA)) {
     try {
@@ -134,6 +221,37 @@ export function loadConfig(env = process.env) {
     } catch (e) {
       errors.push(e);
     }
+  }
+  // Cross-field invariants.
+  if (out.NODE_ENV === 'production' && out.WS_ALLOW_HEADER_AUTH === true) {
+    errors.push(
+      new ConfigError('WS_ALLOW_HEADER_AUTH must not be enabled when NODE_ENV=production', {
+        name: 'WS_ALLOW_HEADER_AUTH',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.HTTP_HEADERS_TIMEOUT_MS) &&
+    Number.isInteger(out.HTTP_REQUEST_TIMEOUT_MS) &&
+    out.HTTP_REQUEST_TIMEOUT_MS > 0 &&
+    out.HTTP_HEADERS_TIMEOUT_MS > out.HTTP_REQUEST_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('HTTP_HEADERS_TIMEOUT_MS must not exceed HTTP_REQUEST_TIMEOUT_MS', {
+        name: 'HTTP_HEADERS_TIMEOUT_MS',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.SHUTDOWN_DRAIN_DELAY_MS) &&
+    Number.isInteger(out.SHUTDOWN_TIMEOUT_MS) &&
+    out.SHUTDOWN_DRAIN_DELAY_MS >= out.SHUTDOWN_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('SHUTDOWN_DRAIN_DELAY_MS must be less than SHUTDOWN_TIMEOUT_MS', {
+        name: 'SHUTDOWN_DRAIN_DELAY_MS',
+      }),
+    );
   }
   if (errors.length > 0) {
     const msg = errors.map((e) => `- ${e.message}`).join('\n');
@@ -148,7 +266,7 @@ export function loadConfig(env = process.env) {
   if (out.NODE_ENV === 'test' && env.BCRYPT_WORK_FACTOR === undefined) {
     out.BCRYPT_WORK_FACTOR = out.BCRYPT_WORK_FACTOR_TEST;
   }
-  return Object.freeze(out);
+  return /** @type {AppConfig} */ (Object.freeze(out));
 }
 
 /** Returns the schema for documentation / .env.example checks. */

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * RecordHumanResponse use case.
  *
@@ -62,7 +63,7 @@ export class RecordHumanResponse {
    * @param {object} command.payload
    * @param {string} [command.rationale]
    * @param {number} [command.confidence]
-   * @param {{ userId: string, sessionId?: string }} command.actor
+   * @param {{ userId: string, sessionId?: string, apiKeyPermissions?: string[]|null }} command.actor
    * @param {string} command.idempotencyKey
    */
   async execute(command) {
@@ -109,7 +110,9 @@ export class RecordHumanResponse {
 
     // 4. Load workflow + responder snapshot for eligibility.
     const workflow = (await this.workflowReader.getSummary(workflowId)) ?? { id: workflowId };
-    const userSnapshot = authResult.user ?? (await this.userDirectory.getUser(actor.userId));
+    const snapshot = authResult.user ?? (await this.userDirectory.getUser(actor.userId));
+    // A scoped API key bounds eligibility exactly as it bounds authorisation.
+    const userSnapshot = snapshot && { ...snapshot, permissionCeiling: actor.apiKeyPermissions ?? null };
     if (!userSnapshot) {
       throw new IneligibleResponderError('Responder not found in directory', { userId: actor.userId });
     }

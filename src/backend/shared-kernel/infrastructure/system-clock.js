@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * SystemClock — production implementation of the Clock port backed by
  * the platform wall clock.

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * IdGenerator port — produces opaque, unique identifiers (UUID v4).
  */

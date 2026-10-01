@@ -1,4 +1,6 @@
+// @ts-check
 import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
+import { assertExpectedVersion } from './cancel-workflow.js';
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 import { WorkflowStatus } from '../../domain/workflow/workflow-status.js';
 import { WorkflowEngine } from '../services/engine.js';
@@ -45,6 +47,7 @@ export class ExecuteWorkflowUseCase {
 
     const wf = await this._workflows.findById(input.workflowId);
     if (!wf) throw new WorkflowNotFoundError(input.workflowId);
+    assertExpectedVersion(wf, input.expectedVersions);
 
     if (wf.status === WorkflowStatus.CREATED) {
       wf.start(this._clock.now(), { actor: input.actor, correlationId: input.correlationId });
@@ -66,6 +69,7 @@ export class ExecuteWorkflowUseCase {
       status: wf.status,
       stoppedReason: result.stoppedReason,
       ranSteps: result.ranSteps,
+      version: wf.version,
     };
     if (input.idempotencyKey && this._idempotency) {
       await this._idempotency.put(

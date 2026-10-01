@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # ==========================================================================
 # GUI-LOP production image (DDD bootstrap entry point)
-# Per ADR 0020: multi-stage, node:18-alpine, non-root, /health HEALTHCHECK.
+# Per ADR 0020: multi-stage, node:24-alpine, non-root, /health HEALTHCHECK.
 # Entry point: src/backend/bootstrap/index.js
 # ==========================================================================
 
@@ -9,7 +9,7 @@
 # Installs the production node_modules tree and copies the source.
 # We deliberately do NOT run a TypeScript build: the runtime is plain
 # ESM JavaScript under src/backend/, and tsconfig is for type-checking only.
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 ENV NODE_ENV=production \
     NPM_CONFIG_LOGLEVEL=warn \
@@ -38,7 +38,7 @@ COPY scripts ./scripts
 # --- Stage 2: runtime ----------------------------------------------------
 # Minimal runtime image. dumb-init reaps zombies and forwards signals so the
 # graceful shutdown handler in bootstrap/index.js receives SIGTERM cleanly.
-FROM node:18-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 # OCI labels — populated for traceability and registry policies (ADR 0020).
 LABEL org.opencontainers.image.title="gui-lop" \
@@ -78,7 +78,7 @@ EXPOSE 3001
 # Liveness check used by docker-compose and any local `docker run`. Kubernetes
 # does its own probe via the Helm chart and ignores this directive.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS "http://localhost:${PORT:-3001}/health" >/dev/null || exit 1
+  CMD curl -fsS "http://localhost:${PORT:-3001}/livez" >/dev/null || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "src/backend/bootstrap/index.js"]

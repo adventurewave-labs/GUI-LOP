@@ -1,3 +1,4 @@
+// @ts-check
 import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { TemplateNotFoundError } from '../../domain/errors.js';
 import { Workflow } from '../../domain/workflow/workflow.js';
