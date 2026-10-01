@@ -40,7 +40,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 ## Backlog (priority order)
 
-- [x] **13c. Last 11 contract failures** (`SHA13C`). Three were **production bugs**: (1) **Redis cross-pod fan-out never delivered** — with injected clients (the prod wiring) the `message` listener was never attached; (2) my loop-13b `isUuid()` guard rejected id value objects, so `findById(ApiKeyId)` returned null — guard now unwraps VOs and all 9 Pg sites pass the primitive; (3) in-memory delivery attempts ignored the ordering contract. Rest were fixtures (identical secret bytes → hash UNIQUE clash; 1-char TemplateKeys). **Contracts 137 → 148/148**, contracts.yml now blocking. Backend 748 → 754.
+- [x] **13c. Last 11 contract failures** (`9c30a2b`). Three were **production bugs**: (1) **Redis cross-pod fan-out never delivered** — with injected clients (the prod wiring) the `message` listener was never attached; (2) my loop-13b `isUuid()` guard rejected id value objects, so `findById(ApiKeyId)` returned null — guard now unwraps VOs and all 9 Pg sites pass the primitive; (3) in-memory delivery attempts ignored the ordering contract. Rest were fixtures (identical secret bytes → hash UNIQUE clash; 1-char TemplateKeys). **Contracts 137 → 148/148**, contracts.yml now blocking. Backend 748 → 754.
 - [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
 - [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.
 
