@@ -54,19 +54,19 @@ export function codeSlug(code) {
 export function toProblem(status, body = {}, { instance, requestId } = {}) {
   const code = legacyCode(body);
   const slug = code ? codeSlug(code) : '';
-  return {
+  const problem = {
     type: slug ? `${PROBLEM_TYPE_BASE}${slug}` : 'about:blank',
     title: STATUS_CODES[status] ?? 'Error',
-    status,
     ...(legacyDetail(body) !== undefined ? { detail: legacyDetail(body) } : {}),
     ...(instance ? { instance } : {}),
     ...(code ? { code } : {}),
     ...(requestId ? { request_id: requestId } : {}),
     // Legacy members last so nothing a client relies on is overwritten…
     ...body,
-    // …except the RFC-defined `status`, which must match the HTTP status.
-    status,
   };
+  // …except the RFC-defined `status`, which must match the HTTP status.
+  problem.status = status;
+  return problem;
 }
 
 function isProblemAlready(body) {

@@ -53,8 +53,23 @@ export function buildAuthRouter({
   // Per-account failed-attempt budget: stops distributed credential
   // stuffing against one identifier that per-IP limits can't see.
   const loginIdentifierLimiter = limiters.loginIdentifier ?? passthrough;
-  const registerLimiter = limiters.register ?? passthrough;
-  const passwordLimiter = limiters.password ?? passthrough;
+  // Standalone defaults are real limiters (not pass-through) so the router
+  // is never unthrottled when built without the composition-root factory.
+  const registerLimiter = limiters.register ?? rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Too many registrations' },
+  });
+  const passwordLimiter = limiters.password ?? rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    message: { error: 'rate_limited', message: 'Too many password change attempts' },
+  });
   const refreshLimiter = refreshRateLimit ?? limiters.refresh ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
