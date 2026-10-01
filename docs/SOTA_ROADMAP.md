@@ -1,0 +1,34 @@
+# SOTA Improvement Loop — GUI-LOP
+
+Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an agent** — Triple-Gate applies.
+
+## Loop contract (every iteration)
+
+1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
+2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` green + `npm run lint:arch` 0 errors (+ `npm run lint` once item 5 lands).
+4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
+5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
+6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.
+
+## Done
+
+- [x] **L0 — WebSocket auth + HTTP hardening.** WS upgrades now require a verified JWT/API key (`?token=`, `Authorization`, or `Sec-WebSocket-Protocol: bearer,<t>`); forged `X-User-Id` → 401 (was full account takeover of any user's event stream). Dev escape hatch `WS_ALLOW_HEADER_AUTH` refused in production. Helmet (API CSP `default-src 'none'`), validated + echoed `X-Request-Id`, `TRUST_PROXY`, server `headersTimeout`/`requestTimeout`/`keepAliveTimeout` (LB-aligned), `/livez` + `/readyz` (bounded 800 ms dep probes, 503 while draining), body-parser 400/413 no longer surface as 500. Probes in Helm/K8s/Dockerfile repointed. +34 tests.
+
+## Backlog (priority order)
+
+- [ ] **1. Graceful drain.** SIGTERM → flip readiness to 503 → wait `SHUTDOWN_DRAIN_DELAY_MS` (default 5 s, ≥ endpoint-removal latency) → stop accepting → close WS with 1001 → drain in-flight → close pools. Add Helm `preStop` + `terminationGracePeriodSeconds` alignment. Test the ordering.
+- [ ] **2. Request-scoped context.** `AsyncLocalStorage` carrying `request_id`/`trace_id`/`user_id`; logger auto-injects; structured access log (method, route template, status, duration_ms). Redact `authorization`, `cookie`, `token` query params.
+- [ ] **3. W3C Trace Context.** Parse/propagate `traceparent`/`tracestate`; emit on outbound AI + webhook calls; OTel SDK optional (enabled only when `OTEL_EXPORTER_OTLP_ENDPOINT` set, zero-cost otherwise).
+- [ ] **4. Prometheus `/metrics`.** `prom-client`: RED histograms per route template, outbox lag/pending gauges, WS connections, AI call latency/errors/circuit state, event-loop lag. Guarded by `METRICS_TOKEN` or separate port.
+- [ ] **5. Real lint.** ESLint 9 flat config (`@eslint/js` + `eslint-plugin-n` + `eslint-plugin-security`), replace placeholder script, add CI job. Fix or explicitly suppress findings.
+- [ ] **6. Node 22 LTS.** Node 18 is EOL. Bump CI matrix, Dockerfiles, devcontainer, `engines`, `.nvmrc`; `node --test`-safe flags.
+- [ ] **7. Supply chain.** Dependabot (npm, actions, docker), pin Actions by SHA, CodeQL workflow, `npm audit --omit=dev --audit-level=high` gate, CycloneDX SBOM + build provenance/attestation in `docker.yml`, `permissions:` least-privilege on every workflow.
+- [ ] **8. WebSocket hardening II.** Restrict upgrades to `/ws/v1`, Origin allow-list (reuse `CORS_ORIGINS`), per-user connection cap, `maxPayload`, close 4001 on access-token `exp`, backpressure (`bufferedAmount`) guard.
+- [ ] **9. Frontend WS client → subprotocol auth.** Move token from `?token=` to `Sec-WebSocket-Protocol` so it never lands in proxy/access logs; drop `user_id` param.
+- [ ] **10. Rate limiting audit.** Verify/route `express-rate-limit` + Redis store on `/auth/*` (login, refresh, register) with per-IP+per-identifier keys and `RateLimit-*` (draft-7) headers; tests.
+- [ ] **11. RFC 9457 problem+json.** Unified `application/problem+json` error envelope (type/title/status/detail/instance + request_id) across contexts, backwards-compatible `error` field.
+- [ ] **12. AI adapter SOTA.** Structured output via tool-use/JSON-schema for UI document drafts (schema already in `ui-document-draft-schema.js`), prompt caching on the static system prompt, configurable model ids per tier, token/cost telemetry. Offline fixture tests only.
+- [ ] **13. Contract tests un-skipped.** `jest.contracts.config.js` currently skips all 148 tests — make them run against the in-memory bootstrap and add to CI.
+- [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
+- [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.

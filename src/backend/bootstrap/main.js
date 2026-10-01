@@ -16,10 +16,10 @@
  * `config.PORT` with graceful SIGTERM/SIGINT handling.
  */
 
-import { randomUUID } from 'node:crypto';
 import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 
 import { loadConfig } from './config.js';
 import { systemClock } from '../shared-kernel/infrastructure/system-clock.js';
@@ -35,16 +35,17 @@ import { wireUIGeneration } from './wire-ui-generation.js';
 import { wireHumanInteraction } from './wire-human-interaction.js';
 import { wireNotification } from './wire-notification.js';
 import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
+import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
+import {
+  requestIdMiddleware,
+  parseTrustProxy,
+  jsonErrorHandler,
+  applyServerTimeouts,
+  probeWithTimeout,
+} from './http-hardening.js';
 
-/* -------------------- middleware helpers -------------------- */
-
-/** Attach a stable request id so logs and downstream services can correlate. */
-function requestIdMiddleware() {
-  return (req, _res, next) => {
-    req.id = req.header('X-Request-Id') ?? randomUUID();
-    next();
-  };
-}
+/** Per-dependency deadline for readiness probes. */
+const PROBE_TIMEOUT_MS = 800;
 
 /* -------------------- bootstrap -------------------- */
 
@@ -218,9 +219,18 @@ export async function bootstrap(envOverride) {
 
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', parseTrustProxy(config.TRUST_PROXY));
+  // First, so every response — including body-parser errors — carries an id.
+  app.use(requestIdMiddleware());
+  // JSON-only API: lock down everything a browser could render.
+  app.use(
+    helmet({
+      contentSecurityPolicy: { directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] } },
+      crossOriginResourcePolicy: { policy: 'same-site' },
+    }),
+  );
   app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
   app.use(express.json({ limit: '1mb' }));
-  app.use(requestIdMiddleware());
 
   // Identity & Access (public + protected).
   app.use('/api/v1/auth', identity.router);
@@ -237,6 +247,30 @@ export async function bootstrap(envOverride) {
   app.use('/api/v1', identity.authMiddleware, audit.routers.audit);
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
   app.use('/api/v1', identity.authMiddleware, notification.router);
+
+  // Kubernetes-style probes. Liveness never touches dependencies (a DB blip
+  // must not restart every pod); readiness fails fast while draining or
+  // when a configured dependency is unreachable.
+  let draining = false;
+  app.get('/livez', (_req, res) => {
+    res.set('Cache-Control', 'no-store').json({ status: 'ok' });
+  });
+  app.get('/readyz', async (_req, res) => {
+    const checks = {};
+    if (pool) {
+      const r = await probeWithTimeout(() => pool.query('SELECT 1'), PROBE_TIMEOUT_MS);
+      checks.db = r.ok ? 'ok' : `error:${r.error}`;
+    }
+    if (redis) {
+      const r = await probeWithTimeout(() => redis.ping(), PROBE_TIMEOUT_MS);
+      checks.redis = r.ok && r.value === 'PONG' ? 'ok' : `error:${r.ok ? 'unexpected' : r.error}`;
+    }
+    const ready = !draining && Object.values(checks).every((v) => v === 'ok');
+    res
+      .status(ready ? 200 : 503)
+      .set('Cache-Control', 'no-store')
+      .json({ status: ready ? 'ready' : draining ? 'draining' : 'not_ready', checks });
+  });
 
   // Liveness + dependency-status probe (ADR 0021 — Observability).
   app.get('/health', async (_req, res) => {
@@ -295,22 +329,24 @@ export async function bootstrap(envOverride) {
 
   // Generic 404 + error handler so unhandled routes return JSON not HTML.
   app.use((req, res) => {
-    res.status(404).json({ error: 'not_found', path: req.path });
+    res.status(404).json({ error: 'not_found', path: req.path, request_id: req.id });
   });
-  app.use((err, _req, res, _next) => {
-    logger.error(`unhandled request error: ${err?.message ?? err}`);
-    res.status(500).json({ error: 'internal_error', message: 'Unexpected error' });
-  });
+  app.use(jsonErrorHandler({ logger }));
 
   /* -------- HTTP server + WebSocket -------- */
 
-  const httpServer = http.createServer(app);
+  const httpServer = applyServerTimeouts(http.createServer(app), config);
+  if (config.WS_ALLOW_HEADER_AUTH) {
+    logger.warn('WS_ALLOW_HEADER_AUTH=true: WebSocket upgrades accept unauthenticated X-User-Id (dev only)');
+  }
   const wsHandle = await notification.attachWebSocket(httpServer, {
-    principalFromUpgrade: async (req) => {
-      // Trust the legacy header in dev; production wires a JWT verifier.
-      const sub = req.headers?.['x-user-id'] ?? null;
-      return sub ? { id: sub } : null;
-    },
+    principalFromUpgrade: makeWsPrincipalResolver({
+      tokenIssuer: identity.tokenIssuer,
+      tokenBlacklist: identity.tokenBlacklist,
+      authenticateWithApiKey: identity.useCases?.authenticateWithApiKey,
+      allowHeaderAuth: config.WS_ALLOW_HEADER_AUTH,
+      logger,
+    }),
   });
 
   /* -------- shutdown -------- */
@@ -319,6 +355,7 @@ export async function bootstrap(envOverride) {
   async function shutdown() {
     if (shuttingDown) return;
     shuttingDown = true;
+    draining = true;
     notification.stopOutboxConsumer();
     if (deadlineWatcher && typeof deadlineWatcher.stop === 'function') {
       await deadlineWatcher.stop();
@@ -326,7 +363,12 @@ export async function bootstrap(envOverride) {
     if (wsHandle && typeof wsHandle.close === 'function') {
       try { wsHandle.close(); } catch { /* ignore */ }
     }
-    await new Promise((resolve) => httpServer.close(() => resolve()));
+    await new Promise((resolve) => {
+      httpServer.close(() => resolve());
+      // Release idle keep-alive sockets so close() isn't held open for
+      // HTTP_KEEPALIVE_TIMEOUT_MS by pooled LB connections.
+      httpServer.closeIdleConnections?.();
+    });
     if (redis) {
       try { await redis.quit(); } catch { /* ignore */ }
     }

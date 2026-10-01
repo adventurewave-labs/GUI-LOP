@@ -78,7 +78,7 @@ EXPOSE 3001
 # Liveness check used by docker-compose and any local `docker run`. Kubernetes
 # does its own probe via the Helm chart and ignores this directive.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD curl -fsS "http://localhost:${PORT:-3001}/health" >/dev/null || exit 1
+  CMD curl -fsS "http://localhost:${PORT:-3001}/livez" >/dev/null || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "src/backend/bootstrap/index.js"]

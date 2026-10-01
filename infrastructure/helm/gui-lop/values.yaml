@@ -86,13 +86,13 @@ autoscaling:
 # Once /health/ready exists upstream, switch readinessProbe.httpGet.path.
 probes:
   liveness:
-    path: /health
+    path: /livez
     initialDelaySeconds: 15
     periodSeconds: 20
     timeoutSeconds: 5
     failureThreshold: 3
   readiness:
-    path: /health
+    path: /readyz
     initialDelaySeconds: 5
     periodSeconds: 10
     timeoutSeconds: 5

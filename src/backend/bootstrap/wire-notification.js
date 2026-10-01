@@ -110,9 +110,13 @@ export function wireNotification({
 
   async function attachWebSocket(httpServer, { principalFromUpgrade } = {}) {
     if (!httpServer) return null;
+    if (typeof principalFromUpgrade !== 'function') {
+      // Fail closed: an unauthenticated WebSocket would let any client
+      // subscribe to any user's event stream.
+      throw new TypeError('attachWebSocket: principalFromUpgrade is required');
+    }
     return attachWsServer(httpServer, {
-      principalFromUpgrade:
-        principalFromUpgrade ?? (async (req) => ({ id: req.headers?.['x-user-id'] ?? 'anonymous' })),
+      principalFromUpgrade,
       subscriptionRepository,
       websocketBroadcaster,
     });

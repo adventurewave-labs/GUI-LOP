@@ -66,6 +66,29 @@ const SCHEMA = {
   AI_TIMEOUT_MS: { type: 'number', default: 30000 },
   /** Number of retries (initial try not counted). Default 2. */
   AI_MAX_RETRIES: { type: 'number', default: 2 },
+
+  /* -------- HTTP server hardening -------- */
+  /**
+   * Allow the legacy `X-User-Id` header to authenticate WebSocket upgrades.
+   * Dev-only escape hatch; refused at load time when NODE_ENV=production.
+   * Default false: upgrades must carry a verifiable access token.
+   */
+  WS_ALLOW_HEADER_AUTH: { type: 'boolean', default: false },
+  /** Max time to receive the full request headers (slowloris guard). */
+  HTTP_HEADERS_TIMEOUT_MS: { type: 'number', default: 15000 },
+  /** Max time to receive the full request (headers + body). */
+  HTTP_REQUEST_TIMEOUT_MS: { type: 'number', default: 30000 },
+  /**
+   * Idle keep-alive timeout. Must exceed the upstream LB idle timeout
+   * (AWS ALB default 60s) to avoid sporadic 502s on reused sockets.
+   */
+  HTTP_KEEPALIVE_TIMEOUT_MS: { type: 'number', default: 65000 },
+  /**
+   * Express `trust proxy` setting. `false` (default) | `true` | hop count
+   * (e.g. `1`) | CSV of subnets. Required behind an LB for correct req.ip
+   * (rate limiting, audit trail).
+   */
+  TRUST_PROXY: { type: 'string', default: 'false' },
 };
 
 function coerce(name, raw, spec) {
@@ -109,6 +132,12 @@ function coerceValue(name, raw, spec) {
       }
       return n;
     }
+    case 'boolean': {
+      const v = String(raw).trim().toLowerCase();
+      if (['true', '1', 'yes', 'on'].includes(v)) return true;
+      if (['false', '0', 'no', 'off'].includes(v)) return false;
+      throw new ConfigError(`Env var ${name} must be a boolean`, { name, value: raw });
+    }
     case 'csv': {
       return String(raw)
         .split(',')
@@ -134,6 +163,26 @@ export function loadConfig(env = process.env) {
     } catch (e) {
       errors.push(e);
     }
+  }
+  // Cross-field invariants.
+  if (out.NODE_ENV === 'production' && out.WS_ALLOW_HEADER_AUTH === true) {
+    errors.push(
+      new ConfigError('WS_ALLOW_HEADER_AUTH must not be enabled when NODE_ENV=production', {
+        name: 'WS_ALLOW_HEADER_AUTH',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.HTTP_HEADERS_TIMEOUT_MS) &&
+    Number.isInteger(out.HTTP_REQUEST_TIMEOUT_MS) &&
+    out.HTTP_REQUEST_TIMEOUT_MS > 0 &&
+    out.HTTP_HEADERS_TIMEOUT_MS > out.HTTP_REQUEST_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('HTTP_HEADERS_TIMEOUT_MS must not exceed HTTP_REQUEST_TIMEOUT_MS', {
+        name: 'HTTP_HEADERS_TIMEOUT_MS',
+      }),
+    );
   }
   if (errors.length > 0) {
     const msg = errors.map((e) => `- ${e.message}`).join('\n');
