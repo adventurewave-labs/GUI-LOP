@@ -27,6 +27,20 @@ import { Subscription } from '../../domain/subscription/subscription.js';
 
 export const CLOSE_TOKEN_EXPIRED = 4001;
 
+/**
+ * Subprotocol negotiation. Browser clients authenticate with
+ * `Sec-WebSocket-Protocol: bearer, <token>`; we must select *something* or
+ * browsers abort the handshake, and we must never select the token itself
+ * (that would echo the credential in the 101 response). `ws`'s default is
+ * "first offered", which is unsafe if a client lists the token first.
+ * @param {Set<string>} protocols
+ * @returns {string|false}
+ */
+export function selectSubprotocol(protocols) {
+  if (protocols.has('bearer')) return 'bearer';
+  return false;
+}
+
 function reject(socket, status, reason) {
   try {
     socket.write(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
@@ -61,7 +75,11 @@ export async function attach(httpServer, deps) {
     if (!ws) {
       throw new Error('ws package not available; pass `wsServer` for tests');
     }
-    WSS = new ws.WebSocketServer({ noServer: true, maxPayload: maxPayloadBytes });
+    WSS = new ws.WebSocketServer({
+      noServer: true,
+      maxPayload: maxPayloadBytes,
+      handleProtocols: selectSubprotocol,
+    });
   }
 
   const originSet = Array.isArray(allowedOrigins) ? new Set(allowedOrigins) : null;

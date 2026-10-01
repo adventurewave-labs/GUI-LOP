@@ -4,7 +4,7 @@
  */
 import WebSocket from 'ws';
 import { bootstrap } from '../main.js';
-import { attach, CLOSE_TOKEN_EXPIRED } from '../../contexts/notification/interfaces/websocket/ws-server.js';
+import { attach, CLOSE_TOKEN_EXPIRED, selectSubprotocol } from '../../contexts/notification/interfaces/websocket/ws-server.js';
 import { WsBroadcaster } from '../../contexts/notification/infrastructure/transport/ws-broadcaster.js';
 
 function connect(url, opts) {
@@ -97,6 +97,20 @@ describe('WebSocket hardening (booted server)', () => {
     const code = closeCode(ws);
     ws.send('x'.repeat(4096));
     await expect(code).resolves.toBe(1009);
+  });
+
+  test('bearer subprotocol: negotiated protocol is "bearer", token never echoed', async () => {
+    const { ws, status } = await open('/ws/v1', [token, 'bearer'].reverse());
+    expect(status).toBe('open');
+    expect(ws.protocol).toBe('bearer');
+  });
+
+  test('token listed first is still not selected as the protocol', async () => {
+    // Even a misordered client must not get its credential reflected back.
+    const { ws } = await open('/ws/v1', ['bearer', token]);
+    expect(ws.protocol).toBe('bearer');
+    expect(selectSubprotocol(new Set([token, 'bearer']))).toBe('bearer');
+    expect(selectSubprotocol(new Set(['graphql-ws']))).toBe(false);
   });
 
   test('"ping" text frame gets "pong"', async () => {

@@ -1,13 +1,19 @@
 /**
  * WebSocket client for the GUI-LOP v1 envelope.
  *
- * Connects to `ws[s]://<host>/ws/v1` (the backend currently mounts `ws` on
- * any upgrade path; we still send `/ws/v1` for forward compatibility, see
- * ADR 0017). The access token is sent via a query parameter (`?token=...`)
- * — browser WebSocket APIs do not allow custom headers, so this is the
- * only universally-supported way to ferry a bearer through an upgrade
- * handshake. Per ADR 0008 the access token has a short TTL so leaking the
- * URL has limited blast radius.
+ * Connects to `ws[s]://<host>/ws/v1` (the only path the backend upgrades).
+ *
+ * Auth: browsers can't set headers on `new WebSocket(...)`, so the access
+ * token rides in the subprotocol list — `Sec-WebSocket-Protocol: bearer,
+ * <token>`. Unlike `?token=` this never lands in URLs, proxy/CDN access logs,
+ * browser history or Referer. The server always selects `bearer` as the
+ * negotiated protocol, so the token is not echoed back.
+ * `tokenTransport: 'query'` keeps the legacy `?token=` behaviour for
+ * environments whose proxies strip unknown subprotocols.
+ *
+ * Close code 4001 means the access token expired mid-session: the client
+ * calls `onTokenExpired()` (e.g. the auth refresh flow) and reconnects
+ * immediately instead of backing off.
  *
  * Versioned envelope (per ADR 0005):
  *
@@ -46,12 +52,14 @@ export const KNOWN_EVENT_TYPES = Object.freeze([
 const DEFAULT_PATH = '/ws/v1';
 const MAX_BACKOFF_MS = 30_000;
 
-function defaultUrlBuilder({ baseUrl, path, token, userId }) {
+export const WS_SUBPROTOCOL = 'bearer';
+export const CLOSE_TOKEN_EXPIRED = 4001;
+
+function defaultUrlBuilder({ baseUrl, path, token, tokenTransport = 'subprotocol' }) {
   const httpBase = baseUrl || apiBaseUrl;
   const wsBase = httpBase.replace(/^https/, 'wss').replace(/^http/, 'ws').replace(/\/$/, '');
   const url = new URL(`${wsBase}${path}`);
-  if (token) url.searchParams.set('token', token);
-  if (userId) url.searchParams.set('user_id', userId);
+  if (token && tokenTransport === 'query') url.searchParams.set('token', token);
   return url.toString();
 }
 
@@ -62,8 +70,8 @@ function defaultUrlBuilder({ baseUrl, path, token, userId }) {
  * @param {string} [options.baseUrl]    HTTP base URL; converted to ws[s]://.
  * @param {string} [options.path]       WebSocket path (default `/ws/v1`).
  * @param {() => string|null} [options.getToken] Token provider (default reads accessTokenStore).
- * @param {() => string|null} [options.getUserId] Optional user id (used in dev where the
- *                                       backend authenticates upgrades via x-user-id).
+ * @param {'subprotocol'|'query'} [options.tokenTransport] How the token is sent (default subprotocol).
+ * @param {() => (void|Promise<void>)} [options.onTokenExpired] Called on close 4001 before reconnecting.
  * @param {(opts: object) => string} [options.urlBuilder] Custom URL builder.
  * @param {boolean} [options.autoConnect] Connect immediately on creation.
  * @param {typeof WebSocket} [options.WebSocketImpl] Override for tests.
@@ -74,7 +82,8 @@ export function createWebSocketClient(options = {}) {
     baseUrl,
     path = DEFAULT_PATH,
     getToken = () => accessTokenStore.get(),
-    getUserId = () => null,
+    tokenTransport = 'subprotocol',
+    onTokenExpired,
     urlBuilder = defaultUrlBuilder,
     autoConnect = false,
     WebSocketImpl,
@@ -165,8 +174,9 @@ export function createWebSocketClient(options = {}) {
     if (status === 'connecting' || status === 'open') return;
     manuallyClosed = false;
     const token = getToken ? getToken() : null;
-    const userId = getUserId ? getUserId() : null;
-    const url = urlBuilder({ baseUrl, path, token, userId });
+    const url = urlBuilder({ baseUrl, path, token, tokenTransport });
+    const protocols =
+      token && tokenTransport === 'subprotocol' ? [WS_SUBPROTOCOL, token] : undefined;
 
     const Impl = WebSocketImpl || (typeof WebSocket !== 'undefined' ? WebSocket : null);
     if (!Impl) {
@@ -177,7 +187,7 @@ export function createWebSocketClient(options = {}) {
     setStatus('connecting');
     let ws;
     try {
-      ws = new Impl(url);
+      ws = protocols ? new Impl(url, protocols) : new Impl(url);
     } catch (err) {
       setStatus('error');
       scheduleReconnect();
@@ -199,10 +209,21 @@ export function createWebSocketClient(options = {}) {
     ws.onerror = () => {
       setStatus('error');
     };
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       socket = null;
       setStatus('closed');
-      if (!manuallyClosed) scheduleReconnect();
+      if (manuallyClosed) return;
+      if (event && event.code === CLOSE_TOKEN_EXPIRED) {
+        // Token expired server-side: refresh, then reconnect without backoff.
+        Promise.resolve()
+          .then(() => (onTokenExpired ? onTokenExpired() : undefined))
+          .catch(() => { /* refresh failed: fall back to normal backoff */ })
+          .then(() => {
+            if (!manuallyClosed) connect();
+          });
+        return;
+      }
+      scheduleReconnect();
     };
   }
 

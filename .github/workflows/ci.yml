@@ -61,3 +61,6 @@ jobs:
             src/backend/ \
             tests/backend/contexts/ \
             tests/integration/bootstrap-smoke.test.js
+
+      - name: Frontend service tests (WebSocket client)
+        run: npm run test:frontend-services
