@@ -17,10 +17,10 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 - [x] **1. Graceful drain** (`8b215f5`). SIGTERM → `/readyz` 503 + `Connection: close` while still serving for `SHUTDOWN_DRAIN_DELAY_MS` → stop outbox/watchers → WS 1001 → HTTP close with idle sweep + force-close at deadline → release pools. Fixed `ws-server.close()` leaving live sockets open. Helm/compose grace periods aligned. In-flight shutdown 2.0 s → 0.24 s. 583 → 589 tests.
 - [x] **2. Request-scoped context** (`10a6905`). AsyncLocalStorage per request (`request_id`, `user_id`, `auth_via`) auto-injected into every log line; recursive credential redaction in the logger; `http_request` access log with bounded route template, status, duration, 499 on abort, never the query string. 589 → 602 tests.
+- [x] **3. W3C Trace Context** (`8adb9cf`). Dependency-free spec-compliant `traceparent`/`tracestate` handling; inbound traces continued with a new server span, invalid headers start a fresh trace; `trace_id`/`span_id` on every log line; `traceresponse` header (CORS-exposed); AI adapters propagate on outbound calls. OTel SDK deferred (propagator-compatible). 602 → 624 tests.
 
 ## Backlog (priority order)
 
-- [ ] **3. W3C Trace Context.** Parse/propagate `traceparent`/`tracestate`; emit on outbound AI + webhook calls; OTel SDK optional (enabled only when `OTEL_EXPORTER_OTLP_ENDPOINT` set, zero-cost otherwise).
 - [ ] **4. Prometheus `/metrics`.** `prom-client`: RED histograms per route template, outbox lag/pending gauges, WS connections, AI call latency/errors/circuit state, event-loop lag. Guarded by `METRICS_TOKEN` or separate port.
 - [ ] **5. Real lint.** ESLint 9 flat config (`@eslint/js` + `eslint-plugin-n` + `eslint-plugin-security`), replace placeholder script, add CI job. Fix or explicitly suppress findings.
 - [ ] **6. Node 22 LTS.** Node 18 is EOL. Bump CI matrix, Dockerfiles, devcontainer, `engines`, `.nvmrc`; `node --test`-safe flags.
