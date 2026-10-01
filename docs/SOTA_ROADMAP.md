@@ -30,6 +30,13 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **12. AI adapter SOTA** (`ce7ccc7`). Anthropic forced tool use + OpenAI `json_schema` structured outputs from one shared JSON Schema (validator kept); prompt caching on the static prefix; `AI_MODEL_CLASSIFY` tier; label-set enforcement. Fixed two loop-4 telemetry bugs: vendor adapters dropped `onTelemetry`, and token counters read the wrong keys. Offline tests only. 721 → 729 tests.
 - [x] **13. Contract tests run for real** (`8d20b19`). Exposed that **production migrations never worked**: `migrate.js` crashed at import (bad default export), used `require` in ESM, split SQL on bare `;`, couldn't do `\i` or `CONCURRENTLY`, and ignored `DATABASE_URL`; migration 002 (6.5k lines) never applied anywhere; 008 index invalid. Lexer-correct shared splitter, runner fixed, 002 neutralised (unreferenced), verified on fresh PG (idempotent). Contracts 16 → 121/148 on real infra; CI uses service containers. Backend 729 → 739.
 - [x] **13b. Contract failures — real bugs** (`3d9be2d`). **Dead letters were lost in prod** (003/006 `dead_letters` shape collision; every insert failed) → migration 011 converges both histories. **Malformed ids 500'd** (22P02 from uuid columns) → `isUuid()` guard in 8 Pg repos → null/404. Fixtures moved to deterministic UUIDs. Contracts 121 → 137/148. Backend 739 → 748.
+- [x] **15. Final CI pass** (`93bce82`). Fixed ESLint `no-dupe-keys` (problem-details) and CodeQL missing-rate-limit (auth router standalone defaults). *Lesson:* verify lint by exit code, not by grepping output.
+
+## Status at end of 6-hour run (2026-10-01)
+
+- 15 loops, 31 commits on `claude/sota-loop` → PR #11 (draft, **not merged** — Triple-Gate).
+- Backend tests **549 → 748**; frontend WS tests 6 → 12 (now in CI); contracts 0 → **137/148** on real Postgres 16 + Redis.
+- Open items below are ordered by impact.
 
 ## Backlog (priority order)
 
