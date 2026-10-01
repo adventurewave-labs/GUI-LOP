@@ -1,4 +1,5 @@
 // @ts-check
+import { isTransientDbError } from '../../../../shared-kernel/infrastructure/transient-errors.js';
 import { ConflictError, DomainError, ForbiddenError, NotFoundError, PreconditionFailedError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Map a domain or unknown error to an HTTP `(status, body)` pair.
@@ -52,6 +53,9 @@ export function mapError(err) {
       status: 422,
       body: { success: false, message: err.message, code: err.code },
     };
+  }
+  if (isTransientDbError(err)) {
+    return { status: 503, body: { success: false, message: 'Temporarily unavailable; retry shortly', code: 'SERVICE_UNAVAILABLE' } };
   }
   return {
     status: 500,

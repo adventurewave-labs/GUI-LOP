@@ -17,6 +17,7 @@
  * `config.PORT` with graceful SIGTERM/SIGINT handling.
  */
 
+import { createPgPool, pgPoolStats } from '../shared-kernel/infrastructure/pg-pool.js';
 import http from 'node:http';
 import express from 'express';
 import cors from 'cors';
@@ -77,7 +78,7 @@ export async function bootstrap(envOverride) {
   if (config.DATABASE_URL) {
     const pgModule = await import('pg');
     const Pool = pgModule.default?.Pool ?? pgModule.Pool;
-    pool = new Pool({ connectionString: config.DATABASE_URL });
+    pool = createPgPool(Pool, config, logger);
     outbox = createPgOutboxRepository(pool);
     logger.info('shared-kernel: postgres pool initialised');
   } else {
@@ -115,6 +116,7 @@ export async function bootstrap(envOverride) {
   let uiRef = null;
   const metrics = createMetrics({
     outbox,
+    dbPool: () => pgPoolStats(pool),
     wsConnectionCount: () => wsHandle?.wss?.clients?.size ?? 0,
     aiProvider: () => uiRef?.aiProvider ?? null,
     logger,

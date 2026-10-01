@@ -1,4 +1,5 @@
 // @ts-check
+import { isTransientDbError } from '../../../../shared-kernel/infrastructure/transient-errors.js';
 /**
  * Maps domain errors to HTTP responses for the Human Interaction context.
  */
@@ -26,6 +27,7 @@ export function mapError(err) {
   if (err instanceof ForbiddenError) return { status: 403, body: toBody(err, err.code ?? 'FORBIDDEN') };
   if (err instanceof ValidationError) return { status: 422, body: toBody(err, err.code ?? 'VALIDATION') };
   if (err instanceof DomainError) return { status: 400, body: toBody(err, err.code ?? 'DOMAIN_ERROR') };
+  if (isTransientDbError(err)) return { status: 503, body: { error: { code: 'SERVICE_UNAVAILABLE', message: 'Temporarily unavailable; retry shortly' } } };
   return { status: 500, body: { error: { code: 'INTERNAL', message: 'Internal server error' } } };
 }
 

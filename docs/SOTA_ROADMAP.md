@@ -61,7 +61,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **18b. Integration tests in the gate** (`f40da07`). 4 of 5 `tests/integration` files never ran in CI; 2 were red since round-1 loop 8 (registered a callback where `WsBroadcaster` needs a socket-like object, so every envelope was dropped). Fixed; the gate now runs the whole directory (policy-tested). Full lifecycle event sequence verified end to end. Backend 915 → 927.
 - [x] **19. Optimistic concurrency over HTTP** (`5d554da`). Strong version ETag on `GET /workflows/:id` (+304), `If-Match` on execute/cancel → 412 with `current_version`; version checked inside the use case after load (no TOCTOU). Unconditional requests unchanged (428 deliberately not enforced — opt-in). CORS now exposes `ETag`, `Idempotent-Replayed`, `Retry-After`, `RateLimit*` (were invisible to the SPA). Backend 927 → 943. *Next:* templates (publish/deprecate) and the SPA sending If-Match.
 - [x] **20. Outbox robustness** (`a6e558a`). **Production bug:** with Postgres the consumer called `fetchPending()`, which the Pg adapter lacked — every tick threw and the outbox was **never drained** (no webhook/email/cross-pod notification ever left a Postgres deployment). Also: `markFailed` set a terminal status nothing retried (one transient error lost the event). Now lease-based `SKIP LOCKED` claim, exponential backoff + full jitter, dead-letter after 10 attempts, crashed-consumer lease reclaim (migration 014). Real-PG contract suite. Contracts 173 → 179.
-- [ ] **21. DB session safety.** `statement_timeout`, `idle_in_transaction_session_timeout`, `application_name`, pool sizing/config + pool metrics.
+- [x] **21. DB session safety** — see P1.
 - [ ] **22. OpenAPI 3.1.** Single spec for `/api/v1`, served at `/api/v1/openapi.json`, and a contract test that validates real responses against it (no drift).
 - [ ] **23. Password policy (NIST SP 800-63B rev4).** Min 8/15, max ≥64, no composition rules, blocklist of common/breached passwords (offline list, no API calls), Unicode NFKC.
 - [ ] **24. Tamper-evident audit log.** Hash-chained audit entries + verifier, so deletion/edit of history is detectable.
@@ -84,7 +84,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 Goal: close the gaps between "tests green" and "safe to run for real users". Same loop contract and rules (never merge to `main`, no paid API calls, gates by exit code, restart Postgres `:55432` / Redis `:56379` each loop). Items 21–26 above are carried into this list; tick them in place **and** here.
 
-- [ ] **P1. DB session safety** (= item 21).
+- [x] **P1. DB session safety** (= item 21, `COMMIT`). One `createPgPool()`: `statement_timeout` 15 s, `lock_timeout` 5 s, `idle_in_transaction_session_timeout` 30 s, `application_name`, pool max/idle/acquire-timeout/max-lifetime, all `DB_*` env (documented in `.env.example`); `db_pool_connections{state}` gauge. **Crash bug found by the real-PG contract:** a checked-out client killed by the server (failover, restart, or the new idle-tx reaper) emitted an unhandled `'error'` and took the process down — every client now gets a listener; idle-client errors were also unguarded. Transient DB failures (timeouts, exhausted pool, failover, deadlock) now return **503 + Retry-After** instead of 500 on every error path. Backend 958 → 994, contracts 179 → 185.
 - [ ] **P2. Password policy** (= item 23).
 - [ ] **P3. SPA security headers** (= item 25).
 - [ ] **P4. Production-mode boot smoke.** `NODE_ENV=production` boot against fresh local PG + Redis: migrations from zero, required-env fail-closed, `/livez` `/readyz` `/metrics`, register → login → workflow → human step → outbox actually drains (row reaches `dispatched`). One script (`scripts/smoke.mjs`), runnable against any base URL, wired into CI.
@@ -100,5 +100,7 @@ Goal: close the gaps between "tests green" and "safe to run for real users". Sam
 - [ ] **P-staging. Railway staging deploy — approved by Marcus 2026-10-01.** Do right after P4 (smoke script exists): project `gui-lop-staging` with Postgres + Redis, deploy `claude/sota-loop`/`main`, run smoke + load against it, verify the outbox drains. Staging only; no custom domain, no paid AI keys.
 
 ### Round 3 schedule
+
+**Branch:** round 3 works on `claude/prod-readiness` (branched from `claude/sota-loop` at 8705bc1) so PR #11 stays frozen while it is at the merge gate; open a PR for it once #11 lands. **Local infra:** `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/guilop-pg -o '-p 55432 -k /tmp -c listen_addresses=127.0.0.1' -l /var/tmp/guilop-pg/log -w start"` (initdb with `-U contracts --auth=trust` if the dir is missing) and `redis-server --port 56379 --daemonize yes --save ''`; contracts run with `CONTRACTS_DATABASE_URL=postgresql://contracts@127.0.0.1:55432/postgres CONTRACTS_REDIS_URL=redis://127.0.0.1:56379 npx jest --config jest.contracts.config.js`.
 
 15 loops, ~24 min apart, 2026-10-01 18:15Z → 23:51Z. Loops 1–14: first unchecked P-item. Loop 15: wrap-up (status block, PR #11 description, final report). Nothing is merged.

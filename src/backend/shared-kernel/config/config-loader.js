@@ -20,6 +20,24 @@ const SCHEMA = /** @type {const} */ ({
   PORT: { type: 'number', default: 3001 },
   DATABASE_URL: { type: 'string', required: false },
   REDIS_URL: { type: 'string', required: false },
+  /* -------- Postgres session safety (roadmap 21; see pg-pool.js) -------- */
+  /**
+   * Connections per process. Keep replicas × DB_POOL_MAX (+ migrations,
+   * admin) under the server's max_connections (Railway/Postgres default 100).
+   */
+  DB_POOL_MAX: { type: 'number', default: 10 },
+  DB_POOL_IDLE_TIMEOUT_MS: { type: 'number', default: 10000 },
+  /** Max wait to acquire a connection; fail fast (503) rather than queue forever. */
+  DB_CONNECT_TIMEOUT_MS: { type: 'number', default: 5000 },
+  /** Recycle connections (picks up failover / DNS changes). 0 = never. */
+  DB_POOL_MAX_LIFETIME_S: { type: 'number', default: 1800 },
+  /** Server-side per-statement limit. 0 disables. */
+  DB_STATEMENT_TIMEOUT_MS: { type: 'number', default: 15000 },
+  /** Max wait for a row/table lock. 0 disables. */
+  DB_LOCK_TIMEOUT_MS: { type: 'number', default: 5000 },
+  /** Reap transactions left open by a crashed/hung handler. 0 disables. */
+  DB_IDLE_IN_TX_TIMEOUT_MS: { type: 'number', default: 30000 },
+  DB_APPLICATION_NAME: { type: 'string', default: 'gui-lop-api' },
   JWT_SECRET: { type: 'string', required: true, secret: true },
   JWT_ACCESS_TTL_SECONDS: { type: 'number', default: 900 },
   JWT_REFRESH_TTL_SECONDS: { type: 'number', default: 604800 },

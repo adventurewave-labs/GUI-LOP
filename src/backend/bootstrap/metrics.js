@@ -32,11 +32,12 @@ const CIRCUIT_STATES = ['closed', 'open', 'half_open'];
  * @param {object} deps
  * @param {{ getPendingCount(): Promise<number>, getOldestPendingAge(now: Date): Promise<number> }} [deps.outbox]
  * @param {() => number} [deps.wsConnectionCount]
+ * @param {() => ({ total: number, idle: number, waiting: number, max: number } | null)} [deps.dbPool]
  * @param {() => ({ name: string, circuitState: string } | null)} [deps.aiProvider]
  * @param {{ warn?: Function }} [deps.logger]
  * @param {boolean} [deps.defaultMetrics=true]
  */
-export function createMetrics({ outbox, wsConnectionCount, aiProvider, logger, defaultMetrics = true } = {}) {
+export function createMetrics({ outbox, wsConnectionCount, dbPool, aiProvider, logger, defaultMetrics = true } = {}) {
   const registry = new client.Registry();
   if (defaultMetrics) client.collectDefaultMetrics({ register: registry, eventLoopMonitoringPrecision: 20 });
 
@@ -77,6 +78,21 @@ export function createMetrics({ outbox, wsConnectionCount, aiProvider, logger, d
     registers: [registry],
     collect() {
       if (wsConnectionCount) this.set(Number(wsConnectionCount()) || 0);
+    },
+  });
+
+  // Pool saturation: waiting > 0 sustained means DB_POOL_MAX is too small
+  // (or queries too slow); total near max across replicas means
+  // max_connections pressure on the server.
+  new client.Gauge({
+    name: 'db_pool_connections',
+    help: 'Postgres pool connections by state (total, idle, waiting clients, configured max)',
+    labelNames: ['state'],
+    registers: [registry],
+    collect() {
+      const s = dbPool?.();
+      if (!s) return;
+      for (const state of /** @type {const} */ (['total', 'idle', 'waiting', 'max'])) this.set({ state }, s[state]);
     },
   });
 

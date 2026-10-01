@@ -1,4 +1,5 @@
 // @ts-check
+import { isTransientDbError } from '../../../../shared-kernel/infrastructure/transient-errors.js';
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   InvalidCredentialsError,
@@ -54,6 +55,9 @@ export function mapErrorToHttp(err) {
   }
   if (err instanceof ConflictError) {
     return { status: 409, body: { error: 'conflict', message: err.message } };
+  }
+  if (isTransientDbError(err)) {
+    return { status: 503, body: { error: 'service_unavailable', message: 'Temporarily unavailable; retry shortly' } };
   }
   return null;
 }

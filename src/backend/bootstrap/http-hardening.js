@@ -10,6 +10,7 @@
  *   - bounded dependency probes for readiness checks
  */
 
+import { isTransientDbError } from '../shared-kernel/infrastructure/transient-errors.js';
 import { randomUUID } from 'node:crypto';
 import { runWithContext, getContext } from '../shared-kernel/infrastructure/request-context.js';
 
@@ -103,7 +104,8 @@ export function parseTrustProxy(raw) {
 export function jsonErrorHandler({ logger } = {}) {
   return (err, req, res, _next) => {
     const raw = Number(err?.status ?? err?.statusCode);
-    const status = Number.isInteger(raw) && raw >= 400 && raw <= 599 ? raw : 500;
+    const transient = isTransientDbError(err);
+    const status = Number.isInteger(raw) && raw >= 400 && raw <= 599 ? raw : transient ? 503 : 500;
     const requestId = req?.id;
 
     if (status >= 500) {
@@ -127,7 +129,9 @@ export function jsonErrorHandler({ logger } = {}) {
       return;
     }
     const body =
-      status >= 500
+      status === 503 && transient
+        ? { error: 'service_unavailable', message: 'Temporarily unavailable; retry shortly' }
+        : status >= 500
         ? { error: 'internal_error', message: 'Unexpected error' }
         : {
             error: err?.type === 'entity.too.large' ? 'payload_too_large' : 'bad_request',

@@ -91,6 +91,8 @@ export function problemDetailsMiddleware() {
   return (req, res, next) => {
     const json = res.json.bind(res);
     res.json = (body) => {
+      // Every 503 (transient DB/infra failure, draining) tells clients when to retry.
+      if (res.statusCode === 503 && !res.get('Retry-After')) res.set('Retry-After', '1');
       if (
         res.statusCode >= 400 &&
         body && typeof body === 'object' && !Array.isArray(body) &&
