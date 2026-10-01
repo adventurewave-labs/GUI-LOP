@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * trace-context — W3C Trace Context (traceparent / tracestate) without an
  * SDK dependency.

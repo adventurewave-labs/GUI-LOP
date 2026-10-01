@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ids — identifier helpers for persistence adapters.
  *

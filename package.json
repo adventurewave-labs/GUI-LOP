@@ -42,7 +42,7 @@
     "build": "tsc",
     "lint": "eslint src/backend tests/backend tests/integration --max-warnings=0",
     "lint:arch": "npx --yes dependency-cruiser --config .dependency-cruiser.cjs src/backend",
-    "typecheck": "echo 'typecheck: no TS files yet; project is pure ESM JS (placeholder for future TS adoption)'",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "playwright": "playwright test",
     "db:migrate": "node database/migrations/migrate.js migrate",
     "db:migrate:status": "node database/migrations/migrate.js status",

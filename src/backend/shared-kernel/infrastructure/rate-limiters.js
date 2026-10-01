@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * rate-limiters — ADR 0015 limiter factory.
  *
@@ -81,9 +82,9 @@ export async function createRateLimiterFactory({ redis = null, logger, prefix = 
 
   /**
    * @param {string} name  unique limiter name (Redis key namespace)
-   * @param {{ windowMs: number, limit: number, keyGenerator?: Function,
-   *   skipSuccessfulRequests?: boolean, failClosed?: boolean, message?: string,
-   *   skip?: Function }} opts
+   * @param {{ windowMs: number, limit: number, keyGenerator?: (req: any, res: any) => string | Promise<string>,
+   *   skip?: (req: any, res: any) => boolean | Promise<boolean>,
+   *   skipSuccessfulRequests?: boolean, failClosed?: boolean, message?: string }} opts
    */
   function create(name, {
     windowMs,

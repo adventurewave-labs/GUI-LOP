@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * problem-details — RFC 9457 (`application/problem+json`) for every error.
  *

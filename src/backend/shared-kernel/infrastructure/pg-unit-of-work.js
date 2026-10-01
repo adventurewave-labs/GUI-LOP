@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * pg-unit-of-work — wraps a `pg` Pool in BEGIN/COMMIT/ROLLBACK and
  * exposes the transactional client to repositories via the ctx argument.

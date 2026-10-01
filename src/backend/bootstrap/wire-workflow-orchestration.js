@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-workflow-orchestration.js — composition for the Workflow context.
  */
@@ -81,6 +82,13 @@ class UIGenerationAdapter {
   }
 }
 
+/**
+ * @param {{
+ *   pool?: any, outbox?: any, clock: any, idGen: any,
+ *   identityAuthorisationService?: any, generateUIForStepCommand?: any,
+ *   logger?: any, eventSink?: any,
+ * }} deps  `eventSink` is only used by the in-memory adapters.
+ */
 export async function wireWorkflowOrchestration({
   pool,
   outbox,

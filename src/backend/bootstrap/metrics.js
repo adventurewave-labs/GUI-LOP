@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * metrics — Prometheus instrumentation for the composition root.
  *
@@ -149,6 +150,7 @@ export function createMetrics({ outbox, wsConnectionCount, aiProvider, logger, d
    * GET /metrics handler. With `token` set, requires `Authorization: Bearer`.
    * Without a token, open unless `failClosed` (production) → 404.
    */
+  /** @param {{ token?: string | null, failClosed?: boolean }} [opts] */
   function handler({ token, failClosed = false } = {}) {
     const expected = token ? Buffer.from(String(token)) : null;
     if (!expected && failClosed) {

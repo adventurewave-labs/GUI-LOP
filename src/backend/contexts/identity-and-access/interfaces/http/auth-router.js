@@ -24,6 +24,9 @@ import {
  *     — built by the shared-kernel rate-limiter factory in the composition
  *     root (Redis-backed in production). Missing entries fall back to the
  *     legacy in-memory per-IP limiters (login/refresh) or pass-through.
+ *
+ * @param {{ useCases?: any, tokenIssuer?: any, tokenBlacklist?: any, idempotencyStore?: any,
+ *   loginRateLimit?: Function, refreshRateLimit?: Function, limiters?: Record<string, Function> }} [deps]
  */
 export function buildAuthRouter({
   useCases,

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * bearer — parse `Authorization: Bearer <credential>` in linear time.
  *

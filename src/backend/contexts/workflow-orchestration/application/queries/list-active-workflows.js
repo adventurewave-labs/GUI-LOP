@@ -6,6 +6,7 @@
  * repository (suitable for in-memory tests).
  */
 export class ListActiveWorkflowsQuery {
+  /** @param {{ workflows: any, readDb?: any }} deps */
   constructor({ workflows, readDb }) {
     this._workflows = workflows;
     this._readDb = readDb;

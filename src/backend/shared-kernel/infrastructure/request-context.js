@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * request-context — per-request ambient context via AsyncLocalStorage.
  *

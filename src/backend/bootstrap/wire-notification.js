@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-notification.js — composition for the Notification context.
  */
@@ -92,6 +93,7 @@ export function wireNotification({
   });
 
   let consumerStop = null;
+  /** @param {{ intervalMs?: number, batchSize?: number }} [opts] */
   function startOutboxConsumer({ intervalMs = 250, batchSize } = {}) {
     if (!outbox) return null;
     const consumer = new OutboxConsumer({
@@ -111,6 +113,10 @@ export function wireNotification({
     }
   }
 
+  /**
+   * @param {import('node:http').Server} httpServer
+   * @param {{ principalFromUpgrade?: Function, [k: string]: any }} [opts]
+   */
   async function attachWebSocket(httpServer, { principalFromUpgrade } = {}) {
     if (!httpServer) return null;
     if (typeof principalFromUpgrade !== 'function') {

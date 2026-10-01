@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * index.js — entry point for the v1 (DDD) HTTP server.
  *
@@ -13,7 +14,7 @@ import { bootstrap } from './main.js';
 async function main() {
   const { httpServer, config, shutdown, ctx } = await bootstrap();
 
-  await new Promise((resolve, reject) => {
+  await new Promise(/** @param {(v?: unknown) => void} resolve */ (resolve, reject) => {
     httpServer.once('error', reject);
     httpServer.listen(config.PORT, () => {
       ctx.logger.info(`GUI-LOP v1 listening on http://localhost:${config.PORT}`);

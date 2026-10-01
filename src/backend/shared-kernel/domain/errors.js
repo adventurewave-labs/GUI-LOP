@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Domain error hierarchy. All domain-layer errors derive from DomainError so
  * application/interface layers can map them to transport-specific responses.

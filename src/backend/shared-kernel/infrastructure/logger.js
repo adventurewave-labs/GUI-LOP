@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Tiny structured logger — emits one JSON line per record on stdout/stderr.
  * Intentionally dependency-free; replace with pino if/when needed.
@@ -27,7 +28,7 @@ function levelEnabled(current, requested) {
 export function redact(value, depth = 0, seen = new WeakSet()) {
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Error) {
-    return { name: value.name, message: value.message, code: value.code, stack: value.stack };
+    return { name: value.name, message: value.message, code: /** @type {any} */ (value).code, stack: value.stack };
   }
   if (value instanceof Date) return value.toISOString();
   if (seen.has(value)) return '[Circular]';

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * config-loader — single, schema-validated entry point for environment config
  * (ADR 0022). The only place in the codebase permitted to read process.env.
@@ -14,7 +15,7 @@ export class ConfigError extends Error {
 }
 
 /** Schema entries: type, optional default, required flag, parser. */
-const SCHEMA = {
+const SCHEMA = /** @type {const} */ ({
   NODE_ENV: { type: 'string', default: 'development' },
   PORT: { type: 'number', default: 3001 },
   DATABASE_URL: { type: 'string', required: false },
@@ -123,7 +124,27 @@ const SCHEMA = {
    * terminationGracePeriodSeconds (default 30s) or SIGKILL wins.
    */
   SHUTDOWN_TIMEOUT_MS: { type: 'number', default: 25000 },
-};
+});
+
+/**
+ * Value type for one schema entry.
+ * @template S
+ * @typedef {S extends { type: 'number' } ? number
+ *   : S extends { type: 'boolean' } ? boolean
+ *   : S extends { type: 'csv' } ? string[]
+ *   : S extends { enum: readonly (infer E)[] } ? E
+ *   : string} ConfigValue
+ */
+
+/**
+ * The loaded configuration, derived from SCHEMA so the type cannot drift
+ * from the loader: entries with a default or `required: true` are always
+ * present; optional entries without a default may be `null`.
+ * @typedef {{ readonly [K in keyof typeof SCHEMA]:
+ *   (typeof SCHEMA)[K] extends { default: any } | { required: true }
+ *     ? ConfigValue<(typeof SCHEMA)[K]>
+ *     : ConfigValue<(typeof SCHEMA)[K]> | null }} AppConfig
+ */
 
 function coerce(name, raw, spec) {
   if (raw === undefined || raw === null || raw === '') {
@@ -187,9 +208,12 @@ function coerceValue(name, raw, spec) {
  * Load + validate config from a source object (defaults to process.env).
  * Returns a frozen plain object. Throws ConfigError on any problem.
  * @param {NodeJS.ProcessEnv | Record<string,string|undefined>} [env]
+ * @returns {AppConfig}
  */
 export function loadConfig(env = process.env) {
+  /** @type {Record<string, any>} */
   const out = {};
+  /** @type {any[]} */
   const errors = [];
   for (const [name, spec] of Object.entries(SCHEMA)) {
     try {
@@ -242,7 +266,7 @@ export function loadConfig(env = process.env) {
   if (out.NODE_ENV === 'test' && env.BCRYPT_WORK_FACTOR === undefined) {
     out.BCRYPT_WORK_FACTOR = out.BCRYPT_WORK_FACTOR_TEST;
   }
-  return Object.freeze(out);
+  return /** @type {AppConfig} */ (Object.freeze(out));
 }
 
 /** Returns the schema for documentation / .env.example checks. */

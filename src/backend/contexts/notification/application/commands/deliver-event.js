@@ -18,6 +18,11 @@ import { CHANNELS } from '../../domain/subscription/channel.js';
 import { NotificationDelivered, NotificationFailed } from '../../domain/events.js';
 
 export class DeliverEventCommand {
+  /**
+   * @param {{ subscriptionRepository: any, deliveryAttemptRepository: any, deadLetterRepository: any,
+   *   websocketBroadcaster?: any, emailSender?: any, webhookSender?: any, eventPublisher?: any,
+   *   clock: any, retryOptions?: object, domainEventSink?: any }} deps
+   */
   constructor({
     subscriptionRepository,
     deliveryAttemptRepository,

@@ -20,6 +20,10 @@ import { HumanStepDeadlinePassed } from '../../domain/events.js';
 import { StepNotPendingError } from '../../domain/errors.js';
 
 export class EscalateOverdueStep {
+  /**
+   * @param {{ pendingStepRepository: any, eventPublisher: any, unitOfWork: any,
+   *   clock: any, escalationPolicy?: any }} deps  policy defaults to EscalationPolicyService
+   */
   constructor({
     pendingStepRepository,
     eventPublisher,

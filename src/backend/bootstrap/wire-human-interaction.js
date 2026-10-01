@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-human-interaction.js — composition for the Human Interaction context.
  */
@@ -47,19 +48,44 @@ class InProcessWorkflowAdvancer {
  * Tiny user/role directory backed by the Identity user repository so the
  * eligibility service has the data it needs even in dev mode.
  */
-class IdentityBackedUserDirectory {
-  constructor(userRepository) {
+export class IdentityBackedUserDirectory {
+  /**
+   * @param {{ userRepository?: any, roleRepository?: any, grantsRepository?: any }} deps
+   */
+  constructor({ userRepository, roleRepository, grantsRepository } = {}) {
     this._users = userRepository;
+    this._roles = roleRepository;
+    this._grants = grantsRepository;
   }
+
+  /**
+   * Eligibility view of a user: role-derived permissions plus direct grants,
+   * composed exactly like identity's AuthorisationService. (This used to
+   * return `permissions: []` unconditionally, so a human step with
+   * `requiredPermissions` could never be answered by anyone.) Scoped grants
+   * keep their `resource:action@scope` form and contribute their scope to
+   * `scopes`, so an unscoped requirement is never satisfied by a scoped grant.
+   * @param {string} id
+   * @returns {Promise<{ id: string, role: string, isActive: boolean, permissions: string[], scopes: string[] } | null>}
+   */
   async getUser(id) {
     if (!this._users) return null;
     const u = await this._users.findById(id);
     if (!u) return null;
+    const roleName = u.role?.value ?? 'user';
+    const [role, grants] = await Promise.all([
+      this._roles?.findByName?.(roleName) ?? null,
+      this._grants?.list?.(String(u.id?.value ?? u.id)) ?? [],
+    ]);
+    const all = [...(role?.permissions ?? []), ...(grants ?? [])];
+    const permissions = [...new Set(all.map((p) => String(p?.value ?? p)))];
+    const scopes = [...new Set(all.map((p) => p?.scope).filter((sc) => typeof sc === 'string' && sc))];
     return {
-      id: u.id,
-      role: u.role?.value ?? 'user',
+      id: u.id?.value ?? u.id,
+      role: roleName,
       isActive: u.isActive ?? true,
-      permissions: [],
+      permissions,
+      scopes,
     };
   }
 }
@@ -92,6 +118,8 @@ export function wireHumanInteraction({
   clock,
   idGen,
   identityUserRepository,
+  identityRoleRepository,
+  identityGrantsRepository,
   identityAuthorisationService,
   workflowAdvanceUseCase,
   workflowGetDetailQuery,
@@ -106,7 +134,11 @@ export function wireHumanInteraction({
   const eventPublisher = new InMemoryEventPublisher();
   const unitOfWork = new UnitOfWorkFactory();
 
-  const userDirectory = new IdentityBackedUserDirectory(identityUserRepository);
+  const userDirectory = new IdentityBackedUserDirectory({
+    userRepository: identityUserRepository,
+    roleRepository: identityRoleRepository,
+    grantsRepository: identityGrantsRepository,
+  });
   const workflowReader = new WorkflowReaderAdapter(workflowGetDetailQuery);
   const workflowAdvancer = new InProcessWorkflowAdvancer(workflowAdvanceUseCase);
 

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Deterministic Clock and IdGenerator implementations for tests.
  *

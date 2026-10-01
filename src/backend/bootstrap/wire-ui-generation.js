@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-ui-generation.js — composition for the UI Generation context.
  *
@@ -80,6 +81,7 @@ export function wireUIGeneration({
   // Tiny sink that just collects emitted events; the bootstrap will replace
   // this with the shared outbox once the publisher is wired.
   const domainEventSink = {
+    /** @type {any[]} */
     events: [],
     async append(e) {
       this.events.push(e);

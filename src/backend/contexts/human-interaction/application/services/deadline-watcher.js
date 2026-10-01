@@ -11,6 +11,10 @@
  *
  * The watcher is deterministic in tests because it polls on a timer that
  * tests can replace with a manual driver via `tick()`.
+ *
+ * @param {{ intervalMs?: number, escalateUseCase?: { execute: Function },
+ *   pendingStepRepository?: { findOverdue: Function }, clock?: { now: () => Date },
+ *   batchSize?: number, onError?: (err: any, ctx?: object) => void }} [opts]
  */
 export function start({
   intervalMs = 5000,

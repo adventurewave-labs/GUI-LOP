@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * main.js — composition root for the v1 (DDD) HTTP server.
  *
@@ -59,7 +60,7 @@ const PROBE_TIMEOUT_MS = 800;
 /**
  * Build the v1 server.
  * @param {Record<string,string|undefined>} [envOverride]
- * @returns {Promise<{app: import('express').Express, httpServer: import('http').Server, shutdown: () => Promise<void>, ctx: object}>}
+ * @returns {Promise<{app: import('express').Express, httpServer: import('http').Server, shutdown: (opts?: { drainDelayMs?: number, inFlightTimeoutMs?: number }) => Promise<void>, config: import('../shared-kernel/config/config-loader.js').AppConfig, ctx: any}>}
  */
 export async function bootstrap(envOverride) {
   const config = loadConfig(envOverride ?? process.env);
@@ -86,7 +87,7 @@ export async function bootstrap(envOverride) {
 
   if (config.REDIS_URL) {
     const redisModule = await import('ioredis');
-    const Redis = redisModule.default ?? redisModule;
+    const Redis = /** @type {any} */ (redisModule.default ?? redisModule);
     redis = new Redis(config.REDIS_URL, { lazyConnect: true });
     try {
       await redis.connect();
@@ -146,6 +147,8 @@ export async function bootstrap(envOverride) {
     clock,
     idGen,
     identityUserRepository: identity.repositories.userRepository,
+    identityRoleRepository: identity.repositories.roleRepository,
+    identityGrantsRepository: identity.repositories.grantsRepository,
     identityAuthorisationService: identity.authorisationService,
     workflowAdvanceUseCase: workflow.useCases.advanceWorkflow,
     workflowGetDetailQuery: workflow.useCases.getDetail,
@@ -226,12 +229,13 @@ export async function bootstrap(envOverride) {
         }
       },
     };
-    if (typeof workflow.repositories.workflows.setEventSink === 'function') {
-      workflow.repositories.workflows.setEventSink(sink);
-    }
-    if (typeof humanInteraction.repositories.responseRepository.setEventSink === 'function') {
-      humanInteraction.repositories.responseRepository.setEventSink(sink);
-    }
+    // Only the in-memory adapters accept a sink; Pg adapters write the outbox.
+    /** @type {any} */
+    const wfRepo = workflow.repositories.workflows;
+    /** @type {any} */
+    const respRepo = humanInteraction.repositories.responseRepository;
+    if (typeof wfRepo.setEventSink === 'function') wfRepo.setEventSink(sink);
+    if (typeof respRepo.setEventSink === 'function') respRepo.setEventSink(sink);
     // Templates emit events via the cached decorator's delegate; the
     // delegate is the in-memory repo when there's no pool.
     const tmplDelegate = workflow.repositories.templates?._delegate ?? workflow.repositories.templates;
@@ -461,7 +465,7 @@ export async function bootstrap(envOverride) {
       try { await wsHandle.close({ code: 1001, reason: 'server shutting down' }); } catch { /* ignore */ }
     }
 
-    await new Promise((resolve) => {
+    await new Promise(/** @param {(v?: unknown) => void} resolve */ (resolve) => {
       if (!httpServer.listening) {
         resolve();
         return;

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * http-hardening — framework-level HTTP concerns for the composition root.
  *
@@ -47,6 +48,7 @@ const QUIET_PATHS = new Set(['/livez', '/readyz', '/health', '/metrics']);
  * One structured line per completed (or aborted) request. Logs the path
  * only — never the query string, which can carry `?token=` credentials.
  */
+/** @param {{ logger?: any, now?: () => bigint }} [opts] */
 export function accessLogMiddleware({ logger, now = () => process.hrtime.bigint() } = {}) {
   return (req, res, next) => {
     const start = now();
@@ -97,6 +99,7 @@ export function parseTrustProxy(raw) {
  * body-parser's 400 malformed JSON / 413 payload too large) keep their
  * status instead of collapsing into 500; 5xx details are never leaked.
  */
+/** @param {{ logger?: any }} [opts] */
 export function jsonErrorHandler({ logger } = {}) {
   return (err, req, res, _next) => {
     const raw = Number(err?.status ?? err?.statusCode);

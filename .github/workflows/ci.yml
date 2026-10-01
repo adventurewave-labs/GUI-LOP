@@ -42,11 +42,8 @@ jobs:
         run: npm ci
 
       - name: Type-check
-        # NOTE: the codebase is currently pure ESM JavaScript so tsc has no
-        # inputs and exits 1 on a fresh checkout (TS18003). Surface the failure
-        # for visibility but don't block merge until TS sources land or
-        # tsconfig.json is fixed. Drop continue-on-error once that's done.
-        continue-on-error: true
+        # Strict checkJs over every file carrying `// @ts-check` (shared-kernel
+        # + bootstrap today; repo-policy test enforces it there). Blocking.
         run: npm run typecheck
 
       - name: Backend + integration tests

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Outbox port — durable buffer for domain events written transactionally
  * with aggregate state, then dispatched by a separate publisher (ADR 0014).

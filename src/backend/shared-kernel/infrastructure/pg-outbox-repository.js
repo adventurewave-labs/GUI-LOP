@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * pg-outbox-repository — Postgres adapter for the Outbox port.
  * Implements enqueue/pickBatch/markDispatched/markFailed against the

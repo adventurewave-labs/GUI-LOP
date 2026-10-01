@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-identity-and-access.js — composition for the Identity & Access context.
  *

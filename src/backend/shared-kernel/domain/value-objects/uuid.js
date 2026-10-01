@@ -1,3 +1,4 @@
+// @ts-check
 import { ValidationError } from '../errors.js';
 
 const UUID_V4_RE =

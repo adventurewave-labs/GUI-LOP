@@ -44,3 +44,29 @@ describe('dependency hygiene', () => {
     expect(pkg.dependencies.uuid).toBeUndefined();
   });
 });
+
+describe('type-check coverage (roadmap #14)', () => {
+  const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((d) => {
+    const p = path.join(dir, d.name);
+    if (d.isDirectory()) return d.name === '__tests__' ? [] : walk(p);
+    return d.name.endsWith('.js') && !d.name.endsWith('.test.js') ? [p] : [];
+  });
+  const checked = ['src/backend/shared-kernel', 'src/backend/bootstrap']
+    .flatMap((d) => walk(path.join(ROOT, d)));
+
+  test('every shared-kernel / bootstrap module opts into `// @ts-check`', () => {
+    const missing = checked
+      .filter((f) => !readFileSync(f, 'utf8').startsWith('// @ts-check'))
+      .map((f) => path.relative(ROOT, f));
+    expect(checked.length).toBeGreaterThan(20);
+    expect(missing).toEqual([]);
+  });
+
+  test('typecheck script is a real tsc run and CI does not tolerate failures', () => {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    expect(pkg.scripts.typecheck).toMatch(/^tsc -p tsconfig\.typecheck\.json/);
+    const ci = workflows.find((w) => w.file === 'ci.yml').text;
+    const step = ci.slice(ci.indexOf('name: Type-check'), ci.indexOf('run: npm run typecheck'));
+    expect(step).not.toMatch(/continue-on-error/);
+  });
+});

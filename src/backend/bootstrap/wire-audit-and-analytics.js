@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-audit-and-analytics.js — composition for the Audit & Analytics context.
  */

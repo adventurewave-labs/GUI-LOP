@@ -21,14 +21,18 @@ export class PendingStepRepository {
    * Insert or update a pending step.
    * @param {import('../../domain/pending-step/pending-step.js').PendingStep} step
    * @param {object} [uow]
+   * @returns {Promise<any>}
    */
   async upsert(step, uow) { throw new Error('not implemented'); }
 
+  /** @returns {Promise<void|boolean>} */
   async remove(workflowId, stepId, uow) { throw new Error('not implemented'); }
 
   /**
    * Optional: list all open pending steps. Used by inbox query.
    * Implementations should support filtering when supplied.
+   * @param {object} [filter]
+   * @returns {Promise<import('../../domain/pending-step/pending-step.js').PendingStep[]>}
    */
   async list(filter) { throw new Error('not implemented'); }
 }

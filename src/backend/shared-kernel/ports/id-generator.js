@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * IdGenerator port — produces fresh identifiers (UUID v4 by default).
  * Implementations live in shared-kernel/infrastructure/.

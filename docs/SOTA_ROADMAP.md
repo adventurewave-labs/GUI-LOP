@@ -6,7 +6,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
 2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
-3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)).
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)) + `npm run typecheck` 0 errors. Check every gate by **exit code**.
 4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
 5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
 6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.
@@ -41,7 +41,9 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 ## Backlog (priority order)
 
 - [x] **13c. Last 11 contract failures** (`9c30a2b`). Three were **production bugs**: (1) **Redis cross-pod fan-out never delivered** — with injected clients (the prod wiring) the `message` listener was never attached; (2) my loop-13b `isUuid()` guard rejected id value objects, so `findById(ApiKeyId)` returned null — guard now unwraps VOs and all 9 Pg sites pass the primitive; (3) in-memory delivery attempts ignored the ordering contract. Rest were fixtures (identical secret bytes → hash UNIQUE clash; 1-char TemplateKeys). **Contracts 137 → 148/148**, contracts.yml now blocking. Backend 748 → 754.
-- [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
+- [x] **14. Type safety** (`SHA14`). Real `npm run typecheck` (strict `tsc` over `// @ts-check` files; all 35 shared-kernel + bootstrap modules opted in, policy-tested); CI step now blocking. `AppConfig` type derived from the config SCHEMA. 49 → 0 errors, mostly stale JSDoc — but one **real bug**: the human-interaction user directory hardcoded `permissions: []`, so any step with `requiredPermissions` was unanswerable by everyone; now composes role perms + grants (+ scopes) like identity's AuthorisationService. Backend 754 → 759.
+- [ ] **14b. Grants persistence.** `grantsRepository` is always `InMemoryGrantsRepository`, even with Postgres → direct permission grants vanish on restart and differ per pod. Add a Pg adapter (+ migration if no table) and a contract test. Also decide (ADR) whether admins bypass human-step eligibility as they do identity's policy.
+- [ ] **14c. Widen @ts-check** to `*/application` and `*/interfaces` (fix port base classes declaring `Promise<void>`).
 - [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.
 
 ### Round 2 candidates (added 2026-10-01; **audit first** — if the repo already does it properly, tick it as "already present" with evidence and move on)
