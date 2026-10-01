@@ -68,6 +68,8 @@ const SCHEMA = {
   AI_BASE_URL: { type: 'string', required: false },
   /** Optional override of the vendor model id. */
   AI_MODEL: { type: 'string', required: false },
+  /** Optional cheaper/faster model for the classify op (defaults to AI_MODEL). */
+  AI_MODEL_CLASSIFY: { type: 'string', required: false },
   /** Per-call timeout enforced via AbortController. Default 30s. */
   AI_TIMEOUT_MS: { type: 'number', default: 30000 },
   /** Number of retries (initial try not counted). Default 2. */

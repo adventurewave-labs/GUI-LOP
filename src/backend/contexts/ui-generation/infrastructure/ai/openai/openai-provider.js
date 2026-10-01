@@ -23,7 +23,21 @@ import {
   AIProviderUnavailable,
   AIQuotaExceeded,
 } from '../domain-errors.js';
-import { validateUIDocumentDraft } from '../ui-document-draft-schema.js';
+import {
+  validateUIDocumentDraft,
+  UI_DOCUMENT_DRAFT_JSON_SCHEMA,
+  classificationJsonSchema,
+  normaliseUsage,
+} from '../ui-document-draft-schema.js';
+
+/**
+ * Structured Outputs (`response_format: json_schema`). `strict: false`
+ * because the draft schema has optional members, which strict mode would
+ * force to required+nullable; the shared validator enforces the rest.
+ */
+function jsonSchemaFormat(name, schema) {
+  return { type: 'json_schema', json_schema: { name, schema, strict: false } };
+}
 
 const SYSTEM_PROMPT = [
   'You are a UI generator. Given a JSON UI specification and context,',
@@ -48,10 +62,12 @@ export class OpenAIProvider extends BaseAIAdapter {
    * @param {object} [opts.retry]
    * @param {object} [opts.circuitBreakerOptions]
    * @param {object} [opts.logger]
+   * @param {string} [opts.classifyModel]  Model for classify (defaults to `model`).
    */
   constructor(opts) {
     super({
       logger: opts?.logger,
+      onTelemetry: opts?.onTelemetry,
       retry: opts?.retry,
       circuitBreakerOptions: opts?.circuitBreakerOptions,
       scrubPii: opts?.scrubPii,
@@ -60,6 +76,7 @@ export class OpenAIProvider extends BaseAIAdapter {
     this._apiKey = opts.apiKey;
     this._baseUrl = (opts.baseUrl ?? 'https://api.openai.com').replace(/\/+$/, '');
     this._model = opts.model ?? 'gpt-4o-mini';
+    this._classifyModel = opts.classifyModel ?? this._model;
     this._fetch = opts.fetch ?? globalThis.fetch;
     if (typeof this._fetch !== 'function') {
       throw new Error('OpenAIProvider: no fetch available (pass opts.fetch or use Node 18+)');
@@ -72,7 +89,7 @@ export class OpenAIProvider extends BaseAIAdapter {
   async _callGenerateUI({ spec, context, strategyHints, signal }) {
     const body = {
       model: this._model,
-      response_format: { type: 'json_object' },
+      response_format: jsonSchemaFormat('ui_document_draft', UI_DOCUMENT_DRAFT_JSON_SCHEMA),
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         {
@@ -93,20 +110,14 @@ export class OpenAIProvider extends BaseAIAdapter {
       throw new AIBadResponse('OpenAI returned non-JSON content', { content });
     }
     const draft = validateUIDocumentDraft(parsed);
-    const usage = data.usage
-      ? {
-          prompt: data.usage.prompt_tokens ?? 0,
-          completion: data.usage.completion_tokens ?? 0,
-          total: data.usage.total_tokens ?? 0,
-        }
-      : undefined;
+    const usage = normaliseUsage(data.usage);
     return { ...draft, ...(usage ? { tokenUsage: usage } : {}) };
   }
 
   async _callClassify({ input, labels, options, signal }) {
     const body = {
-      model: this._model,
-      response_format: { type: 'json_object' },
+      model: this._classifyModel,
+      response_format: jsonSchemaFormat('classification', classificationJsonSchema(labels)),
       messages: [
         {
           role: 'system',
@@ -131,6 +142,9 @@ export class OpenAIProvider extends BaseAIAdapter {
     }
     if (typeof parsed.label !== 'string' || typeof parsed.confidence !== 'number') {
       throw new AIBadResponse('OpenAI classify missing label/confidence');
+    }
+    if (Array.isArray(labels) && labels.length > 0 && !labels.includes(parsed.label)) {
+      throw new AIBadResponse('OpenAI classify returned a label outside the allowed set', { label: parsed.label });
     }
     return parsed;
   }

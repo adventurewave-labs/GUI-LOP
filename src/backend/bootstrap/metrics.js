@@ -133,10 +133,16 @@ export function createMetrics({ outbox, wsConnectionCount, aiProvider, logger, d
       rec.durationMs / 1000,
     );
     const u = rec.tokenUsage;
-    const input = Number(u?.inputTokens ?? u?.input_tokens ?? u?.prompt_tokens);
-    const output = Number(u?.outputTokens ?? u?.output_tokens ?? u?.completion_tokens);
+    // Adapters report normalised usage `{ prompt, completion, cacheRead?,
+    // cacheWrite? }`; raw vendor spellings are accepted as a fallback.
+    const input = Number(u?.prompt ?? u?.inputTokens ?? u?.input_tokens ?? u?.prompt_tokens);
+    const output = Number(u?.completion ?? u?.outputTokens ?? u?.output_tokens ?? u?.completion_tokens);
+    const cacheRead = Number(u?.cacheRead);
+    const cacheWrite = Number(u?.cacheWrite);
     if (Number.isFinite(input) && input > 0) aiTokens.inc({ ...labels, direction: 'input' }, input);
     if (Number.isFinite(output) && output > 0) aiTokens.inc({ ...labels, direction: 'output' }, output);
+    if (Number.isFinite(cacheRead) && cacheRead > 0) aiTokens.inc({ ...labels, direction: 'cache_read' }, cacheRead);
+    if (Number.isFinite(cacheWrite) && cacheWrite > 0) aiTokens.inc({ ...labels, direction: 'cache_write' }, cacheWrite);
   }
 
   /**

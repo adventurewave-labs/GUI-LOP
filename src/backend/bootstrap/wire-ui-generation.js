@@ -45,6 +45,7 @@ export function buildAIProvider(config, logger, { onTelemetry } = {}) {
     retry,
     baseUrl: config?.AI_BASE_URL || undefined,
     model: config?.AI_MODEL || undefined,
+    classifyModel: config?.AI_MODEL_CLASSIFY || undefined,
     apiKey: config?.AI_API_KEY || undefined,
   };
 
