@@ -9,6 +9,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: docker-${{ github.ref }}
   cancel-in-progress: true
@@ -20,13 +23,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Build production image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5.4.0
         with:
           context: .
           file: ./Dockerfile
@@ -37,6 +40,24 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # CycloneDX SBOM of the exact image under test, kept as a build artifact
+      # (attach to the registry push + provenance attestation once a registry
+      # is provisioned — see TODO below).
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: gui-lop:ci
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 90
 
       - name: Run container in background
         run: |
@@ -71,9 +92,12 @@ jobs:
         if: always()
         run: docker rm -f gui-lop-smoke || true
 
-      # TODO: push to registry once credentials are provisioned.
+      # TODO: push to registry once credentials are provisioned. When enabled,
+      # grant `id-token: write` + `attestations: write` and add
+      # actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
+      # with `subject-name` / `subject-digest` from the push step.
       # - name: Login to registry
-      #   uses: docker/login-action@v3
+      #   uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
       #   with:
       #     registry: ghcr.io
       #     username: ${{ github.actor }}
