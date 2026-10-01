@@ -208,6 +208,28 @@ Production checklist (ADR 0022):
 - [ ] Rotation runbook in place. The bootstrap re-reads env on restart,
       so a rolling restart is sufficient after rotating a Secret.
 
+### What production refuses to start with
+
+With `NODE_ENV=production` the config loader fails at boot (listing every problem at once, never
+echoing a value) instead of running insecurely or losing data quietly:
+
+| Setting | Refused when |
+| --- | --- |
+| `NODE_ENV` | not exactly `development`, `test` or `production` (a typo such as `prod` used to run in non-production mode) |
+| `JWT_SECRET` | shorter than 32 characters, a documentation placeholder (`change-me…`, `your-…`, `ci-…`), or low entropy |
+| `DATABASE_URL`, `REDIS_URL` | missing — unless `ALLOW_EPHEMERAL_STATE=true` (throw-away containers only: data is lost on restart, logout and rate limits are per-process) |
+| `CORS_ORIGINS` | contains `*` or `null` (the API allows credentials) |
+| `BCRYPT_WORK_FACTOR` | outside 10–15 |
+| `METRICS_TOKEN` | set but shorter than 16 characters (unset = `/metrics` answers 404) |
+| `JWT_ACCESS_TTL_SECONDS` | outside 60–3600; `JWT_REFRESH_TTL_SECONDS` not longer than it |
+| `AI_PROVIDER` ≠ `stub` | `AI_API_KEY` missing |
+| rate limits | any of `RATE_LIMIT_MAX`, `AUTH_LOGIN_IP_LIMIT`, `AUTH_REGISTER_IP_LIMIT` is 0 |
+| `WS_ALLOW_HEADER_AUTH` | `true` |
+
+Allowed but logged as `config:` warnings at boot: `TRUST_PROXY=true` or `false`, `LOG_LEVEL=debug`,
+no `METRICS_TOKEN`, plain-http or localhost CORS origins, `AI_PROVIDER=stub`, `ALLOW_EPHEMERAL_STATE=true`.
+`.env.example` documents every setting and is checked against the schema in CI.
+
 ---
 
 ## Rollback runbook

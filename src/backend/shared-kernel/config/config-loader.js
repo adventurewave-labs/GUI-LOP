@@ -16,7 +16,19 @@ export class ConfigError extends Error {
 
 /** Schema entries: type, optional default, required flag, parser. */
 const SCHEMA = /** @type {const} */ ({
-  NODE_ENV: { type: 'string', default: 'development' },
+  /**
+   * Only these three. A typo such as `prod` or `Production` used to be
+   * accepted and silently ran the server in non-production mode: /metrics
+   * open, dev escape hatches allowed, in-memory fallbacks without complaint.
+   */
+  NODE_ENV: { type: 'string', default: 'development', enum: ['development', 'test', 'production'] },
+  /**
+   * Production refuses to start without DATABASE_URL and REDIS_URL, because
+   * the fallbacks are per-process memory: all data is lost on restart and
+   * logout / rate limits / idempotency stop working across replicas. Set
+   * this to `true` only for a throw-away container (e.g. the image smoke test).
+   */
+  ALLOW_EPHEMERAL_STATE: { type: 'boolean', default: false },
   PORT: { type: 'number', default: 3001 },
   DATABASE_URL: { type: 'string', required: false },
   REDIS_URL: { type: 'string', required: false },
@@ -62,6 +74,15 @@ const SCHEMA = /** @type {const} */ ({
    */
   RATE_LIMIT_WINDOW_MS: { type: 'number', default: 60000 },
   RATE_LIMIT_MAX: { type: 'number', default: 600 },
+  /**
+   * Login attempts per client IP per 15 min (successful ones included — a
+   * bcrypt verification costs ~250 ms of CPU whether or not it succeeds).
+   * Raise it when many users share one egress IP (office NAT, VPN).
+   * Failed logins are additionally limited to 5 per account.
+   */
+  AUTH_LOGIN_IP_LIMIT: { type: 'number', default: 20 },
+  /** Registrations per client IP per hour. */
+  AUTH_REGISTER_IP_LIMIT: { type: 'number', default: 5 },
   CORS_ORIGINS: { type: 'csv', default: 'http://localhost:3000' },
   LOG_LEVEL: { type: 'string', default: 'info', enum: ['debug', 'info', 'warn', 'error'] },
   /**
@@ -284,6 +305,9 @@ export function loadConfig(env = process.env) {
       }),
     );
   }
+  if (out.NODE_ENV === 'production') {
+    for (const message of productionViolations(out)) errors.push(new ConfigError(message.message, { name: message.name }));
+  }
   if (errors.length > 0) {
     const msg = errors.map((e) => `- ${e.message}`).join('\n');
     throw new ConfigError(`Invalid configuration:\n${msg}`, {
@@ -298,6 +322,86 @@ export function loadConfig(env = process.env) {
     out.BCRYPT_WORK_FACTOR = out.BCRYPT_WORK_FACTOR_TEST;
   }
   return /** @type {AppConfig} */ (Object.freeze(out));
+}
+
+/** Values that are documentation placeholders, not secrets. */
+const PLACEHOLDER_SECRET = /change[-_ ]?me|changeme|your[-_ ]|example|placeholder|secret[-_ ]?key|^(?:dev|test|ci)[-_]|^x+$/i;
+const MIN_JWT_SECRET_LENGTH = 32; // HS256: at least 256 bits of key material
+const MIN_METRICS_TOKEN_LENGTH = 16;
+
+/**
+ * Invariants enforced only when NODE_ENV=production: fail at boot, loudly,
+ * instead of running insecurely or losing data quietly.
+ * @param {Record<string, any>} c  coerced config
+ * @returns {{ name: string, message: string }[]}
+ */
+function productionViolations(c) {
+  /** @type {{ name: string, message: string }[]} */
+  const v = [];
+  const add = (name, message) => v.push({ name, message });
+
+  if (typeof c.JWT_SECRET === 'string') {
+    if (c.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+      add('JWT_SECRET', `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters in production (use \`openssl rand -hex 32\`)`);
+    } else if (PLACEHOLDER_SECRET.test(c.JWT_SECRET) || new Set(c.JWT_SECRET).size < 8) {
+      add('JWT_SECRET', 'JWT_SECRET looks like a placeholder or low-entropy value; generate one with `openssl rand -hex 32`');
+    }
+  }
+  if (!c.ALLOW_EPHEMERAL_STATE) {
+    if (!c.DATABASE_URL) add('DATABASE_URL', 'DATABASE_URL is required in production (the in-memory fallback loses all data on restart); set ALLOW_EPHEMERAL_STATE=true only for throw-away containers');
+    if (!c.REDIS_URL) add('REDIS_URL', 'REDIS_URL is required in production (without it logout, rate limits and cross-replica events are per-process); set ALLOW_EPHEMERAL_STATE=true only for throw-away containers');
+  }
+  if (Array.isArray(c.CORS_ORIGINS)) {
+    if (c.CORS_ORIGINS.some((o) => o === '*' || o.includes('*'))) {
+      add('CORS_ORIGINS', 'CORS_ORIGINS must list exact origins in production (wildcards are refused: the API allows credentials)');
+    }
+    if (c.CORS_ORIGINS.some((o) => o === 'null')) {
+      add('CORS_ORIGINS', 'CORS_ORIGINS must not contain "null" (sandboxed documents and local files send it)');
+    }
+  }
+  if (Number.isInteger(c.BCRYPT_WORK_FACTOR) && (c.BCRYPT_WORK_FACTOR < 10 || c.BCRYPT_WORK_FACTOR > 15)) {
+    add('BCRYPT_WORK_FACTOR', 'BCRYPT_WORK_FACTOR must be between 10 and 15 in production');
+  }
+  if (typeof c.METRICS_TOKEN === 'string' && c.METRICS_TOKEN.length < MIN_METRICS_TOKEN_LENGTH) {
+    add('METRICS_TOKEN', `METRICS_TOKEN must be at least ${MIN_METRICS_TOKEN_LENGTH} characters in production`);
+  }
+  if (Number.isInteger(c.JWT_ACCESS_TTL_SECONDS) && (c.JWT_ACCESS_TTL_SECONDS < 60 || c.JWT_ACCESS_TTL_SECONDS > 3600)) {
+    add('JWT_ACCESS_TTL_SECONDS', 'JWT_ACCESS_TTL_SECONDS must be between 60 and 3600 in production (access tokens cannot be revoked individually)');
+  }
+  if (Number.isInteger(c.JWT_REFRESH_TTL_SECONDS) && Number.isInteger(c.JWT_ACCESS_TTL_SECONDS) && c.JWT_REFRESH_TTL_SECONDS <= c.JWT_ACCESS_TTL_SECONDS) {
+    add('JWT_REFRESH_TTL_SECONDS', 'JWT_REFRESH_TTL_SECONDS must be longer than JWT_ACCESS_TTL_SECONDS');
+  }
+  if (c.AI_PROVIDER && c.AI_PROVIDER !== 'stub' && !c.AI_API_KEY) {
+    add('AI_API_KEY', `AI_API_KEY is required when AI_PROVIDER=${c.AI_PROVIDER}`);
+  }
+  if (c.RATE_LIMIT_MAX === 0 || c.AUTH_LOGIN_IP_LIMIT === 0 || c.AUTH_REGISTER_IP_LIMIT === 0) {
+    add('RATE_LIMIT_MAX', 'rate limits must be positive in production (0 disables or blocks everything)');
+  }
+  return v;
+}
+
+/**
+ * Settings that are allowed but worth a line in the boot log.
+ * @param {Record<string, any>} c  loaded config
+ * @returns {string[]}
+ */
+export function configWarnings(c) {
+  /** @type {string[]} */
+  const w = [];
+  if (c.NODE_ENV !== 'production') return w;
+  if (c.ALLOW_EPHEMERAL_STATE) w.push('ALLOW_EPHEMERAL_STATE=true: missing DATABASE_URL/REDIS_URL fall back to per-process memory');
+  if (c.TRUST_PROXY === 'true') w.push('TRUST_PROXY=true trusts every X-Forwarded-For hop (client-spoofable IPs defeat rate limits); use the hop count, e.g. 1');
+  if (c.TRUST_PROXY === 'false') w.push('TRUST_PROXY=false: behind a load balancer every client shares the proxy IP for rate limiting');
+  if (c.LOG_LEVEL === 'debug') w.push('LOG_LEVEL=debug in production is verbose and may log request details');
+  if (!c.METRICS_TOKEN && c.METRICS_ENABLED) w.push('METRICS_TOKEN unset: /metrics answers 404 (fail closed), so nothing can scrape this instance');
+  if (Array.isArray(c.CORS_ORIGINS) && c.CORS_ORIGINS.some((o) => /^http:\/\//.test(o) && !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(o))) {
+    w.push('CORS_ORIGINS contains a plain-http origin');
+  }
+  if (Array.isArray(c.CORS_ORIGINS) && c.CORS_ORIGINS.some((o) => /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(o))) {
+    w.push('CORS_ORIGINS still contains a localhost origin (the default); set it to the SPA origin');
+  }
+  if (c.AI_PROVIDER === 'stub') w.push('AI_PROVIDER=stub: UI generation returns deterministic stub output, not model output');
+  return w;
 }
 
 /** Returns the schema for documentation / .env.example checks. */

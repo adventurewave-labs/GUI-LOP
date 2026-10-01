@@ -85,11 +85,11 @@ class InMemoryRoleRepository {
  * ADR 0015 auth limits. All fail closed: if the limiter store is down we
  * refuse auth traffic rather than allow unlimited guessing.
  */
-export function buildAuthLimiters(create) {
+export function buildAuthLimiters(create, { loginIpLimit = 20, registerIpLimit = 5 } = {}) {
   const FIFTEEN_MIN = 15 * 60 * 1000;
   return {
     loginIp: create('login-ip', {
-      windowMs: FIFTEEN_MIN, limit: 20, failClosed: true, message: 'Too many login attempts',
+      windowMs: FIFTEEN_MIN, limit: loginIpLimit, failClosed: true, message: 'Too many login attempts',
     }),
     loginIdentifier: create('login-id', {
       windowMs: FIFTEEN_MIN,
@@ -108,7 +108,7 @@ export function buildAuthLimiters(create) {
       windowMs: FIFTEEN_MIN, limit: 30, failClosed: true, message: 'Too many refresh attempts',
     }),
     register: create('register', {
-      windowMs: 60 * 60 * 1000, limit: 5, failClosed: true, message: 'Too many registrations',
+      windowMs: 60 * 60 * 1000, limit: registerIpLimit, failClosed: true, message: 'Too many registrations',
     }),
     password: create('password', {
       windowMs: FIFTEEN_MIN,
@@ -189,7 +189,9 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     useCases,
     tokenIssuer,
     tokenBlacklist,
-    limiters: rateLimiter ? buildAuthLimiters(rateLimiter) : undefined,
+    limiters: rateLimiter
+      ? buildAuthLimiters(rateLimiter, { loginIpLimit: config.AUTH_LOGIN_IP_LIMIT, registerIpLimit: config.AUTH_REGISTER_IP_LIMIT })
+      : undefined,
     // Shared across replicas when Postgres is configured (a retry that lands
     // on another pod must replay, not re-register).
     idempotencyStore: pool ? new PgHttpIdempotencyStore(pool) : undefined,

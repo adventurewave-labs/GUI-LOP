@@ -64,7 +64,8 @@ jobs:
           docker run -d --name gui-lop-smoke \
             -e DATABASE_URL='' \
             -e REDIS_URL='' \
-            -e JWT_SECRET=ci-smoke-secret \
+            -e JWT_SECRET="$(openssl rand -hex 32)" \
+            -e ALLOW_EPHEMERAL_STATE=true \
             -e NODE_ENV=production \
             -e PORT=3001 \
             -p 3001:3001 \

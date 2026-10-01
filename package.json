@@ -59,7 +59,7 @@
     "db:setup": "npm run db:migrate && npm run db:seed",
     "db:setup:dev": "npm run db:migrate && npm run db:seed:force",
     "docker:build": "docker build -t gui-lop:local -f Dockerfile .",
-    "docker:run": "docker run --rm -e DATABASE_URL='' -e REDIS_URL='' -e JWT_SECRET=local-dev-secret -p 3001:3001 gui-lop:local",
+    "docker:run": "docker run --rm -e NODE_ENV=development -e DATABASE_URL='' -e REDIS_URL='' -e JWT_SECRET=local-dev-secret -p 3001:3001 gui-lop:local",
     "helm:lint": "helm lint infrastructure/helm/gui-lop",
     "lint:fix": "eslint src/backend tests/backend tests/integration --fix",
     "test:frontend-services": "jest --config jest.frontend-services.config.js"

@@ -63,7 +63,7 @@ describe('/metrics auth', () => {
   });
 
   test('fails closed in production without a token', async () => {
-    const booted = await bootstrap({ JWT_SECRET: 's', LOG_LEVEL: 'error', NODE_ENV: 'production' });
+    const booted = await bootstrap({ JWT_SECRET: 'f3a91c0de57b2648a1d09e3c7b5f6a8210c4d7e9b3a5f1c2', LOG_LEVEL: 'error', NODE_ENV: 'production', ALLOW_EPHEMERAL_STATE: 'true' });
     try {
       expect((await scrape(booted.app)).status).toBe(404);
     } finally {

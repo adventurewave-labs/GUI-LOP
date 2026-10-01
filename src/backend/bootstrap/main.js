@@ -23,7 +23,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 
-import { loadConfig } from './config.js';
+import { loadConfig, configWarnings } from './config.js';
 import { systemClock } from '../shared-kernel/infrastructure/system-clock.js';
 import { uuidGenerator } from '../shared-kernel/infrastructure/uuid-generator.js';
 import { createPgOutboxRepository } from '../shared-kernel/infrastructure/pg-outbox-repository.js';
@@ -66,6 +66,7 @@ const PROBE_TIMEOUT_MS = 800;
 export async function bootstrap(envOverride) {
   const config = loadConfig(envOverride ?? process.env);
   const logger = createLogger({ level: config.LOG_LEVEL });
+  for (const warning of configWarnings(config)) logger.warn(`config: ${warning}`);
 
   const clock = systemClock;
   const idGen = uuidGenerator;
