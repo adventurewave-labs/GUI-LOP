@@ -333,8 +333,11 @@ export async function bootstrap(envOverride) {
     );
   }
 
+  // `version` lets a deploy pipeline wait until the new build is serving
+  // before it runs the smoke test (instead of testing the old one).
+  const version = config.GIT_SHA ?? config.RAILWAY_GIT_COMMIT_SHA ?? null;
   app.get('/livez', (_req, res) => {
-    res.set('Cache-Control', 'no-store').json({ status: 'ok' });
+    res.set('Cache-Control', 'no-store').json({ status: 'ok', ...(version ? { version } : {}) });
   });
   app.get('/readyz', async (_req, res) => {
     const checks = {};

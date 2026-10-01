@@ -75,6 +75,12 @@ const SCHEMA = /** @type {const} */ ({
   OUTBOX_BATCH_SIZE: { type: 'number', default: 200 },
   /** Insert missing built-in workflow templates at boot (Postgres; never overwrites). */
   SEED_DEFAULT_TEMPLATES: { type: 'boolean', default: true },
+  /**
+   * Deployed commit, reported by /livez so deploy pipelines can wait for
+   * the new build (Railway injects RAILWAY_GIT_COMMIT_SHA; others set GIT_SHA).
+   */
+  GIT_SHA: { type: 'string', required: false },
+  RAILWAY_GIT_COMMIT_SHA: { type: 'string', required: false },
 
   /* -------- AI Provider ACL (ADR 0023) -------- */
   /**
