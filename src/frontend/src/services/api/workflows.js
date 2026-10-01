@@ -15,6 +15,20 @@ function unwrap(envelope) {
   return envelope;
 }
 
+/**
+ * Strong ETag for a workflow version, as the backend emits it. Sent as
+ * `If-Match` so an action taken on a stale view (another operator already
+ * cancelled, a human step was answered, the engine advanced) is refused with
+ * 412 instead of silently acting on state the user never saw.
+ */
+export function versionEtag(version) {
+  return `"v${version}"`;
+}
+
+function ifMatch(expectedVersion) {
+  return Number.isInteger(expectedVersion) ? { 'If-Match': versionEtag(expectedVersion) } : undefined;
+}
+
 export const workflowsApi = {
   /** GET /api/v1/workflows/templates */
   async listTemplates({ activeOnly } = {}) {
@@ -65,25 +79,27 @@ export const workflowsApi = {
   },
 
   /** POST /api/v1/workflows/:id/execute */
-  async execute(workflowId, { idempotencyKey } = {}) {
+  async execute(workflowId, { idempotencyKey, expectedVersion } = {}) {
     const env = await request(
       `/api/v1/workflows/${encodeURIComponent(workflowId)}/execute`,
       {
         method: 'POST',
         body: {},
         idempotencyKey,
+        headers: ifMatch(expectedVersion),
       },
     );
     return unwrap(env);
   },
 
   /** POST /api/v1/workflows/:id/cancel */
-  async cancel(workflowId, { reason } = {}) {
+  async cancel(workflowId, { reason, expectedVersion } = {}) {
     const env = await request(
       `/api/v1/workflows/${encodeURIComponent(workflowId)}/cancel`,
       {
         method: 'POST',
         body: { reason },
+        headers: ifMatch(expectedVersion),
       },
     );
     return unwrap(env);

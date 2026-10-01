@@ -1,3 +1,4 @@
+import { TemplateVersionExistsError } from '../../domain/errors.js';
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 
 /**
@@ -91,7 +92,12 @@ export class PgWorkflowTemplateRepository {
     return rows[0] ? rowToTemplate(rows[0]) : null;
   }
 
-  async save(template) {
+  /**
+   * @param {import('../../domain/template/workflow-template.js').WorkflowTemplate} template
+   * @param {{ createOnly?: boolean }} [opts]  createOnly: fail (409) instead of
+   *   overwriting when (key, version) already exists — used by publish.
+   */
+  async save(template, { createOnly = false } = {}) {
     const hasColumn = await this._versionColumnExists();
     // Row + domain events in ONE transaction (transactional outbox). This
     // used to enqueue on no transaction at all, which the Postgres outbox
@@ -105,18 +111,19 @@ export class PgWorkflowTemplateRepository {
         const config = { ...(template.defaultConfig ?? {}) };
         // Insert-or-update on the (template_key, version) identity. is_active
         // mirrors the aggregate's `isDeprecated()` flag.
-        await q.query(
+        const inserted = await q.query(
           `INSERT INTO workflow_templates
             (template_key, version, name, description, steps, default_config,
              is_active, created_by)
            VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
-           ON CONFLICT (template_key, version) DO UPDATE
+           ${createOnly ? 'ON CONFLICT (template_key, version) DO NOTHING' : `ON CONFLICT (template_key, version) DO UPDATE
              SET name = EXCLUDED.name,
                  description = EXCLUDED.description,
                  steps = EXCLUDED.steps,
                  default_config = EXCLUDED.default_config,
                  is_active = EXCLUDED.is_active,
-                 updated_at = NOW()`,
+                 updated_at = NOW()`}
+           RETURNING id`,
           [
             template.key.value,
             template.version.value,
@@ -128,6 +135,10 @@ export class PgWorkflowTemplateRepository {
             template.createdBy,
           ],
         );
+        // Lost the race to another publisher of the same (key, version).
+        if (createOnly && inserted.rowCount === 0) {
+          throw new TemplateVersionExistsError(template.key.value, template.version.value);
+        }
       } else {
         // Legacy fallback: pre-migration schema with `template_key` UNIQUE
         // and version smuggled through default_config.__version.

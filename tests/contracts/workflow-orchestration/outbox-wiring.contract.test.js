@@ -20,7 +20,7 @@ import { PgWorkflowRepository } from '../../../src/backend/contexts/workflow-orc
 import { PgWorkflowTemplateRepository } from '../../../src/backend/contexts/workflow-orchestration/infrastructure/persistence/pg-workflow-template-repository.js';
 import { Workflow } from '../../../src/backend/contexts/workflow-orchestration/domain/workflow/workflow.js';
 import { WorkflowTemplate } from '../../../src/backend/contexts/workflow-orchestration/domain/template/workflow-template.js';
-import { WorkflowConflictError } from '../../../src/backend/contexts/workflow-orchestration/domain/errors.js';
+import { WorkflowConflictError, TemplateVersionExistsError } from '../../../src/backend/contexts/workflow-orchestration/domain/errors.js';
 
 const NOW = new Date('2026-10-01T12:00:00.000Z');
 
@@ -96,6 +96,24 @@ describeIfDocker('workflow repositories × Postgres outbox', () => {
     stale.start(NOW, { actor: { type: 'user', id: randomUUID() } }); // same change, stale version
     await expect(workflows.save(stale)).rejects.toBeInstanceOf(WorkflowConflictError);
     expect((await rows(id)).length).toBe(afterWinner); // the loser's events were rolled back
+  });
+
+  test('createOnly publish: 8 concurrent writers of one (key, version) — exactly one wins, no events from the losers', async () => {
+    const make = (name) => {
+      const t = WorkflowTemplate.draft({ key: 'race-flow', version: 1, name, now: NOW });
+      t.addStep({ name: 'a', kind: 'automated' });
+      t.publish({ now: NOW, actor: { type: 'system' } });
+      return t;
+    };
+    const results = await Promise.allSettled(Array.from({ length: 8 }, (_, i) => templates.save(make(`writer-${i}`), { createOnly: true })));
+    const won = results.filter((r) => r.status === 'fulfilled');
+    const lost = results.filter((r) => r.status === 'rejected');
+    expect(won).toHaveLength(1);
+    expect(lost).toHaveLength(7);
+    for (const r of lost) expect(r.reason).toBeInstanceOf(TemplateVersionExistsError);
+    const { rows: stored } = await pg.pool.query("SELECT name FROM workflow_templates WHERE template_key = 'race-flow'");
+    expect(stored).toHaveLength(1);
+    expect((await rows('race-flow@1')).length).toBe(1); // only the winner's published event
   });
 
   test('enqueue refuses to run outside a transaction', async () => {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { workflowsApi } from '../../services/api/workflows.js';
 
-export default function ExecuteButton({ workflowId, onExecuted, disabled }) {
+export default function ExecuteButton({ workflowId, version, onExecuted, onStale, disabled }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -9,9 +9,15 @@ export default function ExecuteButton({ workflowId, onExecuted, disabled }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await workflowsApi.execute(workflowId);
+      const result = await workflowsApi.execute(workflowId, { expectedVersion: version });
       onExecuted?.(result);
     } catch (err) {
+      if (err?.isPreconditionFailed) {
+        // Someone (or the engine) changed the workflow after this view loaded.
+        setError('This workflow changed since you loaded it. It has been refreshed — check its status and try again.');
+        onStale?.(err.currentVersion);
+        return;
+      }
       setError(err.message || 'Failed to execute');
     } finally {
       setBusy(false);

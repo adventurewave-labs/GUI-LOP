@@ -152,7 +152,7 @@ export function buildOpenApiDocument({ version } = {}) {
 
       '/api/v1/workflows/templates': {
         get: op('templates', 'List published workflow templates', { responses: { 200: json(envelope(obj({ templates: { type: 'array', items: ref('Template') } }))), ...errs(401, 403) } }),
-        post: op('templates', 'Publish a template version (requires template:publish)', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Published'), ...errs(400, 401, 403, 409, 422) } }),
+        post: op('templates', 'Publish a template version (requires template:publish). Versions are immutable: the same content again is a no-op, different content for an existing version is 409', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Published'), ...errs(400, 401, 403, 409, 422) } }),
       },
       '/api/v1/workflows/templates/{key}': { get: op('templates', 'Get the current version of a template', { parameters: [pathParam('key')], responses: { 200: json(envelope(obj({ template: ref('Template') }))), ...errs(401, 403, 404) } }) },
       '/api/v1/workflows/templates/{key}/deprecate': { post: op('templates', 'Deprecate a template', { parameters: [pathParam('key')], responses: { 200: json(anyObject), ...errs(401, 403, 404, 409) } }) },

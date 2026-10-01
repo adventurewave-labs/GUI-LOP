@@ -1,3 +1,4 @@
+import { TemplateVersionExistsError } from '../../domain/errors.js';
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 
 /**
@@ -35,9 +36,16 @@ export class InMemoryWorkflowTemplateRepository {
     return WorkflowTemplate.rehydrate(deepClone(versions.get(v)));
   }
 
-  async save(template) {
+  /**
+   * @param {import('../../domain/template/workflow-template.js').WorkflowTemplate} template
+   * @param {{ createOnly?: boolean }} [opts]  createOnly: fail if (key, version) exists
+   */
+  async save(template, { createOnly = false } = {}) {
     const key = template.key.value;
     if (!this._byKey.has(key)) this._byKey.set(key, new Map());
+    if (createOnly && this._byKey.get(key).has(template.version.value)) {
+      throw new TemplateVersionExistsError(key, template.version.value);
+    }
     const snap = serialise(template);
     this._byKey.get(key).set(template.version.value, snap);
     const events = template.pullEvents();
