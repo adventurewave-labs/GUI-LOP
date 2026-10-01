@@ -106,8 +106,8 @@ config:
   LOG_LEVEL: info
   BCRYPT_WORK_FACTOR: "12"
   OUTBOX_BATCH_SIZE: "200"
-  RATE_LIMIT_WINDOW_MS: "900000"
-  RATE_LIMIT_MAX: "100"
+  RATE_LIMIT_WINDOW_MS: "60000"
+  RATE_LIMIT_MAX: "600"
   CORS_ORIGINS: "https://gui-lop.example.com"
   # One LB/ingress hop in front of the pod → real client IP in req.ip.
   TRUST_PROXY: "1"

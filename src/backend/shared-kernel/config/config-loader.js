@@ -30,8 +30,14 @@ const SCHEMA = {
    * worker-thread pool so factor 12 doesn't block the event loop.
    */
   BCRYPT_WORK_FACTOR_TEST: { type: 'number', default: 4 },
-  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 900000 },
-  RATE_LIMIT_MAX: { type: 'number', default: 100 },
+  /**
+   * General /api/v1 budget per client IP (ADR 0015). Previously declared
+   * but never enforced; defaults sized for an interactive SPA (10 req/s
+   * sustained) rather than the old 100 per 15 min, which would throttle
+   * normal dashboard use. Auth routes carry their own stricter limits.
+   */
+  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 60000 },
+  RATE_LIMIT_MAX: { type: 'number', default: 600 },
   CORS_ORIGINS: { type: 'csv', default: 'http://localhost:3000' },
   LOG_LEVEL: { type: 'string', default: 'info', enum: ['debug', 'info', 'warn', 'error'] },
   /**

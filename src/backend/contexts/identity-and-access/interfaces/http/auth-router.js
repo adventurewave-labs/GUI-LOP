@@ -20,6 +20,10 @@ import {
  * Optional:
  *   idempotencyStore (defaults to in-memory)
  *   loginRateLimit / refreshRateLimit (override the per-IP limiters)
+ *   limiters: { loginIp, loginIdentifier, refresh, register, password }
+ *     — built by the shared-kernel rate-limiter factory in the composition
+ *     root (Redis-backed in production). Missing entries fall back to the
+ *     legacy in-memory per-IP limiters (login/refresh) or pass-through.
  */
 export function buildAuthRouter({
   useCases,
@@ -28,6 +32,7 @@ export function buildAuthRouter({
   idempotencyStore,
   loginRateLimit,
   refreshRateLimit,
+  limiters = {},
 } = {}) {
   if (!useCases) throw new Error('useCases required');
   const router = Router();
@@ -37,14 +42,20 @@ export function buildAuthRouter({
   const idem = makeIdempotencyMiddleware({ store: idemStore });
 
   // ADR 0015 — strict per-IP limits on login/refresh; auth fails closed.
-  const loginLimiter = loginRateLimit ?? rateLimit({
+  const passthrough = (_req, _res, next) => next();
+  const loginLimiter = loginRateLimit ?? limiters.loginIp ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: 'rate_limited', message: 'Too many login attempts' },
   });
-  const refreshLimiter = refreshRateLimit ?? rateLimit({
+  // Per-account failed-attempt budget: stops distributed credential
+  // stuffing against one identifier that per-IP limits can't see.
+  const loginIdentifierLimiter = limiters.loginIdentifier ?? passthrough;
+  const registerLimiter = limiters.register ?? passthrough;
+  const passwordLimiter = limiters.password ?? passthrough;
+  const refreshLimiter = refreshRateLimit ?? limiters.refresh ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
     standardHeaders: true,
@@ -52,7 +63,7 @@ export function buildAuthRouter({
     message: { error: 'rate_limited', message: 'Too many refresh attempts' },
   });
 
-  router.post('/register', idem, async (req, res) => {
+  router.post('/register', registerLimiter, idem, async (req, res) => {
     try {
       const out = await useCases.registerUser.execute(req.body ?? {});
       res.status(201).json(out);
@@ -61,7 +72,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/login', loginLimiter, async (req, res) => {
+  router.post('/login', loginLimiter, loginIdentifierLimiter, async (req, res) => {
     try {
       const out = await useCases.authenticateUser.execute({
         identifier: req.body?.identifier ?? req.body?.email ?? req.body?.username,
@@ -98,7 +109,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/password', requireAuth, idem, async (req, res) => {
+  router.post('/password', requireAuth, passwordLimiter, idem, async (req, res) => {
     try {
       await useCases.changePassword.execute({
         userId: req.principal.userId,

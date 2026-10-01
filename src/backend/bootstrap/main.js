@@ -36,6 +36,7 @@ import { wireHumanInteraction } from './wire-human-interaction.js';
 import { wireNotification } from './wire-notification.js';
 import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
 import { createMetrics } from './metrics.js';
+import { createRateLimiterFactory } from '../shared-kernel/infrastructure/rate-limiters.js';
 import { traceContextMiddleware } from '../shared-kernel/infrastructure/trace-context.js';
 import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
 import {
@@ -100,7 +101,12 @@ export async function bootstrap(envOverride) {
 
   /* -------- bounded contexts -------- */
 
-  const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger });
+  // ADR 0015: one limiter factory; Redis-backed (global across replicas)
+  // whenever Redis is connected.
+  const rateLimiter = await createRateLimiterFactory({ redis, logger });
+  logger.info(`rate limiting: ${rateLimiter.backend} store`);
+
+  const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter });
 
   /* -------- metrics (created early so adapters can report into it) -------- */
   let wsHandle = null;
@@ -273,6 +279,17 @@ export async function bootstrap(envOverride) {
     }),
   );
   app.use(express.json({ limit: '1mb' }));
+
+  // General API budget per client (fail-open: availability over strictness
+  // for ordinary traffic; auth routes add their own fail-closed limits).
+  app.use(
+    '/api/v1',
+    rateLimiter('api', {
+      windowMs: config.RATE_LIMIT_WINDOW_MS,
+      limit: config.RATE_LIMIT_MAX,
+      message: 'Too many requests',
+    }),
+  );
 
   // Identity & Access (public + protected).
   app.use('/api/v1/auth', identity.router);

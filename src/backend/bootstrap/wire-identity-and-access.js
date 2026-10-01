@@ -6,6 +6,7 @@
  * composition root. Picks Postgres adapters when `pool` is non-null, else
  * falls back to in-memory.
  */
+import { identifierKey, ipBucket } from '../shared-kernel/infrastructure/rate-limiters.js';
 import { InMemoryUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-user-repository.js';
 import { InMemorySessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-session-repository.js';
 import { InMemoryGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-grants-repository.js';
@@ -73,7 +74,46 @@ class InMemoryRoleRepository {
   }
 }
 
-export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger }) {
+/**
+ * ADR 0015 auth limits. All fail closed: if the limiter store is down we
+ * refuse auth traffic rather than allow unlimited guessing.
+ */
+export function buildAuthLimiters(create) {
+  const FIFTEEN_MIN = 15 * 60 * 1000;
+  return {
+    loginIp: create('login-ip', {
+      windowMs: FIFTEEN_MIN, limit: 20, failClosed: true, message: 'Too many login attempts',
+    }),
+    loginIdentifier: create('login-id', {
+      windowMs: FIFTEEN_MIN,
+      limit: 5,
+      failClosed: true,
+      // Only failures count, so a legitimate user isn't locked out by their
+      // own successful logins; keyed on a hash of the normalised identifier.
+      skipSuccessfulRequests: true,
+      keyGenerator: (req) => {
+        const raw = req.body?.identifier ?? req.body?.email ?? req.body?.username;
+        return `id:${identifierKey(raw) ?? `ip:${ipBucket(req.ip)}`}`;
+      },
+      message: 'Too many failed login attempts for this account',
+    }),
+    refresh: create('refresh', {
+      windowMs: FIFTEEN_MIN, limit: 30, failClosed: true, message: 'Too many refresh attempts',
+    }),
+    register: create('register', {
+      windowMs: 60 * 60 * 1000, limit: 5, failClosed: true, message: 'Too many registrations',
+    }),
+    password: create('password', {
+      windowMs: FIFTEEN_MIN,
+      limit: 5,
+      failClosed: true,
+      keyGenerator: (req) => `user:${req.principal?.userId ?? ipBucket(req.ip)}`,
+      message: 'Too many password change attempts',
+    }),
+  };
+}
+
+export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter }) {
   const userRepository = pool ? new PgUserRepository(pool) : new InMemoryUserRepository();
   const sessionRepository = pool
     ? new PgSessionRepository(pool)
@@ -134,6 +174,7 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     useCases,
     tokenIssuer,
     tokenBlacklist,
+    limiters: rateLimiter ? buildAuthLimiters(rateLimiter) : undefined,
   });
 
   const authMiddleware = makeAuthMiddleware({
