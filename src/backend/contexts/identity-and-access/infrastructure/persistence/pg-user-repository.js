@@ -4,6 +4,7 @@ import { Username } from '../../domain/user/username.js';
 import { PasswordHash } from '../../domain/user/password-hash.js';
 import { RoleName } from '../../domain/user/role-name.js';
 import { User } from '../../domain/user/user.js';
+import { isUuid } from '../../../../shared-kernel/infrastructure/ids.js';
 
 /**
  * Postgres UserRepository against the `users` table.
@@ -15,6 +16,7 @@ export class PgUserRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
     const { rows } = await this.pool.query(
       'SELECT id, email, username, password_hash, full_name, role, is_active, metadata, created_at, updated_at, last_login FROM users WHERE id = $1',
       [id],

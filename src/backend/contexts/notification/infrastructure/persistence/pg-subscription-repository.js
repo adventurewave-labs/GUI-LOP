@@ -9,6 +9,7 @@ import { Subscription } from '../../domain/subscription/subscription.js';
 import { Channel } from '../../domain/subscription/channel.js';
 import { EndpointAddress } from '../../domain/subscription/endpoint-address.js';
 import { Filter } from '../../domain/subscription/filter.js';
+import { isUuid } from '../../../../shared-kernel/infrastructure/ids.js';
 
 const ROW_COLS = `
   id, subscriber_kind, subscriber_ref, channel, address, filters,
@@ -78,6 +79,7 @@ export class PgSubscriptionRepository extends SubscriptionRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
     const { rows } = await this._pool.query(
       `SELECT ${ROW_COLS} FROM subscriptions WHERE id = $1`,
       [id]

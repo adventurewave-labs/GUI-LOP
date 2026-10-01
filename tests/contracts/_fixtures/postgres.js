@@ -97,6 +97,10 @@ async function startExternalPostgres(opts = {}) {
   const url = new URL(adminUrl.toString());
   url.pathname = `/${dbName}`;
   const pool = new Pool({ connectionString: url.toString(), max: 8 });
+  // DROP DATABASE … WITH (FORCE) at cleanup terminates any client a suite
+  // still holds; without listeners that surfaces as an unhandled 'error'.
+  pool.on('error', () => {});
+  admin.on('error', () => {});
 
   await applyMigrations(pool, { logger: { warn: () => {}, info: () => {} } });
   if (opts.applyAnalytics !== false) {

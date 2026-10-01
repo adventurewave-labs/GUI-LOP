@@ -1,4 +1,5 @@
 import { Session } from '../../domain/session/session.js';
+import { isUuid } from '../../../../shared-kernel/infrastructure/ids.js';
 
 /**
  * Postgres SessionRepository against the `user_sessions` table.
@@ -11,6 +12,7 @@ export class PgSessionRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
     const { rows } = await this.pool.query(
       'SELECT id, user_id, session_token, ip_address, user_agent, created_at, expires_at, is_active, metadata FROM user_sessions WHERE id = $1',
       [id],

@@ -1,6 +1,7 @@
 import { ApiKey } from '../../domain/api-key/api-key.js';
 import { ApiKeyId } from '../../domain/api-key/api-key-id.js';
 import { Permission } from '../../domain/permission/permission.js';
+import { isUuid } from '../../../../shared-kernel/infrastructure/ids.js';
 
 /**
  * Postgres ApiKeyRepository against the `api_keys` table from
@@ -20,6 +21,7 @@ export class PgApiKeyRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
     const value = id?.value ?? id;
     const { rows } = await this.pool.query(
       `SELECT id, user_id, key_name, api_key_hash, permissions, is_active,
