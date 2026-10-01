@@ -70,3 +70,27 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 ## Round 2 schedule
 
 15 loops, ~24 min apart, 2026-10-01 12:15Z → 17:51Z. Same contract and rules; first unchecked item each loop. **Background processes do not survive between turns** — (re)start Postgres/Redis at the start of every loop that runs contracts. Local contract infra: Postgres 16 on `:55432` (`postgresql://contracts@127.0.0.1:55432/postgres`), Redis on `:56379`.
+
+## Production-readiness round (round 3, scheduled 2026-10-01)
+
+Goal: close the gaps between "tests green" and "safe to run for real users". Same loop contract and rules (never merge to `main`, no paid API calls, gates by exit code, restart Postgres `:55432` / Redis `:56379` each loop). Items 21–26 above are carried into this list; tick them in place **and** here.
+
+- [ ] **P1. DB session safety** (= item 21).
+- [ ] **P2. Password policy** (= item 23).
+- [ ] **P3. SPA security headers** (= item 25).
+- [ ] **P4. Production-mode boot smoke.** `NODE_ENV=production` boot against fresh local PG + Redis: migrations from zero, required-env fail-closed, `/livez` `/readyz` `/metrics`, register → login → workflow → human step → outbox actually drains (row reaches `dispatched`). One script (`scripts/smoke.mjs`), runnable against any base URL, wired into CI.
+- [ ] **P5. Load baseline.** Load script (autocannon or k6, whichever installs offline) for the hot paths; record p50/p95/p99 + error rate locally; write SLOs and the numbers into `docs/`. Find and fix the first bottleneck if one shows.
+- [ ] **P6. Production config audit.** Every secret/required env refuses defaults in production; dangerous dev flags refused; config documented in one table (`.env.example` in sync, policy-tested).
+- [ ] **P7. Backup / restore + migration drill.** `pg_dump` → restore → app boots and contracts pass; forward-only migration policy written down; idempotent re-run verified.
+- [ ] **P8. OpenAPI 3.1** (= item 22).
+- [ ] **P9. If-Match everywhere it matters.** Template publish/deprecate conditional; SPA sends `If-Match` on workflow execute/cancel and handles 412 by re-reading.
+- [ ] **P10. Go-live checklist + runbook.** `docs/RUNBOOK.md`: deploy, rollback, rotate secrets, drain outbox / replay dead letters, common alerts; Prometheus alert rules (5xx rate, p99, outbox age, dead letters, readyz) checked in and lint-tested.
+- [ ] **P11. Tamper-evident audit log** (= item 24).
+- [ ] **P12. OTel SDK, opt-in** (= item 26).
+- [ ] **P13. Mutation — identity (57.4) + notification (61.3).**
+- [?] **P-staging. Railway staging deploy — needs Marcus's explicit OK** (creates billable resources). Until confirmed, P4/P5 run locally only.
+- [?] **14b-2 admin eligibility — still needs Marcus.** Unchanged.
+
+### Round 3 schedule
+
+15 loops, ~24 min apart, 2026-10-01 18:15Z → 23:51Z. Loops 1–14: first unchecked P-item. Loop 15: wrap-up (status block, PR #11 description, final report). Nothing is merged.
