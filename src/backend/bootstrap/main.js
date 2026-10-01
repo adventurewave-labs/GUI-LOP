@@ -333,6 +333,12 @@ export async function bootstrap(envOverride) {
   app.use('/api/v1/ui/generate', ...guarded('workflow:create'));
   app.use('/api/v1/ui', ...guarded('workflow:read'));
   app.use('/api/v1', identity.authMiddleware, ui.router);
+  // Dedicated limits on top of the general /api/v1 limiter: the integrity
+  // check scans the whole audit table, and webhook registration creates a
+  // standing delivery target.
+  const expensiveLimiter = rateLimiter('expensive', { windowMs: 60_000, limit: 30, message: 'Too many requests' });
+  app.use('/api/v1/audit/integrity', expensiveLimiter);
+  app.use('/api/v1/analytics/users', expensiveLimiter);
   app.use('/api/v1/audit', ...guarded('audit:read'));
   app.use('/api/v1/audit/exports', ...guarded('audit:export'));
   app.use('/api/v1/analytics/users/:id', identity.authMiddleware,
@@ -345,7 +351,7 @@ export async function bootstrap(envOverride) {
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
   // Unfiltered webhooks see every user's events: non-admins may only
   // subscribe to workflows they created.
-  app.post('/api/v1/webhooks', identity.authMiddleware, webhookScopeGuard(identity.authorisationService, async (workflowId) => {
+  app.post('/api/v1/webhooks', expensiveLimiter, identity.authMiddleware, webhookScopeGuard(identity.authorisationService, async (workflowId) => {
     try {
       return (await workflow.useCases.getDetail.execute({ workflowId }))?.created_by ?? null;
     } catch {
