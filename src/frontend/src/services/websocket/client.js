@@ -35,7 +35,7 @@
  * Reconnect strategy: exponential backoff (1s, 2s, 4s, ...) capped at 30s.
  */
 
-import { accessTokenStore, apiBaseUrl } from '../api/client.js';
+import { accessTokenStore, apiBaseUrl, refreshAccessToken } from '../api/client.js';
 
 export const KNOWN_EVENT_TYPES = Object.freeze([
   'workflow.created',
@@ -72,6 +72,8 @@ function defaultUrlBuilder({ baseUrl, path, token, tokenTransport = 'subprotocol
  * @param {() => string|null} [options.getToken] Token provider (default reads accessTokenStore).
  * @param {'subprotocol'|'query'} [options.tokenTransport] How the token is sent (default subprotocol).
  * @param {() => (void|Promise<void>)} [options.onTokenExpired] Called on close 4001 before reconnecting.
+ *   Defaults to the API client's single-flight token refresh, so an expired
+ *   socket renews its token instead of reconnecting with the stale one.
  * @param {(opts: object) => string} [options.urlBuilder] Custom URL builder.
  * @param {boolean} [options.autoConnect] Connect immediately on creation.
  * @param {typeof WebSocket} [options.WebSocketImpl] Override for tests.
@@ -83,7 +85,7 @@ export function createWebSocketClient(options = {}) {
     path = DEFAULT_PATH,
     getToken = () => accessTokenStore.get(),
     tokenTransport = 'subprotocol',
-    onTokenExpired,
+    onTokenExpired = () => refreshAccessToken(),
     urlBuilder = defaultUrlBuilder,
     autoConnect = false,
     WebSocketImpl,
@@ -214,12 +216,17 @@ export function createWebSocketClient(options = {}) {
       setStatus('closed');
       if (manuallyClosed) return;
       if (event && event.code === CLOSE_TOKEN_EXPIRED) {
-        // Token expired server-side: refresh, then reconnect without backoff.
+        // Token expired server-side: refresh, then reconnect at once. A failed
+        // refresh (throw, or { ok: false } from the shared refresher) takes
+        // the normal backoff path instead — reconnecting immediately with the
+        // same stale token used to spin a tight 4001 → reconnect loop.
         Promise.resolve()
           .then(() => (onTokenExpired ? onTokenExpired() : undefined))
-          .catch(() => { /* refresh failed: fall back to normal backoff */ })
-          .then(() => {
-            if (!manuallyClosed) connect();
+          .then((r) => !(r && r.ok === false), () => false)
+          .then((refreshed) => {
+            if (manuallyClosed) return;
+            if (refreshed) connect();
+            else scheduleReconnect();
           });
         return;
       }

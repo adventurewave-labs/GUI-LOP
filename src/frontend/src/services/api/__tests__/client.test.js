@@ -1,4 +1,7 @@
 /**
+ * @jest-environment jsdom
+ */
+/**
  * Unit tests for the v1 API client. Focuses on the auth-refresh-on-401
  * flow, idempotency-key emission, and ApiError mapping. We use a custom
  * `fetch` mock rather than `msw` so the test runs without a network stack.
