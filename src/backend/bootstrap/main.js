@@ -282,8 +282,10 @@ export async function bootstrap(envOverride) {
     cors({
       origin: config.CORS_ORIGINS,
       credentials: true,
-      // Let browser clients read correlation headers for bug reports / RUM.
-      exposedHeaders: ['X-Request-Id', 'traceresponse'],
+      // Let browser clients read correlation headers for bug reports / RUM,
+      // the ETag for conditional writes (If-Match), and the idempotency /
+      // rate-limit signals they are expected to act on.
+      exposedHeaders: ['X-Request-Id', 'traceresponse', 'ETag', 'Idempotent-Replayed', 'Retry-After', 'RateLimit', 'RateLimit-Policy'],
     }),
   );
   app.use(express.json({ limit: '1mb' }));

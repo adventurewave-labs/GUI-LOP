@@ -56,6 +56,16 @@ export class ConflictError extends DomainError {
   }
 }
 
+/**
+ * A conditional request's precondition (If-Match) did not hold: the client
+ * acted on a stale version. HTTP 412.
+ */
+export class PreconditionFailedError extends DomainError {
+  constructor(message = 'Resource has changed; re-read and retry', details = {}) {
+    super('PRECONDITION_FAILED', message, details);
+  }
+}
+
 /** Raised when the actor lacks permission to perform the action. */
 export class ForbiddenError extends DomainError {
   constructor(message = 'Action not permitted', details = {}) {
