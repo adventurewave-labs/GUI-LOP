@@ -21,6 +21,7 @@
 import { randomBytes } from 'node:crypto';
 import { getContext, setContextField } from './request-context.js';
 
+// eslint-disable-next-line security/detect-unsafe-regex -- fixed-width groups; trailing (-.*)? is linear
 const TRACEPARENT_RE = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})(-.*)?$/;
 const ZERO_TRACE = '0'.repeat(32);
 const ZERO_SPAN = '0'.repeat(16);

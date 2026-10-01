@@ -54,6 +54,8 @@ export function makeIdempotencyMiddleware({ store }) {
 
     const existing = store.get(storeKey);
     if (existing) {
+      // Body digest equality, not a secret comparison.
+      // eslint-disable-next-line security/detect-possible-timing-attacks
       if (existing.bodyHash !== hash) {
         return res
           .status(409)

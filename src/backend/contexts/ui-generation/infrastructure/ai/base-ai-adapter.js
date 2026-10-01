@@ -84,17 +84,14 @@ export class BaseAIAdapter extends AIProvider {
 
   /* -------- subclass hooks (default no-op) -------- */
 
-  // eslint-disable-next-line no-unused-vars
   async _callGenerateUI(_args) {
     throw new Error(`${this.name}._callGenerateUI not implemented`);
   }
 
-  // eslint-disable-next-line no-unused-vars
   async _callClassify(_args) {
     throw new Error(`${this.name}._callClassify not implemented`);
   }
 
-  // eslint-disable-next-line no-unused-vars
   async _callHealthCheck(_args) {
     throw new Error(`${this.name}._callHealthCheck not implemented`);
   }

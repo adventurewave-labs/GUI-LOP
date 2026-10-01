@@ -98,7 +98,6 @@ export function parseTrustProxy(raw) {
  * status instead of collapsing into 500; 5xx details are never leaked.
  */
 export function jsonErrorHandler({ logger } = {}) {
-  // eslint-disable-next-line no-unused-vars
   return (err, req, res, _next) => {
     const raw = Number(err?.status ?? err?.statusCode);
     const status = Number.isInteger(raw) && raw >= 400 && raw <= 599 ? raw : 500;

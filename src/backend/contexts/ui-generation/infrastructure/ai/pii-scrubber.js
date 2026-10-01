@@ -14,15 +14,20 @@
  * The scrubber is pure (no I/O) so we can unit-test it exhaustively.
  */
 
-const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
+// Bounded per RFC 5321 (local ≤ 64, domain ≤ 253) so pathological inputs
+// (long dot/dash runs with no TLD) can't trigger polynomial backtracking.
+// eslint-disable-next-line security/detect-unsafe-regex -- every quantifier is bounded (see above)
+const EMAIL_RE = /\b[A-Z0-9._%+-]{1,64}@(?:[A-Z0-9-]{1,63}\.){1,8}[A-Z]{2,24}\b/gi;
 
 // E.164-ish or NA-formatted phones; 10-15 digits with optional separators.
 // We require the run to end on a digit so we don't eat a trailing space.
+// eslint-disable-next-line security/detect-unsafe-regex -- bounded {9,14}, lookaround-anchored
 const PHONE_RE = /(?<!\d)\+?\d(?:[\s.-]?\d){9,14}(?!\d)/g;
 
 // Candidate digit run for credit-card detection: 13-19 digits with
 // optional separators. Final acceptance is gated on Luhn so we don't
 // nuke arbitrary long numbers. Like phones, must end on a digit.
+// eslint-disable-next-line security/detect-unsafe-regex -- bounded {12,18}, lookaround-anchored
 const CARD_CANDIDATE_RE = /(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)/g;
 
 export const PLACEHOLDERS = Object.freeze({

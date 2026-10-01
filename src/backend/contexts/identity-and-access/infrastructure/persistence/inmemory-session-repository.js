@@ -13,6 +13,8 @@ export class InMemorySessionRepository {
 
   async findByRefreshTokenHash(hash) {
     for (const s of this._byId.values()) {
+      // Compares stored digests, not the raw token; dev-only in-memory adapter.
+      // eslint-disable-next-line security/detect-possible-timing-attacks
       if (s.refreshTokenHash === hash) return s;
     }
     return null;

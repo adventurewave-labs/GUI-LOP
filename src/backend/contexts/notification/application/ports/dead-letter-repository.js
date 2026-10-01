@@ -11,6 +11,7 @@ export class DeadLetterRepository {
     throw new Error('DeadLetterRepository.findById is abstract');
   }
 
+  // eslint-disable-next-line no-unused-vars -- abstract signature documents the contract
   async list({ limit = 100, offset = 0 } = {}) {
     throw new Error('DeadLetterRepository.list is abstract');
   }

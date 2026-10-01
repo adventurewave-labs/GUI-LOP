@@ -34,7 +34,6 @@ const DEFAULT_ROUNDS = 12;
  */
 function resolveWorkerPath() {
   try {
-    // eslint-disable-next-line no-new-func
     const meta = new Function('return import.meta')();
     if (meta && typeof meta.url === 'string') {
       return join(dirname(fileURLToPath(meta.url)), 'bcrypt-worker.js');
@@ -43,9 +42,7 @@ function resolveWorkerPath() {
     // Babel/CJS path below.
   }
   // CJS fallback: __dirname is defined when babel-jest transforms us to CJS.
-  // eslint-disable-next-line no-undef
   if (typeof __dirname === 'string') {
-    // eslint-disable-next-line no-undef
     return join(__dirname, 'bcrypt-worker.js');
   }
   // Last-ditch: assume the worker sits next to this file under the canonical path.

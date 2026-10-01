@@ -40,7 +40,7 @@
     "bench:auth": "node tests/benchmarks/scenarios/auth-throughput.bench.js",
     "bench:domain": "node tests/benchmarks/scenarios/domain-purity.bench.js",
     "build": "tsc",
-    "lint": "echo 'Add linting here'",
+    "lint": "eslint src/backend tests/backend tests/integration --max-warnings=0",
     "lint:arch": "npx --yes dependency-cruiser --config .dependency-cruiser.cjs src/backend",
     "typecheck": "echo 'typecheck: no TS files yet; project is pure ESM JS (placeholder for future TS adoption)'",
     "playwright": "playwright test",
@@ -58,7 +58,8 @@
     "db:setup:dev": "npm run db:migrate && npm run db:seed:force",
     "docker:build": "docker build -t gui-lop:local -f Dockerfile .",
     "docker:run": "docker run --rm -e DATABASE_URL='' -e REDIS_URL='' -e JWT_SECRET=local-dev-secret -p 3001:3001 gui-lop:local",
-    "helm:lint": "helm lint infrastructure/helm/gui-lop"
+    "helm:lint": "helm lint infrastructure/helm/gui-lop",
+    "lint:fix": "eslint src/backend tests/backend tests/integration --fix"
   },
   "keywords": [
     "gui",
@@ -101,6 +102,7 @@
   },
   "devDependencies": {
     "@babel/preset-env": "^7.28.3",
+    "@eslint/js": "^9.39.5",
     "@jest/core": "^29.7.0",
     "@jest/reporters": "^29.7.0",
     "@playwright/test": "^1.56.1",
@@ -115,7 +117,11 @@
     "async": "^3.2.6",
     "autocannon": "^8.0.0",
     "concurrently": "^9.2.1",
+    "eslint": "^9.39.5",
+    "eslint-plugin-n": "^18.4.0",
+    "eslint-plugin-security": "^4.1.0",
     "form-data": "^2.5.5",
+    "globals": "^17.13.0",
     "jest": "^29.7.0",
     "jest-circus": "^29.7.0",
     "jest-config": "^29.7.0",

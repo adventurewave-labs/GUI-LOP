@@ -35,3 +35,25 @@ jobs:
       # workflow stays deterministic.
       - name: Run architecture lint
         run: npx --yes -p dependency-cruiser@16 depcruise --config .dependency-cruiser.cjs src/backend
+
+  eslint:
+    name: eslint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ESLint 9 flat config (eslint.config.js): @eslint/js recommended,
+      # eslint-plugin-n, eslint-plugin-security. Zero warnings allowed.
+      - name: Lint backend
+        run: npm run lint

@@ -25,7 +25,6 @@ async function main() {
   async function gracefulShutdown(signal) {
     if (shuttingDown) return;
     shuttingDown = true;
-    // eslint-disable-next-line no-console
     console.log(`Received ${signal}, shutting down gracefully...`);
     try {
       // Drain delay + in-flight budget must fit inside SHUTDOWN_TIMEOUT_MS,
@@ -36,15 +35,13 @@ async function main() {
       );
       await Promise.race([
         shutdown({ drainDelayMs: config.SHUTDOWN_DRAIN_DELAY_MS, inFlightTimeoutMs }),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('shutdown timeout')), config.SHUTDOWN_TIMEOUT_MS),
-        ),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('shutdown timeout')), config.SHUTDOWN_TIMEOUT_MS);
+        }),
       ]);
-      // eslint-disable-next-line no-console
       console.log('Shutdown complete.');
       process.exit(0);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Forced shutdown:', err?.message ?? err);
       process.exit(1);
     }
@@ -55,7 +52,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error('Failed to start GUI-LOP v1:', err);
   process.exit(1);
 });

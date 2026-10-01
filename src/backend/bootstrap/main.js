@@ -47,7 +47,7 @@ import {
   probeWithTimeout,
 } from './http-hardening.js';
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 /** Per-dependency deadline for readiness probes. */
 const PROBE_TIMEOUT_MS = 800;
@@ -441,7 +441,10 @@ export async function bootstrap(envOverride) {
     }
 
     await new Promise((resolve) => {
-      if (!httpServer.listening) return resolve();
+      if (!httpServer.listening) {
+        resolve();
+        return;
+      }
       const force = setTimeout(() => {
         logger.warn('shutdown: in-flight deadline reached; force-closing connections');
         httpServer.closeAllConnections?.();

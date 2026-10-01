@@ -10,9 +10,6 @@
 
 import { randomUUID } from 'crypto';
 import { Subscription } from '../../domain/subscription/subscription.js';
-import { Channel } from '../../domain/subscription/channel.js';
-import { EndpointAddress } from '../../domain/subscription/endpoint-address.js';
-import { Filter } from '../../domain/subscription/filter.js';
 
 export async function attach(httpServer, deps) {
   const {

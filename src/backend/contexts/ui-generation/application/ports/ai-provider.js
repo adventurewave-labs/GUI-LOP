@@ -61,12 +61,10 @@
  * @property {Record<string, number>} [scores]
  */
 export class AIProvider {
-  // eslint-disable-next-line no-unused-vars
   async generateUI(_input) {
     throw new Error('AIProvider.generateUI is abstract');
   }
 
-  // eslint-disable-next-line no-unused-vars
   async classify(_input) {
     throw new Error('AIProvider.classify is abstract');
   }
