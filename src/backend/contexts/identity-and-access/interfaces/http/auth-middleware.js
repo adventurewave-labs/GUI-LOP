@@ -1,4 +1,5 @@
 import { sendError } from './error-mapper.js';
+import { setContextField } from '../../../../shared-kernel/infrastructure/request-context.js';
 import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
 const BEARER_RE = /^Bearer\s+(.+)$/i;
@@ -77,6 +78,10 @@ export function makeAuthMiddleware({
       }
 
       req.principal = principal;
+      // Enrich the ambient request context so every subsequent log line
+      // (and the access log) is attributable to the caller.
+      setContextField('user_id', principal.userId);
+      setContextField('auth_via', principal.via);
       // Compatibility views for routers that haven't migrated to req.principal.
       req.user = {
         id: principal.userId,

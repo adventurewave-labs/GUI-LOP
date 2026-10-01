@@ -38,6 +38,7 @@ import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
 import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
 import {
   requestIdMiddleware,
+  accessLogMiddleware,
   parseTrustProxy,
   jsonErrorHandler,
   applyServerTimeouts,
@@ -227,6 +228,7 @@ export async function bootstrap(envOverride) {
   app.set('trust proxy', parseTrustProxy(config.TRUST_PROXY));
   // First, so every response — including body-parser errors — carries an id.
   app.use(requestIdMiddleware());
+  app.use(accessLogMiddleware({ logger }));
   // While draining, tell keep-alive clients to reconnect elsewhere.
   app.use((_req, res, next) => {
     if (draining) res.set('Connection', 'close');
