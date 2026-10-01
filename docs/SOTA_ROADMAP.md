@@ -72,6 +72,14 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 15 loops, ~24 min apart, 2026-10-01 12:15Z → 17:51Z. Same contract and rules; first unchecked item each loop. **Background processes do not survive between turns** — (re)start Postgres/Redis at the start of every loop that runs contracts. Local contract infra: Postgres 16 on `:55432` (`postgresql://contracts@127.0.0.1:55432/postgres`), Redis on `:56379`.
 
+## Status at end of round 2 (2026-10-01)
+
+- 15 loops on `claude/sota-loop` → PR #11; branch is 68 commits ahead of `main`, 0 behind, merges cleanly.
+- Backend tests 748 → **958**; frontend services 12 → **25**; contracts 148 → **179/179** on real Postgres 16 + Redis; typecheck 0 errors over 149 modules; mutation 57.4% → **65.2%** (break 63).
+- Production bugs fixed this round: Postgres outbox never drained (no notifications ever left a PG deployment); Redis cross-pod fan-out never attached; API-key scopes never enforced (security); grants lost on restart; refresh-token replay undetected; logout left access tokens alive 15 min; idempotency per-pod / cached 5xx / wrong scope; lost updates on workflows; validation accepted unknown types, ignored `required`, and unchecked AI rule values; CodeQL regex-injection on AI patterns.
+- Decisions recorded: admin eligibility (14b-2) → consistent with identity; Railway staging approved for round 3.
+- Not production-ready yet — round 3 (below) covers DB timeouts, password policy, SPA headers, prod-mode smoke, staging, load baseline, runbook.
+
 ## Production-readiness round (round 3, scheduled 2026-10-01)
 
 Goal: close the gaps between "tests green" and "safe to run for real users". Same loop contract and rules (never merge to `main`, no paid API calls, gates by exit code, restart Postgres `:55432` / Redis `:56379` each loop). Items 21–26 above are carried into this list; tick them in place **and** here.
