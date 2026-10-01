@@ -70,6 +70,15 @@ export function buildAuthRouter({
     keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
     message: { error: 'rate_limited', message: 'Too many password change attempts' },
   });
+  // Generic budget for authenticated, low-cost auth routes (/me, /logout).
+  const sessionLimiter = limiters.session ?? rateLimit({
+    windowMs: 60 * 1000,
+    limit: 120,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    message: { error: 'rate_limited', message: 'Too many requests' },
+  });
   const refreshLimiter = refreshRateLimit ?? limiters.refresh ?? rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 30,
@@ -112,7 +121,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.post('/logout', requireAuth, async (req, res) => {
+  router.post('/logout', requireAuth, sessionLimiter, async (req, res) => {
     try {
       await useCases.revokeSession.execute({
         sessionId: req.principal.sessionId,
@@ -137,7 +146,7 @@ export function buildAuthRouter({
     }
   });
 
-  router.get('/me', requireAuth, async (req, res) => {
+  router.get('/me', requireAuth, sessionLimiter, async (req, res) => {
     try {
       const profile = await useCases.getUserProfile.execute({
         userId: req.principal.userId,
