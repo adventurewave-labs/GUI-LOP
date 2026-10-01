@@ -41,7 +41,7 @@ export default {
   // these floors cover the unit/integration gate only.
   coverageThreshold: {
     './src/backend/bootstrap/': { branches: 56, functions: 75, lines: 78, statements: 75 },
-    './src/backend/contexts/audit-and-analytics/': { branches: 42, functions: 72, lines: 61, statements: 59 },
+    './src/backend/contexts/audit-and-analytics/': { branches: 65, functions: 89, lines: 68, statements: 70 }, // 15b: was 42/72/61/59
     './src/backend/contexts/human-interaction/': { branches: 59, functions: 60, lines: 73, statements: 69 },
     './src/backend/contexts/identity-and-access/': { branches: 69, functions: 77, lines: 80, statements: 78 },
     './src/backend/contexts/notification/': { branches: 59, functions: 60, lines: 74, statements: 72 },
