@@ -1,4 +1,7 @@
+import { RegExpParser, visitRegExpAST } from '@eslint-community/regexpp';
 import { ValidationError } from '../../../shared-kernel/domain/errors.js';
+
+const regexParser = new RegExpParser({ ecmaVersion: 2025 });
 export const RULE_TYPES = Object.freeze({
   REQUIRED: 'required',
   MIN_LENGTH: 'minLength',
@@ -64,12 +67,7 @@ function checkValue(type, value) {
     case RULE_TYPES.PATTERN:
       if (typeof value !== 'string' || value.length === 0) fail('must be a non-empty string');
       if (value.length > MAX_PATTERN_LENGTH) fail(`must be at most ${MAX_PATTERN_LENGTH} characters`);
-      try {
-        // eslint-disable-next-line security/detect-non-literal-regexp -- compile check only, never executed here
-        new RegExp(value);
-      } catch {
-        fail('must be a valid regular expression');
-      }
+      checkPattern(value, fail);
       return;
     case RULE_TYPES.ENUM:
       if (!Array.isArray(value) || value.length === 0) fail('must be a non-empty array');
@@ -80,4 +78,36 @@ function checkValue(type, value) {
     default:
       return;
   }
+}
+
+/**
+ * Validate an AI-supplied pattern by *parsing* it (never constructing a
+ * RegExp from untrusted input on the server — CodeQL js/regex-injection), and
+ * reject the classic catastrophic-backtracking shape: a repeating quantifier
+ * nested inside another repeating quantifier where either is unbounded
+ * (`(a+)+`, `(\w*)*`, `(x|y+){2,}`). The browser executes this pattern against
+ * user keystrokes, so an exponential pattern would freeze the form.
+ */
+function checkPattern(src, fail) {
+  let ast;
+  try {
+    ast = regexParser.parsePattern(src, 0, src.length, { unicode: false, unicodeSets: false });
+  } catch {
+    fail('must be a valid regular expression');
+  }
+  /** @type {{ unbounded: boolean }[]} */
+  const stack = [];
+  let nested = false;
+  visitRegExpAST(ast, {
+    onQuantifierEnter(q) {
+      if (q.max <= 1) return; // `?` / `{0,1}` cannot repeat
+      const unbounded = q.max === Infinity;
+      if (stack.length > 0 && (unbounded || stack.some((s) => s.unbounded))) nested = true;
+      stack.push({ unbounded });
+    },
+    onQuantifierLeave(q) {
+      if (q.max > 1) stack.pop();
+    },
+  });
+  if (nested) fail('must not nest repeating quantifiers (catastrophic backtracking)');
 }

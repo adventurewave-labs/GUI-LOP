@@ -10,6 +10,15 @@
  *   - role          : string|null
  *   - permissions   : string[]
  *   - scopes        : string[]   (resource scopes the user is granted)
+ *   - permissionCeiling : string[]|null  (API-key scope; null/[] = none)
+ *
+ * Admins satisfy `requiredPermissions` and `scope` implicitly, matching
+ * identity's authorisation policy ("admins implicitly hold every
+ * permission") — before this, an admin could pass every API permission check
+ * yet could not answer a permission-gated step (decision 14b-2, 2026-10-01).
+ * `requiredRole` stays an exact match: routing a step to a role is a
+ * deliberate assignment, not a permission. A scoped API key bounds admins
+ * too: with a ceiling the bypass is off and only ceiling permissions count.
  *
  * The workflow object provides the scope key for permission matching:
  *   - id            : string
@@ -32,8 +41,14 @@ export class EligibilityService {
       return false;
     }
 
+    const ceiling = Array.isArray(user.permissionCeiling) && user.permissionCeiling.length > 0
+      ? new Set(user.permissionCeiling)
+      : null;
+    if (user.role === 'admin' && !ceiling) return true;
+
     if (rule.requiredPermissions && rule.requiredPermissions.length > 0) {
-      const userPerms = new Set(user.permissions || []);
+      const own = user.role === 'admin' ? [...ceiling] : (user.permissions || []);
+      const userPerms = new Set(ceiling ? own.filter((p) => ceiling.has(p)) : own);
       for (const required of rule.requiredPermissions) {
         if (!userPerms.has(required)) return false;
       }

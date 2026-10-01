@@ -99,12 +99,23 @@ describe('ValidationRule', () => {
     ['pattern', 42, 'non-empty string'],
     ['pattern', '([a-z]', 'valid regular expression'],
     ['pattern', 'a'.repeat(MAX_PATTERN_LENGTH + 1), `at most ${MAX_PATTERN_LENGTH}`],
+    ['pattern', '[z-a]', 'valid regular expression'],
+    ['pattern', '(a+)+$', 'catastrophic backtracking'],
+    ['pattern', '^(\\w*)*@', 'catastrophic backtracking'],
+    ['pattern', '(x|y+){2,}', 'catastrophic backtracking'],
+    ['pattern', '((ab)*c)+', 'catastrophic backtracking'],
     ['enum', [], 'non-empty array'],
     ['enum', 'a', 'non-empty array'],
     ['enum', [{}], 'strings, numbers or booleans'],
   ])('%s with value %p is rejected (%s)', (type, value, msg) => {
     expect(() => rule(type, value)).toThrow(`ValidationRule(${type}).value`);
     expect(() => rule(type, value)).toThrow(msg);
+  });
+
+  test.each([
+    '^[a-z]+$', '^\\d{3}-\\d{4}$', '^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$', '(ab)?c+', '(\\d{1,3}\\.){3}\\d{1,3}', '\\u{41}',
+  ])('safe pattern %p is accepted', (p) => {
+    expect(rule('pattern', p).value).toBe(p);
   });
 
   test('id, type and message are checked', () => {

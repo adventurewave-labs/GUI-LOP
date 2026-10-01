@@ -80,6 +80,7 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@eslint-community/regexpp": "^4.12.2",
     "accept-language-parser": "^1.5.0",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.2",
