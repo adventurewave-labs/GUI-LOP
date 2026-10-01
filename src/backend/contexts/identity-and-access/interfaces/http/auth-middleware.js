@@ -1,8 +1,8 @@
 import { sendError } from './error-mapper.js';
 import { setContextField } from '../../../../shared-kernel/infrastructure/request-context.js';
+import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
 import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
-const BEARER_RE = /^Bearer\s+(.+)$/i;
 
 /**
  * Build the auth middleware. Verifies `Authorization: Bearer <token>`,
@@ -40,10 +40,8 @@ export function makeAuthMiddleware({
     try {
       const header = req.headers?.authorization ?? req.headers?.Authorization;
       if (!header) throw new UnauthorisedError('Missing Authorization header');
-      const m = BEARER_RE.exec(header);
-      if (!m) throw new UnauthorisedError('Malformed Authorization header');
-
-      const raw = m[1];
+      const raw = parseBearer(header);
+      if (!raw) throw new UnauthorisedError('Malformed Authorization header');
 
       let principal;
       if (ApiKeySecret.looksLikeApiKey(raw)) {

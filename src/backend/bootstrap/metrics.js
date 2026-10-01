@@ -21,6 +21,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import client from 'prom-client';
 import { routeTemplate } from './http-hardening.js';
+import { parseBearer } from '../shared-kernel/infrastructure/bearer.js';
 
 const HTTP_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 const AI_BUCKETS = [0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60];
@@ -151,8 +152,8 @@ export function createMetrics({ outbox, wsConnectionCount, aiProvider, logger, d
       if (!expected) {
         if (failClosed) return res.status(404).json({ error: 'not_found', path: req.path });
       } else {
-        const m = /^Bearer\s+(.+)$/i.exec(req.get('authorization') ?? '');
-        const given = m ? Buffer.from(m[1]) : Buffer.alloc(0);
+        const cred = parseBearer(req.get('authorization'));
+        const given = cred ? Buffer.from(cred) : Buffer.alloc(0);
         if (given.length !== expected.length || !timingSafeEqual(given, expected)) {
           res.set('WWW-Authenticate', 'Bearer');
           return res.status(401).json({ error: 'unauthorised' });

@@ -21,8 +21,8 @@
  */
 
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
+import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
 
-const BEARER_RE = /^Bearer\s+(.+)$/i;
 const MAX_TOKEN_LEN = 8192;
 
 /**
@@ -34,10 +34,8 @@ export function extractUpgradeToken(req) {
   const headers = req?.headers ?? {};
 
   const auth = headers.authorization;
-  if (typeof auth === 'string') {
-    const m = BEARER_RE.exec(auth);
-    if (m) return sane(m[1]);
-  }
+  const fromHeader = parseBearer(auth);
+  if (fromHeader) return sane(fromHeader);
 
   const proto = headers['sec-websocket-protocol'];
   if (typeof proto === 'string') {
