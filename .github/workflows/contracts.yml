@@ -104,7 +104,10 @@ jobs:
             node src/backend/bootstrap/index.js > smoke-server.log 2>&1 &
           echo $! > smoke-server.pid
           for i in $(seq 1 30); do curl -sf localhost:38080/livez >/dev/null && break; sleep 1; done
-          node scripts/smoke.mjs --base http://localhost:38080 --metrics-token "$METRICS_TOKEN" --database-url "$SMOKE_DB"
+          # Failures are surfaced as an annotation (job logs are not always reachable).
+          node scripts/smoke.mjs --base http://localhost:38080 --metrics-token "$METRICS_TOKEN" --database-url "$SMOKE_DB" > smoke.log 2>&1 \
+            || { echo "::error title=production smoke::$( (grep -v '^{' smoke.log | tail -n 6; grep -v http_request smoke-server.log | tail -n 6) | tr '\n' '|' | cut -c1-1400)"; exit 1; }
+          grep -v '^{' smoke.log
 
       # Short load pass as a regression tripwire (docs/PRODUCTION_DEPLOYMENT_GUIDE.md
       # has the SLOs and the baseline). Thresholds are loose: shared runners are noisy.
