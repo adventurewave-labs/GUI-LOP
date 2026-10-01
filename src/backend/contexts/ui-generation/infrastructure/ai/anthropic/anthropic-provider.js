@@ -16,6 +16,7 @@
  *   - HTTP 5xx, fetch failure → AIProviderUnavailable
  *   - Bad JSON / schema fail  → AIBadResponse
  */
+import { outboundTraceHeaders } from '../../../../../shared-kernel/infrastructure/trace-context.js';
 import { BaseAIAdapter } from '../base-ai-adapter.js';
 import {
   AIBadResponse,
@@ -146,6 +147,8 @@ export class AnthropicProvider extends BaseAIAdapter {
       res = await this._fetch(`${this._baseUrl}${path}`, {
         method: 'POST',
         headers: {
+          // W3C trace propagation (no-op outside a request).
+          ...outboundTraceHeaders(),
           'Content-Type': 'application/json',
           'x-api-key': this._apiKey,
           'anthropic-version': ANTHROPIC_VERSION,

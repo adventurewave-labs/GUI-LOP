@@ -15,6 +15,7 @@
  *   - HTTP 5xx, fetch failure → AIProviderUnavailable
  *   - Bad JSON / schema fail  → AIBadResponse
  */
+import { outboundTraceHeaders } from '../../../../../shared-kernel/infrastructure/trace-context.js';
 import { BaseAIAdapter } from '../base-ai-adapter.js';
 import {
   AIBadResponse,
@@ -151,6 +152,8 @@ export class OpenAIProvider extends BaseAIAdapter {
       res = await this._fetch(`${this._baseUrl}${path}`, {
         method: 'POST',
         headers: {
+          // W3C trace propagation (no-op outside a request).
+          ...outboundTraceHeaders(),
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this._apiKey}`,
         },

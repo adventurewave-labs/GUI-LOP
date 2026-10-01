@@ -35,6 +35,7 @@ import { wireUIGeneration } from './wire-ui-generation.js';
 import { wireHumanInteraction } from './wire-human-interaction.js';
 import { wireNotification } from './wire-notification.js';
 import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
+import { traceContextMiddleware } from '../shared-kernel/infrastructure/trace-context.js';
 import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
 import {
   requestIdMiddleware,
@@ -228,6 +229,7 @@ export async function bootstrap(envOverride) {
   app.set('trust proxy', parseTrustProxy(config.TRUST_PROXY));
   // First, so every response — including body-parser errors — carries an id.
   app.use(requestIdMiddleware());
+  app.use(traceContextMiddleware());
   app.use(accessLogMiddleware({ logger }));
   // While draining, tell keep-alive clients to reconnect elsewhere.
   app.use((_req, res, next) => {
@@ -241,7 +243,14 @@ export async function bootstrap(envOverride) {
       crossOriginResourcePolicy: { policy: 'same-site' },
     }),
   );
-  app.use(cors({ origin: config.CORS_ORIGINS, credentials: true }));
+  app.use(
+    cors({
+      origin: config.CORS_ORIGINS,
+      credentials: true,
+      // Let browser clients read correlation headers for bug reports / RUM.
+      exposedHeaders: ['X-Request-Id', 'traceresponse'],
+    }),
+  );
   app.use(express.json({ limit: '1mb' }));
 
   // Identity & Access (public + protected).

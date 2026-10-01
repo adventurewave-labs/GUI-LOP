@@ -78,6 +78,22 @@ describe('access log', () => {
     expect(line).toEqual(expect.objectContaining({ status: 404, route: 'unmatched', path: '/nope' }));
   });
 
+  test('inbound traceparent is continued: traceresponse header + trace_id on the log', async () => {
+    const tid = '4bf92f3577b34da6a3ce929d0e0e4736';
+    const res = await request(booted.app)
+      .get('/livez')
+      .set('traceparent', `00-${tid}-00f067aa0ba902b7-01`);
+    await flush();
+    expect(res.headers.traceresponse).toMatch(new RegExp(`^00-${tid}-[0-9a-f]{16}-01$`));
+    const spanId = res.headers.traceresponse.split('-')[2];
+    expect(accessLines()[0]).toEqual(expect.objectContaining({ trace_id: tid, span_id: spanId }));
+  });
+
+  test('no inbound traceparent → a fresh trace is started', async () => {
+    const res = await request(booted.app).get('/livez');
+    expect(res.headers.traceresponse).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+  });
+
   test('probe endpoints log at debug', async () => {
     await request(booted.app).get('/livez');
     await flush();
