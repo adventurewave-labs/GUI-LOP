@@ -10,6 +10,10 @@ export function validate(value, schema, path = '$') {
     throw new ValidationError(`Invalid schema at ${path}`, path);
   }
   const expectedType = schema.type;
+  if (expectedType !== undefined && !KNOWN_TYPES.has(expectedType)) {
+    // A typo ('strnig') used to match anything, silently disabling validation.
+    throw new ValidationError(`Unknown schema type "${expectedType}" at ${path}`, path);
+  }
   if (expectedType) {
     if (!matchesType(value, expectedType)) {
       throw new ValidationError(
@@ -18,7 +22,10 @@ export function validate(value, schema, path = '$') {
       );
     }
   }
-  if (expectedType === 'object' && schema.properties) {
+  // `required` is enforced whenever present — it used to be skipped unless
+  // `properties` was also declared, so { type: 'object', required: ['x'] }
+  // accepted {}.
+  if (expectedType === 'object' || (!expectedType && Array.isArray(schema.required))) {
     if (Array.isArray(schema.required)) {
       for (const k of schema.required) {
         if (value === null || value === undefined || !(k in value)) {
@@ -29,7 +36,7 @@ export function validate(value, schema, path = '$') {
         }
       }
     }
-    for (const [k, sub] of Object.entries(schema.properties)) {
+    for (const [k, sub] of Object.entries(schema.properties ?? {})) {
       if (value && k in value) {
         validate(value[k], sub, `${path}.${k}`);
       }
@@ -42,6 +49,8 @@ export function validate(value, schema, path = '$') {
   }
 }
 
+const KNOWN_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'object', 'array', 'null']);
+
 function matchesType(value, type) {
   switch (type) {
     case 'string': return typeof value === 'string';
@@ -51,7 +60,7 @@ function matchesType(value, type) {
     case 'object': return value !== null && typeof value === 'object' && !Array.isArray(value);
     case 'array': return Array.isArray(value);
     case 'null': return value === null;
-    default: return true;
+    default: return false; // unreachable: unknown types are rejected above
   }
 }
 
