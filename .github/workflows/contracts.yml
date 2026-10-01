@@ -1,9 +1,8 @@
 name: contracts
 
 # Adapter contract tests — real Postgres + Redis via GitHub Actions
-# service containers. Informational / non-blocking until it stabilises;
-# the existing `ci` workflow remains the required merge check (see
-# repo branch-protection settings).
+# service containers. Blocking: every adapter must honour its port's
+# contract against real infrastructure (159 tests as of 2026-10-01).
 #
 # Runs on PRs to `main` and pushes to `main` / `claude/**`.
 on:

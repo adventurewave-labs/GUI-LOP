@@ -78,3 +78,25 @@ describe('type-check coverage (roadmap #14)', () => {
     expect(step).not.toMatch(/continue-on-error/);
   });
 });
+
+describe('quality ratchets (roadmap #15)', () => {
+  test('every bounded context has a coverage floor in the backend gate', async () => {
+    const { default: cfg } = await import('../../../../jest.backend.config.js');
+    const keys = Object.keys(cfg.coverageThreshold ?? {});
+    const contexts = readdirSync(path.join(ROOT, 'src/backend/contexts'), { withFileTypes: true })
+      .filter((d) => d.isDirectory()).map((d) => d.name);
+    for (const c of contexts) expect(keys).toContain(`./src/backend/contexts/${c}/`);
+    expect(keys).toEqual(expect.arrayContaining(['./src/backend/shared-kernel/', './src/backend/bootstrap/']));
+    for (const t of Object.values(cfg.coverageThreshold)) {
+      for (const m of ['branches', 'functions', 'lines', 'statements']) expect(t[m]).toBeGreaterThan(0);
+    }
+  });
+
+  test('CI runs the coverage gate and mutation testing has a break threshold', () => {
+    const ci = workflows.find((w) => w.file === 'ci.yml').text;
+    expect(ci).toMatch(/npm run test:coverage:backend/);
+    expect(workflows.map((w) => w.file)).toContain('mutation.yml');
+    const stryker = readFileSync(path.join(ROOT, 'stryker.config.mjs'), 'utf8');
+    expect(stryker).toMatch(/break:\s*[1-9]\d/);
+  });
+});

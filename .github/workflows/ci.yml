@@ -53,11 +53,18 @@ jobs:
           DATABASE_URL: ""
           REDIS_URL: ""
           JWT_SECRET: ci-test-secret-not-used-in-prod
-        run: |
-          npx jest --config jest.backend.config.js \
-            src/backend/ \
-            tests/backend/contexts/ \
-            tests/integration/bootstrap-smoke.test.js
+        # Coverage on every leg: the per-area ratchet floors in
+        # jest.backend.config.js fail the job if coverage drops (roadmap #15).
+        run: npm run test:coverage:backend
+
+      - name: Upload coverage report
+        if: always() && matrix.node == '24'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
 
       - name: Frontend service tests (WebSocket client)
         run: npm run test:frontend-services

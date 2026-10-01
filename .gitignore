@@ -310,3 +310,7 @@ Thumbs.db
 # ==========================================
 # Last updated: Comprehensive cleanup for GUI-LOP repository
 # Total patterns: 150+ organized across 12 categories
+
+# Mutation testing (Stryker)
+.stryker-tmp/
+reports/mutation/
