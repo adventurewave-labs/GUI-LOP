@@ -36,6 +36,7 @@ import { wireHumanInteraction } from './wire-human-interaction.js';
 import { wireNotification } from './wire-notification.js';
 import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
 import { createMetrics } from './metrics.js';
+import { problemDetailsMiddleware } from '../shared-kernel/infrastructure/problem-details.js';
 import { createRateLimiterFactory } from '../shared-kernel/infrastructure/rate-limiters.js';
 import { traceContextMiddleware } from '../shared-kernel/infrastructure/trace-context.js';
 import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
@@ -255,6 +256,9 @@ export async function bootstrap(envOverride) {
   app.set('trust proxy', parseTrustProxy(config.TRUST_PROXY));
   // First, so every response — including body-parser errors — carries an id.
   app.use(requestIdMiddleware());
+  // RFC 9457: every JSON error response becomes application/problem+json
+  // (legacy envelope fields preserved as extension members).
+  app.use(problemDetailsMiddleware());
   app.use(traceContextMiddleware());
   app.use(accessLogMiddleware({ logger }));
   if (config.METRICS_ENABLED) app.use(metrics.httpMiddleware());
