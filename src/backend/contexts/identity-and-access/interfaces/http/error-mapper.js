@@ -2,6 +2,8 @@
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   InvalidCredentialsError,
+  RefreshConflictError,
+  RefreshTokenReusedError,
   SessionExpiredError,
   SessionRevokedError,
   UserDeactivatedError,
@@ -34,6 +36,12 @@ export function mapErrorToHttp(err) {
   }
   if (err instanceof SessionExpiredError) {
     return { status: 401, body: { error: 'session_expired', message: err.message } };
+  }
+  if (err instanceof RefreshTokenReusedError) {
+    return { status: 401, body: { error: 'refresh_token_reused', message: err.message } };
+  }
+  if (err instanceof RefreshConflictError) {
+    return { status: 409, body: { error: 'refresh_conflict', message: err.message } };
   }
   if (err instanceof SessionRevokedError) {
     return { status: 401, body: { error: 'session_revoked', message: err.message } };

@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import {
   InvalidCredentialsError,
+  RefreshTokenReusedError,
   SessionExpiredError,
   SessionRevokedError,
 } from '../../domain/errors.js';
@@ -42,9 +43,21 @@ export class RefreshSessionUseCase {
     }
     const incomingHash = hashSecret(cmd.refreshToken);
     const session = await this.sessionRepository.findByRefreshTokenHash(incomingHash);
-    if (!session) throw new InvalidCredentialsError();
-
     const now = this.clock.now();
+    if (!session) {
+      // Not the current token. If it is one this session already rotated
+      // away, it has been replayed — assume it leaked and kill the session
+      // (every descendant token with it). RFC 9700 §4.14.2.
+      const reused = await this.sessionRepository.findBySupersededRefreshTokenHash?.(incomingHash);
+      if (reused) {
+        reused.revokeForReuse(now);
+        await this.sessionRepository.save(reused);
+        await this.outbox.enqueue(reused.pullEvents());
+        throw new RefreshTokenReusedError();
+      }
+      throw new InvalidCredentialsError();
+    }
+
     if (!session.isActive) throw new SessionRevokedError();
     if (!session.isUsable(now)) throw new SessionExpiredError();
 

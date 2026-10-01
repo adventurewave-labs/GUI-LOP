@@ -194,6 +194,21 @@ export class SessionRevoked extends DomainEvent {
   }
 }
 
+/** Security signal: a superseded refresh token was replayed; session revoked. */
+export class SessionRefreshTokenReused extends DomainEvent {
+  constructor({ sessionId, userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
+    super(envelope({
+      eventType: 'session.refresh_token_reused',
+      aggregateId: sessionId,
+      aggregateType: AGG_SESSION,
+      payload: { sessionId, userId },
+      occurredAt,
+      correlationId,
+      actor: actor ?? { type: 'system' },
+    }));
+  }
+}
+
 export class RoleGranted extends DomainEvent {
   constructor({ userId, role, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({

@@ -15,6 +15,7 @@ export const TRUNCATABLE = [
   'workflow_steps',
   'workflows',
   'workflow_templates',
+  'refresh_token_history',
   'user_sessions',
   'user_permissions',
   'api_keys',
