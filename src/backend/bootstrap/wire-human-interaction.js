@@ -153,6 +153,7 @@ export function wireHumanInteraction({
           userId: actor.userId,
           permission,
           scope,
+          ceiling: actor.apiKeyPermissions ?? null,
         });
         return { authorised: true };
       } catch (err) {

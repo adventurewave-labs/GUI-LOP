@@ -1,3 +1,4 @@
+// @ts-check
 import { sendError } from './error-mapper.js';
 import { setContextField } from '../../../../shared-kernel/infrastructure/request-context.js';
 import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
@@ -30,6 +31,9 @@ import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
  *   - `req.actor` — { userId, sessionId? }
  *
  * The three views are populated in lock-step from the same source.
+ */
+/**
+ * @param {{ tokenIssuer?: any, tokenBlacklist?: any, authenticateWithApiKey?: any }} [deps]
  */
 export function makeAuthMiddleware({
   tokenIssuer,
@@ -81,14 +85,22 @@ export function makeAuthMiddleware({
       setContextField('user_id', principal.userId);
       setContextField('auth_via', principal.via);
       // Compatibility views for routers that haven't migrated to req.principal.
+      // A key minted with an explicit permission list is a ceiling on what
+      // the request may do (enforced by AuthorisationService); an unscoped
+      // key or a session token carries none.
+      const apiKeyPermissions = principal.via === 'api-key' && principal.permissions.length > 0
+        ? principal.permissions
+        : undefined;
       req.user = {
         id: principal.userId,
         role: principal.role,
         sessionId: principal.sessionId,
+        ...(apiKeyPermissions ? { apiKeyPermissions } : {}),
       };
       req.actor = {
         userId: principal.userId,
         sessionId: principal.sessionId,
+        ...(apiKeyPermissions ? { apiKeyPermissions } : {}),
       };
       next();
     } catch (err) {

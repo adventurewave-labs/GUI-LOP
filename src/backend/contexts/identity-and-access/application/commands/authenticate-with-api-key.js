@@ -1,3 +1,4 @@
+// @ts-check
 import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
 
@@ -21,7 +22,8 @@ export class AuthenticateWithApiKeyUseCase {
 
   /**
    * @param {{ rawKey: string }} cmd
-   * @returns {Promise<{ userId: string, role: string, apiKeyId: string }>}
+   * @returns {Promise<{ userId: string, role: string, apiKeyId: string, permissions: string[] }>}
+   *   `permissions` is the key's ceiling ([] = inherit the owner's)
    */
   async execute(cmd) {
     const raw = cmd?.rawKey;

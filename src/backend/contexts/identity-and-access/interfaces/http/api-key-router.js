@@ -1,3 +1,4 @@
+// @ts-check
 import { Router } from 'express';
 import { sendError } from './error-mapper.js';
 
@@ -13,6 +14,7 @@ import { sendError } from './error-mapper.js';
  *   }
  *   requireAuth: middleware
  */
+/** @param {{ useCases?: any, requireAuth?: Function }} [deps] */
 export function buildApiKeyRouter({ useCases, requireAuth } = {}) {
   if (!useCases) throw new Error('useCases required');
   if (typeof requireAuth !== 'function') {
@@ -20,6 +22,17 @@ export function buildApiKeyRouter({ useCases, requireAuth } = {}) {
   }
   const router = Router();
   router.use(requireAuth);
+  // A permission-scoped key could otherwise mint an unscoped key for its
+  // owner and escape its ceiling. Key management needs a session or an
+  // unscoped key.
+  router.use((req, res, next) => {
+    const p = req.principal;
+    if (p?.via === 'api-key' && Array.isArray(p.permissions) && p.permissions.length > 0) {
+      res.status(403).json({ error: 'forbidden', message: 'scoped API keys cannot manage API keys' });
+      return;
+    }
+    next();
+  });
 
   // POST /  → mint a new key for the principal (or for another user when admin)
   router.post('/', async (req, res) => {

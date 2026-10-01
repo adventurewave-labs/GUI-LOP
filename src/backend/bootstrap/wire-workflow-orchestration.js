@@ -43,6 +43,7 @@ class IdentityAuthorisationAdapter {
         userId: actor.id,
         permission: action,
         scope: resource?.id ?? null,
+        ceiling: actor.apiKeyPermissions ?? null,
       });
       return { allowed: true };
     } catch (err) {
