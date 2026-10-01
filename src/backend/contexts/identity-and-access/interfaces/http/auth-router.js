@@ -3,10 +3,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { sendError } from './error-mapper.js';
 import { makeAuthMiddleware } from './auth-middleware.js';
-import {
-  InMemoryIdempotencyStore,
-  makeIdempotencyMiddleware,
-} from './idempotency-middleware.js';
+import { idempotency, InMemoryHttpIdempotencyStore } from '../../../../shared-kernel/infrastructure/http-idempotency.js';
 
 /**
  * Build the Express router for the Identity & Access context.
@@ -42,8 +39,7 @@ export function buildAuthRouter({
   const router = Router();
 
   const requireAuth = makeAuthMiddleware({ tokenIssuer, tokenBlacklist });
-  const idemStore = idempotencyStore ?? new InMemoryIdempotencyStore();
-  const idem = makeIdempotencyMiddleware({ store: idemStore });
+  const idem = idempotency({ store: idempotencyStore ?? new InMemoryHttpIdempotencyStore() });
 
   // ADR 0015 — strict per-IP limits on login/refresh; auth fails closed.
   const passthrough = (_req, _res, next) => next();

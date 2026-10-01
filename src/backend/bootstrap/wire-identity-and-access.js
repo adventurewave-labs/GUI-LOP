@@ -17,6 +17,7 @@ import { PgSessionRepository } from '../contexts/identity-and-access/infrastruct
 import { PgGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-grants-repository.js';
 import { PgRoleRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-role-repository.js';
 import { PgApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-api-key-repository.js';
+import { PgHttpIdempotencyStore } from '../shared-kernel/infrastructure/http-idempotency.js';
 import { withAccessTokenRevocation } from '../contexts/identity-and-access/application/services/access-token-revocation.js';
 import { InMemoryTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/inmemory-token-blacklist.js';
 import { RedisTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/redis-token-blacklist.js';
@@ -185,6 +186,9 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     tokenIssuer,
     tokenBlacklist,
     limiters: rateLimiter ? buildAuthLimiters(rateLimiter) : undefined,
+    // Shared across replicas when Postgres is configured (a retry that lands
+    // on another pod must replay, not re-register).
+    idempotencyStore: pool ? new PgHttpIdempotencyStore(pool) : undefined,
   });
 
   const authMiddleware = makeAuthMiddleware({

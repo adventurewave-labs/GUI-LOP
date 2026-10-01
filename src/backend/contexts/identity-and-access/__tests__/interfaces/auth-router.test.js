@@ -142,7 +142,7 @@ describe('Auth HTTP router', () => {
     expect(second.body).toEqual(first.body);
   });
 
-  test('Idempotency-Key with different body returns 409', async () => {
+  test('Idempotency-Key with different body returns 422 (IETF idempotency-key draft)', async () => {
     const { app } = buildTestApp();
     const key = 'idem-key-2';
     await request(app)
@@ -153,7 +153,7 @@ describe('Auth HTTP router', () => {
       .post('/api/v1/auth/register')
       .set('Idempotency-Key', key)
       .send({ ...creds, email: 'other@example.com' });
-    expect(conflict.status).toBe(409);
-    expect(conflict.body.error).toBe('idempotency_conflict');
+    expect(conflict.status).toBe(422);
+    expect(conflict.body.error).toBe('idempotency_key_reused');
   });
 });

@@ -9,6 +9,7 @@ import { PgWorkflowTemplateRepository } from '../contexts/workflow-orchestration
 import { CachedWorkflowTemplateRepository } from '../contexts/workflow-orchestration/infrastructure/persistence/cached-workflow-template-repository.js';
 import { StubAutomatedStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/automated-step-runner.js';
 import { StubExternalStepRunner } from '../contexts/workflow-orchestration/infrastructure/step-runners/external-step-runner.js';
+import { PgHttpIdempotencyStore, InMemoryHttpIdempotencyStore } from '../shared-kernel/infrastructure/http-idempotency.js';
 import { InMemoryIdempotencyStore } from '../contexts/workflow-orchestration/application/ports/idempotency-store.js';
 
 import { PublishWorkflowTemplateUseCase } from '../contexts/workflow-orchestration/application/commands/publish-workflow-template.js';
@@ -176,6 +177,7 @@ export async function wireWorkflowOrchestration({
     getDetail: useCases.getDetail,
     listActive: useCases.listActive,
     idempotencyStore: idempotency,
+    httpIdempotencyStore: pool ? new PgHttpIdempotencyStore(pool) : new InMemoryHttpIdempotencyStore(),
   });
 
   if (logger) {
