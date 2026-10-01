@@ -122,13 +122,17 @@ jobs:
           kill "$(cat smoke-server.pid)" || true
           for i in $(seq 1 40); do kill -0 "$(cat smoke-server.pid)" 2>/dev/null || break; sleep 1; done
           pg_dump --version
-          DATABASE_URL=$SMOKE_DB DRILL_KEEP=1 bash database/scripts/db-backup.sh drill | tee drill.log
+          # Failures are surfaced as an annotation (job logs are not always reachable).
+          fail() { echo "::error title=$1::$(tail -n 12 "$2" | tr '\n' '|' | cut -c1-900)"; exit 1; }
+          DATABASE_URL=$SMOKE_DB DRILL_KEEP=1 bash database/scripts/db-backup.sh drill > drill.log 2>&1 || fail "restore drill" drill.log
+          cat drill.log
           RESTORED=$(tail -n 1 drill.log)
           NODE_ENV=production PORT=38081 AUTH_REGISTER_IP_LIMIT=100 JWT_SECRET=$(openssl rand -hex 32) \
             CORS_ORIGINS=https://app.example.com DATABASE_URL=$RESTORED REDIS_URL=redis://localhost:6379 \
             node src/backend/bootstrap/index.js > restore-server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:38081/livez >/dev/null && break; sleep 1; done
-          node scripts/smoke.mjs --base http://localhost:38081 --database-url "$RESTORED"
+          node scripts/smoke.mjs --base http://localhost:38081 --database-url "$RESTORED" > restored-smoke.log 2>&1 || fail "smoke on restored copy" restored-smoke.log
+          cat restored-smoke.log
 
       - name: Smoke server log on failure
         if: failure()
