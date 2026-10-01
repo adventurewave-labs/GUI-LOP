@@ -111,8 +111,10 @@ describe('route authorisation (booted app)', () => {
   });
 
   test('subscriptions are owner-scoped: no listing, deleting or registering for someone else', async () => {
+    const wf = await api.post('/api/v1/workflows').set(tokens.alice.auth).set('Idempotency-Key', 'authz-sub-wf')
+      .send({ template: 'data-analysis', context: {} }).expect(201);
     const created = await api.post('/api/v1/webhooks').set(tokens.alice.auth)
-      .send({ url: 'http://localhost:9/hook', subscriberRef: tokens.bob.id, filter: {} });
+      .send({ url: 'http://localhost:9/hook', subscriberRef: tokens.bob.id, filter: { workflowIds: [wf.body.data.workflow_id] } });
     expect(created.status).toBe(201);
 
     const alices = (await api.get('/api/v1/subscriptions').set(tokens.alice.auth).expect(200)).body.items;
@@ -144,9 +146,9 @@ describe('route authorisation (booted app)', () => {
   });
 
   test('webhook URLs with credentials or non-http schemes are refused even outside production', async () => {
-    const res = await api.post('/api/v1/webhooks').set(tokens.alice.auth).send({ url: 'https://u:p@example.com/x' });
+    const res = await api.post('/api/v1/webhooks').set(tokens.admin.auth).send({ url: 'https://u:p@example.com/x' });
     expect(res.status).toBe(400);
     expect(JSON.stringify(res.body)).toMatch(/INVALID_WEBHOOK_URL/);
-    expect((await api.post('/api/v1/webhooks').set(tokens.alice.auth).send({ url: 'file:///etc/passwd' })).status).toBe(400);
+    expect((await api.post('/api/v1/webhooks').set(tokens.admin.auth).send({ url: 'file:///etc/passwd' })).status).toBe(400);
   });
 });

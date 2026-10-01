@@ -183,13 +183,13 @@ export function buildOpenApiDocument({ version } = {}) {
       '/api/v1/inbox': { get: op('human-interaction', 'Pending human steps the caller may answer', { responses: { 200: json(obj({ data: { type: 'array', items: ref('PendingStep') } })), ...errs(401) } }) },
       '/api/v1/inbox/{workflowId}/{stepId}': { get: op('human-interaction', 'One pending step', { parameters: [pathParam('workflowId', uuid), pathParam('stepId', uuid)], responses: { 200: json(anyObject), ...errs(401, 403, 404) } }) },
 
-      '/api/v1/ui/generate': { post: op('ui', 'Generate a UI document for a step (AI provider; `stub` by default)', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Generated'), ...errs(400, 401) } }) },
-      '/api/v1/ui/documents/{id}': { get: op('ui', 'Get a generated UI document', { parameters: [pathParam('id')], responses: { 200: json(anyObject), ...errs(401, 404) } }) },
+      '/api/v1/ui/generate': { post: op('ui', 'Generate a UI document for a step (AI provider; `stub` by default)', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Generated'), ...errs(400, 401, 403) } }) },
+      '/api/v1/ui/documents/{id}': { get: op('ui', 'Get a generated UI document', { parameters: [pathParam('id')], responses: { 200: json(anyObject), ...errs(401, 403, 404) } }) },
       '/api/v1/ui/components': { get: op('ui', 'The component catalogue a UI document may use', { responses: { 200: json(obj({ items: { type: 'array', items: obj({ name: str, version: str, kind: str }) } })), ...errs(401) } }) },
 
       '/api/v1/subscriptions': { get: op('notifications', 'List your notification subscriptions', { responses: { 200: json(anyObject), ...errs(401) } }) },
       '/api/v1/subscriptions/{id}': { delete: op('notifications', 'Delete a subscription', { parameters: [pathParam('id')], responses: { 204: { description: 'Deleted' }, ...errs(401, 403, 404) } }) },
-      '/api/v1/webhooks': { post: op('notifications', 'Register a webhook subscription', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Created'), ...errs(400, 401) } }) },
+      '/api/v1/webhooks': { post: op('notifications', 'Register a webhook (non-admins: `filter.workflowIds` must name workflows they created)', { requestBody: { required: true, content: { 'application/json': { schema: anyObject } } }, responses: { 201: json(anyObject, 'Created'), ...errs(400, 401, 403) } }) },
       '/api/v1/dead-letters': { get: op('notifications', 'Deliveries that exhausted their retries', { responses: { 200: json(anyObject), ...errs(401, 403) } }) },
       '/api/v1/dead-letters/{id}/retry': { post: op('notifications', 'Re-queue a dead letter', { parameters: [pathParam('id')], responses: { 200: json(anyObject), 202: json(anyObject, 'Queued'), ...errs(401, 403, 404) } }) },
 

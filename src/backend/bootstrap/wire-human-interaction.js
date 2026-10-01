@@ -191,11 +191,12 @@ export function wireHumanInteraction({
       unitOfWork,
       clock,
     }),
-    getPendingStep: new GetPendingStep({ pendingStepRepository }),
+    getPendingStep: new GetPendingStep({ pendingStepRepository, userDirectory, workflowReader, authorisation }),
     listPendingStepsForUser: new ListPendingStepsForUser({
       pendingStepRepository,
       userDirectory,
       workflowReader,
+      authorisation,
     }),
   };
 

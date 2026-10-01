@@ -44,3 +44,54 @@ export function selfOrPermission(authorisation, permission, subjectOf) {
     return fallback(req, res, next);
   };
 }
+
+const MAX_WEBHOOK_WORKFLOWS = 50;
+
+/**
+ * Webhook registration scope.
+ *
+ * A webhook with an empty filter receives EVERY event the platform emits —
+ * every user's workflows, responses and identity events — and any signed-in
+ * user could register one. A subscription is a standing export to a third
+ * party, so it is held to a stricter rule than a one-off read:
+ *
+ *   - `notification:admin` (admins implicitly): any filter, including none;
+ *   - everyone else: `filter.workflowIds` must name 1..50 workflows the
+ *     caller created, and the caller needs `workflow:read` (so a key scoped
+ *     to something else cannot set up an export).
+ *
+ * @param {Parameters<typeof requirePermission>[0]} authorisation
+ * @param {(workflowId: string) => Promise<string|null>} ownerOf  creator of a workflow, or null when unknown
+ */
+export function webhookScopeGuard(authorisation, ownerOf) {
+  const allowed = async (req, permission) => {
+    const result = await authorisation.evaluate({ userId: req.user.id, permission, ceiling: req.user.apiKeyPermissions ?? null });
+    return Boolean(result) && typeof result.isFail === 'function' && !result.isFail();
+  };
+  return async function webhookScopeMiddleware(req, res, next) {
+    try {
+      if (!req.user?.id) return deny(res, 'Authentication required');
+      if (await allowed(req, 'notification:admin')) return next();
+      if (!(await allowed(req, 'workflow:read'))) return deny(res, 'Permission denied: workflow:read');
+      const ids = req.body?.filter?.workflowIds;
+      const scoped = Array.isArray(ids) && ids.length > 0 && ids.length <= MAX_WEBHOOK_WORKFLOWS && ids.every((id) => typeof id === 'string' && id.length > 0);
+      if (!scoped) {
+        return res.status(403).json({
+          error: 'forbidden',
+          code: 'WEBHOOK_SCOPE_REQUIRED',
+          message: `filter.workflowIds must list 1 to ${MAX_WEBHOOK_WORKFLOWS} workflows you created; an unfiltered webhook needs notification:admin`,
+        });
+      }
+      for (const id of new Set(ids)) {
+        const owner = await ownerOf(id);
+        // Same answer for "not yours" and "does not exist".
+        if (owner == null || String(owner) !== String(req.user.id)) {
+          return res.status(403).json({ error: 'forbidden', code: 'WEBHOOK_SCOPE_REQUIRED', message: 'filter.workflowIds may only name workflows you created' });
+        }
+      }
+      return next();
+    } catch (err) {
+      return next(err);
+    }
+  };
+}

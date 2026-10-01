@@ -166,4 +166,11 @@ UI resume when the circuit closes; nothing needs replaying. To stop spend or err
 - **Data loss / corruption**: stop writers, restore the newest verified backup into an empty
   database, repoint `DATABASE_URL`, deploy, smoke — full procedure in the deployment guide.
 - **Who can see what**: audit trail and exports need `audit:read` / `audit:export`; dead letters need
-  `notification:admin`; subscriptions are visible only to their owner (and admins).
+  `notification:admin`; subscriptions are visible only to their owner (and admins). Workflows are
+  readable by everyone holding `workflow:read` (one organisation, no tenants); execute/cancel is
+  owner-or-admin. The inbox shows a step only to someone who can answer it (`workflow:respond` +
+  the step's eligibility rule); the workflow's owner can also open it. UI generation needs
+  `workflow:create`. Non-admins can register webhooks only for workflows they created
+  (`filter.workflowIds`); an unfiltered webhook needs `notification:admin`. Webhooks registered
+  before this rule keep their filter — review with
+  `SELECT id, subscriber_ref, address, filters FROM subscriptions WHERE channel = 'webhook';`.

@@ -17,7 +17,7 @@
  * `config.PORT` with graceful SIGTERM/SIGINT handling.
  */
 
-import { requirePermission, selfOrPermission } from './route-guards.js';
+import { requirePermission, selfOrPermission, webhookScopeGuard } from './route-guards.js';
 import { buildOpenApiDocument } from './openapi.js';
 import { createPgPool, pgPoolStats } from '../shared-kernel/infrastructure/pg-pool.js';
 import http from 'node:http';
@@ -325,9 +325,14 @@ export async function bootstrap(envOverride) {
   // Mounted at /api/v1: the router's own paths start with /ui. It used to be
   // mounted at /api/v1/ui, so the real paths were /api/v1/ui/ui/generate
   // etc. and the documented /api/v1/ui/* returned 404.
-  app.use('/api/v1', identity.authMiddleware, ui.router);
   // Authorisation for routers that have none of their own (see route-guards.js).
   const guarded = (permission) => [identity.authMiddleware, requirePermission(identity.authorisationService, permission)];
+  // UI generation calls the AI provider (money, with a real provider) and
+  // stores a document: it needs the right to author workflows, not just a
+  // login — a read-only `viewer` could trigger it. Reading needs workflow:read.
+  app.use('/api/v1/ui/generate', ...guarded('workflow:create'));
+  app.use('/api/v1/ui', ...guarded('workflow:read'));
+  app.use('/api/v1', identity.authMiddleware, ui.router);
   app.use('/api/v1/audit', ...guarded('audit:read'));
   app.use('/api/v1/audit/exports', ...guarded('audit:export'));
   app.use('/api/v1/analytics/users/:id', identity.authMiddleware,
@@ -338,6 +343,15 @@ export async function bootstrap(envOverride) {
   app.use('/api/v1', identity.authMiddleware, audit.routers.analytics);
   app.use('/api/v1', identity.authMiddleware, audit.routers.audit);
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
+  // Unfiltered webhooks see every user's events: non-admins may only
+  // subscribe to workflows they created.
+  app.post('/api/v1/webhooks', identity.authMiddleware, webhookScopeGuard(identity.authorisationService, async (workflowId) => {
+    try {
+      return (await workflow.useCases.getDetail.execute({ workflowId }))?.created_by ?? null;
+    } catch {
+      return null;
+    }
+  }));
   app.use('/api/v1', identity.authMiddleware, notification.router);
 
   // Kubernetes-style probes. Liveness never touches dependencies (a DB blip
