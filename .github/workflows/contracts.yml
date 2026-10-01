@@ -99,11 +99,16 @@ jobs:
           DATABASE_URL=$SMOKE_DB npm run -s db:migrate
           DATABASE_URL=$SMOKE_DB npm run -s db:migrate   # idempotent re-run
           export METRICS_TOKEN=$(openssl rand -hex 16)
-          NODE_ENV=production PORT=38080 JWT_SECRET=$(openssl rand -hex 32) \
+          NODE_ENV=production PORT=38080 RATE_LIMIT_MAX=100000000 JWT_SECRET=$(openssl rand -hex 32) \
             CORS_ORIGINS=https://app.example.com DATABASE_URL=$SMOKE_DB REDIS_URL=redis://localhost:6379 \
             node src/backend/bootstrap/index.js > smoke-server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:38080/livez >/dev/null && break; sleep 1; done
           node scripts/smoke.mjs --base http://localhost:38080 --metrics-token "$METRICS_TOKEN" --database-url "$SMOKE_DB"
+
+      # Short load pass as a regression tripwire (docs/PRODUCTION_DEPLOYMENT_GUIDE.md
+      # has the SLOs and the baseline). Thresholds are loose: shared runners are noisy.
+      - name: Load tripwire (mixed, 10 users, 10 s)
+        run: node scripts/load.mjs --base http://localhost:38080 --scenario mixed --concurrency 10 --duration 10 --p95 500 --p99 1500 --max-error-rate 0.01
 
       - name: Smoke server log on failure
         if: failure()

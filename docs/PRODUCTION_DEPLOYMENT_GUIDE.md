@@ -256,6 +256,47 @@ helm -n gui-lop upgrade gui-lop infrastructure/helm/gui-lop \
 
 ---
 
+## Performance: SLOs, baseline and load testing
+
+**Service-level objectives** (per API instance, measured at the server; alert rules follow in the runbook):
+
+| Objective | Target |
+| --- | --- |
+| API latency (all `/api/v1` routes except login) | p95 < 250 ms, p99 < 600 ms |
+| Login latency (bcrypt cost 12, by design CPU-bound) | p95 < 800 ms |
+| Error rate (5xx + timeouts) | < 0.1 % |
+| Liveness / readiness probes | p99 < 50 ms |
+| Outbox delivery lag (`outbox_oldest_pending_age_seconds`) | < 30 s |
+
+**Baseline** — 2026-10-01, `NODE_ENV=production`, one API process, Postgres 16 + Redis on the same
+2-vCPU sandbox as the load generator (so these are conservative), 20 closed-loop virtual users, 15 s:
+
+| Scenario | Throughput | p50 | p95 | p99 | Errors |
+| --- | --- | --- | --- | --- | --- |
+| `health` — `GET /livez` | 4 631 req/s | 3.1 ms | 10.3 ms | 15.3 ms | 0 |
+| `read` — `GET /workflows/:id` (auth + 2 DB round-trips) | 1 381 req/s | 13.6 ms | 22.2 ms | 29.1 ms | 0 |
+| `write` — `POST /workflows` (txn + steps + outbox, ~5 round-trips) | 450 req/s | 43.5 ms | 58.9 ms | 70.1 ms | 0 |
+| `mixed` — 70 % read · 20 % templates · 10 % write | 1 048 req/s | 16.2 ms | 42.7 ms | 55.1 ms | 0 |
+
+Unloaded single-request latency: read 1.8 ms, write 4 ms. Under 20 users the process is CPU-bound,
+not waiting on the database (pool never queued), so the first scaling lever is replicas, then
+`DB_POOL_MAX`. A login flood from one IP is absorbed by the auth limiter (300/min per IP): 2 575 req/s
+answered with 429 at p99 11 ms without reaching bcrypt. Legitimate login capacity is bounded by
+bcrypt: ~250 ms of CPU each, i.e. roughly 4 logins/s per core.
+
+**Run it** (`scripts/load.mjs`, no dependencies; exits non-zero when an SLO is missed):
+
+```bash
+# The default 600 req/min per-IP budget would turn a load run into a 429 test.
+RATE_LIMIT_MAX=100000000 NODE_ENV=production ... node src/backend/bootstrap/index.js &
+node scripts/load.mjs --base http://localhost:3001 --scenario mixed \
+  --concurrency 20 --duration 20 --p95 250 --p99 600 --max-error-rate 0.001
+```
+
+CI runs a short `mixed` pass after the production-mode smoke test as a regression tripwire (generous
+thresholds: shared runners are noisy). Do not point a real load run at staging without raising its
+`RATE_LIMIT_MAX` first.
+
 ## CI/CD reference
 
 | Workflow | Trigger | Gate? |
