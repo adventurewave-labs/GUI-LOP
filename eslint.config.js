@@ -32,7 +32,7 @@ export default [
       sourceType: 'module',
       globals: { ...globals.node },
     },
-    settings: { node: { version: '>=18.18.0' } },
+    settings: { node: { version: '>=22.12.0' } },
     rules: {
       // --- correctness ---
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
@@ -50,7 +50,7 @@ export default [
       'n/no-process-exit': 'off', // only the entry point exits; enforced via no-console scope
       'n/no-unpublished-import': 'off', // devDeps legitimately imported by tests
       'n/no-missing-import': 'off', // resolver can't follow package "exports" in all deps
-      'n/no-unsupported-features/node-builtins': ['error', { ignores: ['fetch'] }],
+      'n/no-unsupported-features/node-builtins': 'error',
 
       // --- security ---
       // Object-injection fires on every computed property access; too noisy

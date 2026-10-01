@@ -135,5 +135,8 @@
     "testcontainers": "^10.13.2",
     "typescript": "^5.9.3",
     "ws": "^8.18.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
