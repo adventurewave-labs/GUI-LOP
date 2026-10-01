@@ -87,6 +87,17 @@ export function buildAuthRouter({
     message: { error: 'rate_limited', message: 'Too many refresh attempts' },
   });
 
+  // Router-wide baseline (defence in depth beneath the per-route limits and
+  // the global /api/v1 limiter). Direct express-rate-limit instance so
+  // static analysis (CodeQL js/missing-rate-limiting) can see it.
+  router.use(rateLimit({
+    windowMs: 60 * 1000,
+    limit: 300,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: 'rate_limited', message: 'Too many requests' },
+  }));
+
   router.post('/register', registerLimiter, idem, async (req, res) => {
     try {
       const out = await useCases.registerUser.execute(req.body ?? {});
