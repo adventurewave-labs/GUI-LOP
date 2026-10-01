@@ -27,10 +27,10 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **9. Frontend WS subprotocol auth** (`473769e`). Token moved from `?token=` to `Sec-WebSocket-Protocol: bearer,<token>`; `user_id` param dropped; 4001 → `onTokenExpired()` + immediate reconnect. Server pins negotiation to `bearer` (default would echo a misordered token). Frontend service tests now run in CI. Backend 684 → 686; frontend WS 6 → 12.
 - [x] **10. Rate limiting** (`b8cf08b`). Was per-pod memory, per-IP only, `/register` + `/password` unlimited, global config unenforced. Now Redis-backed factory (draft-7 headers, IPv6 /64, hashed identifiers), per-account failed-login limit, register/password limits, auth fail-closed, general `/api/v1` budget (defaults 600/min). Also fixed a boot-time crash path (unhandled `SCRIPT LOAD` rejection with Redis down). 686 → 708 tests.
 - [x] **11. RFC 9457** (`8bede0b`). One middleware turns every ≥400 JSON response into `application/problem+json` (`type`/`title`/`status`/`detail`/`instance` + `code`, `request_id`) while preserving all three legacy context envelopes as extension members — non-breaking, no router edits. 708 → 721 tests.
+- [x] **12. AI adapter SOTA** (`ce7ccc7`). Anthropic forced tool use + OpenAI `json_schema` structured outputs from one shared JSON Schema (validator kept); prompt caching on the static prefix; `AI_MODEL_CLASSIFY` tier; label-set enforcement. Fixed two loop-4 telemetry bugs: vendor adapters dropped `onTelemetry`, and token counters read the wrong keys. Offline tests only. 721 → 729 tests.
 
 ## Backlog (priority order)
 
-- [ ] **12. AI adapter SOTA.** Structured output via tool-use/JSON-schema for UI document drafts (schema already in `ui-document-draft-schema.js`), prompt caching on the static system prompt, configurable model ids per tier, token/cost telemetry. Offline fixture tests only.
 - [ ] **13. Contract tests un-skipped.** `jest.contracts.config.js` currently skips all 148 tests — make them run against the in-memory bootstrap and add to CI.
 - [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
 - [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.
