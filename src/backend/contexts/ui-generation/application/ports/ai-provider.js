@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AIProvider — outbound port for the Anti-Corruption Layer described in
  * ADR 0023. Adapters live under `infrastructure/ai/<vendor>/` and translate

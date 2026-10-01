@@ -27,7 +27,7 @@ function envelope({ eventType, aggregateId, aggregateType, payload, occurredAt, 
 }
 
 export class HumanResponseRecorded extends DomainEvent {
-  constructor({ humanResponseId, workflowId, stepId, action, payload, by, occurredAt, correlationId, actor }) {
+  constructor({ humanResponseId, workflowId, stepId, action, payload, by, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: HUMAN_RESPONSE_RECORDED,
       aggregateId: humanResponseId,
@@ -41,7 +41,7 @@ export class HumanResponseRecorded extends DomainEvent {
 }
 
 export class HumanStepEscalated extends DomainEvent {
-  constructor({ workflowId, stepId, level, reason, occurredAt, correlationId, actor }) {
+  constructor({ workflowId, stepId, level, reason, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: HUMAN_STEP_ESCALATED,
       aggregateId: `${workflowId}:${stepId}`,
@@ -55,7 +55,7 @@ export class HumanStepEscalated extends DomainEvent {
 }
 
 export class HumanStepDeadlinePassed extends DomainEvent {
-  constructor({ workflowId, stepId, policy, occurredAt, correlationId, actor }) {
+  constructor({ workflowId, stepId, policy, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: HUMAN_STEP_DEADLINE_PASSED,
       aggregateId: `${workflowId}:${stepId}`,

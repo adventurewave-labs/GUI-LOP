@@ -1,3 +1,4 @@
+// @ts-check
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { sendError } from './error-mapper.js';

@@ -35,7 +35,7 @@ export class PendingStep {
    * @param {string} args.stepId
    * @param {string} [args.uiDocumentId]
    * @param {object|EligibilityRule} args.eligibility
-   * @param {Date}  [args.deadline]
+   * @param {Date|null}  [args.deadline]
    * @param {string|TimeoutPolicy} [args.onTimeout]
    * @param {Date}  args.now
    */

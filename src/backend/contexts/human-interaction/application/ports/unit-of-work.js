@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * UnitOfWork port — transactional boundary for repository writes.
  *

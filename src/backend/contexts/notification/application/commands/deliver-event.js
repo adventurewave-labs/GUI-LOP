@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * DeliverEventCommand — main consumer entry.
  *

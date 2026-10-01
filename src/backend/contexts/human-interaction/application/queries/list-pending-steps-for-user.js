@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ListPendingStepsForUser query — drives the inbox UI.
  *

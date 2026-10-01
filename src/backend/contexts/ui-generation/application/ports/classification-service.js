@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ClassificationService — application-level port that exposes classification
  * as a first-class capability, distinct from `AIProvider.classify`. The

@@ -41,7 +41,7 @@ function envelope({
 }
 
 export class UserRegistered extends DomainEvent {
-  constructor({ userId, email, username, role, occurredAt, correlationId, actor }) {
+  constructor({ userId, email, username, role, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.registered',
       aggregateId: userId,
@@ -55,7 +55,7 @@ export class UserRegistered extends DomainEvent {
 }
 
 export class UserDeactivated extends DomainEvent {
-  constructor({ userId, occurredAt, correlationId, actor }) {
+  constructor({ userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.deactivated',
       aggregateId: userId,
@@ -69,7 +69,7 @@ export class UserDeactivated extends DomainEvent {
 }
 
 export class UserReactivated extends DomainEvent {
-  constructor({ userId, occurredAt, correlationId, actor }) {
+  constructor({ userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.reactivated',
       aggregateId: userId,
@@ -83,7 +83,7 @@ export class UserReactivated extends DomainEvent {
 }
 
 export class UserEmailChanged extends DomainEvent {
-  constructor({ userId, oldEmail, newEmail, occurredAt, correlationId, actor }) {
+  constructor({ userId, oldEmail, newEmail, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.email_changed',
       aggregateId: userId,
@@ -97,7 +97,7 @@ export class UserEmailChanged extends DomainEvent {
 }
 
 export class UserUsernameChanged extends DomainEvent {
-  constructor({ userId, oldUsername, newUsername, occurredAt, correlationId, actor }) {
+  constructor({ userId, oldUsername, newUsername, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.username_changed',
       aggregateId: userId,
@@ -111,7 +111,7 @@ export class UserUsernameChanged extends DomainEvent {
 }
 
 export class UserPasswordChanged extends DomainEvent {
-  constructor({ userId, occurredAt, correlationId, actor }) {
+  constructor({ userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.password_changed',
       aggregateId: userId,
@@ -125,7 +125,7 @@ export class UserPasswordChanged extends DomainEvent {
 }
 
 export class UserAuthenticated extends DomainEvent {
-  constructor({ userId, sessionId, ip, occurredAt, correlationId, actor }) {
+  constructor({ userId, sessionId, ip, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.authenticated',
       aggregateId: userId,
@@ -139,7 +139,7 @@ export class UserAuthenticated extends DomainEvent {
 }
 
 export class UserAuthenticationFailed extends DomainEvent {
-  constructor({ identifier, ip, reason, occurredAt, correlationId, actor }) {
+  constructor({ identifier, ip, reason, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'user.authentication_failed',
       aggregateId: identifier ?? 'unknown',
@@ -153,7 +153,7 @@ export class UserAuthenticationFailed extends DomainEvent {
 }
 
 export class SessionCreated extends DomainEvent {
-  constructor({ sessionId, userId, ip, occurredAt, correlationId, actor }) {
+  constructor({ sessionId, userId, ip, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'session.created',
       aggregateId: sessionId,
@@ -167,7 +167,7 @@ export class SessionCreated extends DomainEvent {
 }
 
 export class SessionRefreshed extends DomainEvent {
-  constructor({ sessionId, userId, occurredAt, correlationId, actor }) {
+  constructor({ sessionId, userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'session.refreshed',
       aggregateId: sessionId,
@@ -181,7 +181,7 @@ export class SessionRefreshed extends DomainEvent {
 }
 
 export class SessionRevoked extends DomainEvent {
-  constructor({ sessionId, userId, occurredAt, correlationId, actor }) {
+  constructor({ sessionId, userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'session.revoked',
       aggregateId: sessionId,
@@ -195,7 +195,7 @@ export class SessionRevoked extends DomainEvent {
 }
 
 export class RoleGranted extends DomainEvent {
-  constructor({ userId, role, occurredAt, correlationId, actor }) {
+  constructor({ userId, role, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'role.granted',
       aggregateId: userId,
@@ -209,7 +209,7 @@ export class RoleGranted extends DomainEvent {
 }
 
 export class PermissionGranted extends DomainEvent {
-  constructor({ userId, permission, scope, occurredAt, correlationId, actor }) {
+  constructor({ userId, permission, scope, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'permission.granted',
       aggregateId: userId,
@@ -223,7 +223,7 @@ export class PermissionGranted extends DomainEvent {
 }
 
 export class PermissionRevoked extends DomainEvent {
-  constructor({ userId, permission, scope, occurredAt, correlationId, actor }) {
+  constructor({ userId, permission, scope, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'permission.revoked',
       aggregateId: userId,
@@ -267,7 +267,7 @@ export class ApiKeyMinted extends DomainEvent {
 }
 
 export class ApiKeyRevoked extends DomainEvent {
-  constructor({ apiKeyId, userId, occurredAt, correlationId, actor }) {
+  constructor({ apiKeyId, userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'api_key.revoked',
       aggregateId: apiKeyId,
@@ -281,7 +281,7 @@ export class ApiKeyRevoked extends DomainEvent {
 }
 
 export class ApiKeyUsed extends DomainEvent {
-  constructor({ apiKeyId, userId, occurredAt, correlationId, actor }) {
+  constructor({ apiKeyId, userId, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'api_key.used',
       aggregateId: apiKeyId,

@@ -1,3 +1,4 @@
+// @ts-check
 import crypto from 'node:crypto';
 import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 /**

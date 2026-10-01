@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * CloseAbandonedStep use case.
  *

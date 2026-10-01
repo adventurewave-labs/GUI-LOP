@@ -1,3 +1,4 @@
+// @ts-check
 import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { WorkflowTemplate } from '../../domain/template/workflow-template.js';
 import { StepDefinition } from '../../domain/template/step-definition.js';

@@ -1,3 +1,4 @@
+// @ts-check
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 
 export class GetWorkflowDetailQuery {

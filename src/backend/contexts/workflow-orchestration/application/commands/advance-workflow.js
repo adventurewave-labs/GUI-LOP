@@ -1,3 +1,4 @@
+// @ts-check
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 import { WorkflowStatus } from '../../domain/workflow/workflow-status.js';
 import { WorkflowEngine } from '../services/engine.js';

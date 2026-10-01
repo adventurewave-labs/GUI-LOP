@@ -1,3 +1,4 @@
+// @ts-check
 export class GetActiveWorkflowsQuery {
   constructor({ pool }) {
     this._pool = pool;

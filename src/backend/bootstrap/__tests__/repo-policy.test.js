@@ -51,14 +51,22 @@ describe('type-check coverage (roadmap #14)', () => {
     if (d.isDirectory()) return d.name === '__tests__' ? [] : walk(p);
     return d.name.endsWith('.js') && !d.name.endsWith('.test.js') ? [p] : [];
   });
-  const checked = ['src/backend/shared-kernel', 'src/backend/bootstrap']
+  const contexts = readdirSync(path.join(ROOT, 'src/backend/contexts'), { withFileTypes: true })
+    .filter((d) => d.isDirectory()).map((d) => d.name);
+  const checked = [
+    'src/backend/shared-kernel',
+    'src/backend/bootstrap',
+    // roadmap 14c: every context's application + interfaces layers
+    ...contexts.flatMap((c) => [`src/backend/contexts/${c}/application`, `src/backend/contexts/${c}/interfaces`]),
+  ]
+    .filter((d) => { try { return readdirSync(path.join(ROOT, d)) && true; } catch { return false; } })
     .flatMap((d) => walk(path.join(ROOT, d)));
 
-  test('every shared-kernel / bootstrap module opts into `// @ts-check`', () => {
+  test('every shared-kernel / bootstrap / application / interfaces module opts into `// @ts-check`', () => {
     const missing = checked
       .filter((f) => !readFileSync(f, 'utf8').startsWith('// @ts-check'))
       .map((f) => path.relative(ROOT, f));
-    expect(checked.length).toBeGreaterThan(20);
+    expect(checked.length).toBeGreaterThan(140);
     expect(missing).toEqual([]);
   });
 

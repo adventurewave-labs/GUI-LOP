@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * EscalateOverdueStep use case.
  *

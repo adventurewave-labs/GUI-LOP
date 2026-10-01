@@ -1,3 +1,4 @@
+// @ts-check
 import express from 'express';
 
 export function createAnalyticsRouter({

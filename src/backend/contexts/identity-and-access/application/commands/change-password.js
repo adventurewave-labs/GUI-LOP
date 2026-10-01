@@ -1,3 +1,4 @@
+// @ts-check
 import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { InvalidCredentialsError } from '../../domain/errors.js';
 
@@ -17,8 +18,8 @@ export class ChangePasswordUseCase {
 
     if (typeof cmd.newPassword !== 'string' || cmd.newPassword.length < 8) {
       const err = new Error('newPassword must be at least 8 characters');
-      err.code = 'VALIDATION';
-      err.field = 'newPassword';
+      /** @type {any} */ (err).code = 'VALIDATION';
+      /** @type {any} */ (err).field = 'newPassword';
       throw err;
     }
 

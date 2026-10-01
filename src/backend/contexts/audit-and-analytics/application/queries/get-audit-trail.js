@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * GetAuditTrail — generic audit trail by aggregate.
  */

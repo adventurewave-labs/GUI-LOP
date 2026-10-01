@@ -1,3 +1,4 @@
+// @ts-check
 import { ConflictError } from '../../../../shared-kernel/domain/errors.js';
 import { EmailAddress } from '../../domain/user/email-address.js';
 import { Username } from '../../domain/user/username.js';
@@ -26,8 +27,8 @@ export class RegisterUserUseCase {
 
     if (typeof cmd.password !== 'string' || cmd.password.length < 8) {
       const err = new Error('password must be at least 8 characters');
-      err.code = 'VALIDATION';
-      err.field = 'password';
+      /** @type {any} */ (err).code = 'VALIDATION';
+      /** @type {any} */ (err).field = 'password';
       throw err;
     }
 

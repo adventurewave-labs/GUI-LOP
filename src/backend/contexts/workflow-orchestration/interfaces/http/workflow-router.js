@@ -1,3 +1,4 @@
+// @ts-check
 import { Router } from 'express';
 import { expressErrorBoundary } from './error-mapper.js';
 import { withHttpIdempotency } from './idempotency.js';

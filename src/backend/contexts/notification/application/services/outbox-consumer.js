@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * OutboxConsumer — long-running poller that drains the outbox and feeds the
  * DeliverEvent command. Designed for deterministic testing: pass a frozen
@@ -76,6 +77,9 @@ export class OutboxConsumer {
 }
 
 /** Convenience factory matching the spec's `start({outboxPort, intervalMs})` shape. */
+/**
+ * @param {{ outboxPort?: any, deliverEventCommand?: any, intervalMs?: number, batchSize?: number, logger?: any }} [opts]
+ */
 export function start({ outboxPort, deliverEventCommand, intervalMs = 250, batchSize = 25, logger } = {}) {
   const consumer = new OutboxConsumer({ outboxPort, deliverEventCommand, batchSize, logger });
   const stop = consumer.start({ intervalMs });

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ws-principal-resolver — authenticates WebSocket upgrade requests.
  *
@@ -66,8 +67,8 @@ function sane(token) {
  * Build the `principalFromUpgrade` callback consumed by the notification
  * context's WebSocket adapter.
  *
- * @param {object} deps
- * @param {{ verifyAccess(token: string): Promise<object> }} deps.tokenIssuer
+ * @param {object} [deps]
+ * @param {{ verifyAccess(token: string): Promise<object> }} [deps.tokenIssuer]  required at runtime
  * @param {{ isBlacklisted(jti: string): Promise<boolean> }} [deps.tokenBlacklist]
  * @param {{ execute(input: {rawKey: string}): Promise<object> }} [deps.authenticateWithApiKey]
  * @param {boolean} [deps.allowHeaderAuth=false]

@@ -1,3 +1,4 @@
+// @ts-check
 import { ConflictError, DomainError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Map a domain or unknown error to an HTTP `(status, body)` pair.

@@ -1,3 +1,4 @@
+// @ts-check
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   InvalidCredentialsError,

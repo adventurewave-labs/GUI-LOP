@@ -1,3 +1,4 @@
+// @ts-check
 import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 import { WorkflowStatus } from '../../domain/workflow/workflow-status.js';

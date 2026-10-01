@@ -1,3 +1,4 @@
+// @ts-check
 import { Router } from 'express';
 import { sendError } from './error-mapper.js';
 import { adminGuard } from './admin-guard.js';
@@ -19,6 +20,7 @@ import { adminGuard } from './admin-guard.js';
  *   }
  *   requireAuth: middleware (already authenticates principal)
  */
+/** @param {{ useCases?: any, requireAuth?: Function }} [deps] */
 export function buildAdminRouter({ useCases, requireAuth } = {}) {
   if (!useCases) throw new Error('useCases required');
   if (typeof requireAuth !== 'function') {

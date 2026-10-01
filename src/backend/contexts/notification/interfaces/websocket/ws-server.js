@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ws-server.js — WebSocket adapter for the notification context.
  *
@@ -227,7 +228,7 @@ export async function attach(httpServer, deps) {
         try { ws.close?.(code, reason); } catch { /* ignore */ }
       }
       if (clients.length > 0 && terminateAfterMs > 0) {
-        await new Promise((resolve) => {
+        await new Promise(/** @param {(v?: unknown) => void} resolve */ (resolve) => {
           const t = setTimeout(resolve, terminateAfterMs);
           t.unref?.();
           const check = () => {

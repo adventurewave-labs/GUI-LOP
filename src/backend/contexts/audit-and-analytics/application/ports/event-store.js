@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * EventStore — read-only port over the platform's `events` table.
  *

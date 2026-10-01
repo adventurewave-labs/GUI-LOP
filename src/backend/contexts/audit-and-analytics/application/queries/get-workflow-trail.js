@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * GetWorkflowTrail — joins `events` and `audit_logs` for a single workflow,
  * returning a chronological combined trail.

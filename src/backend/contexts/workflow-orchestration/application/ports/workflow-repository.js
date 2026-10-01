@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/workflow/workflow.js').Workflow} Workflow
  *

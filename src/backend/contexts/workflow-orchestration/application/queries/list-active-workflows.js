@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ListActiveWorkflows — read-side query.
  *

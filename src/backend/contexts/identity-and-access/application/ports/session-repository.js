@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/session/session.js').Session} Session
  */

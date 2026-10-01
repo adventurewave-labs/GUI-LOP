@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Deadline watcher.
  *
@@ -27,6 +28,10 @@ export function start({
   if (!escalateUseCase) throw new Error('deadline-watcher: escalateUseCase required');
   if (!pendingStepRepository) throw new Error('deadline-watcher: pendingStepRepository required');
   if (!clock) throw new Error('deadline-watcher: clock required');
+  // Re-bind as consts so the narrowing survives into the tick() closure.
+  const esc = escalateUseCase;
+  const repo = pendingStepRepository;
+  const clk = clock;
 
   let timer = null;
   let stopped = false;
@@ -34,10 +39,10 @@ export function start({
 
   async function tick() {
     if (stopped) return { processed: 0 };
-    const now = clock.now();
+    const now = clk.now();
     let overdue;
     try {
-      overdue = await pendingStepRepository.findOverdue(now, batchSize);
+      overdue = await repo.findOverdue(now, batchSize);
     } catch (err) {
       onError(err, { phase: 'findOverdue' });
       return { processed: 0, error: err };
@@ -46,7 +51,7 @@ export function start({
     for (const step of overdue) {
       if (stopped) break;
       try {
-        await escalateUseCase.execute({
+        await esc.execute({
           workflowId: step.workflowId,
           stepId: step.stepId,
         });
