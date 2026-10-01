@@ -25,8 +25,9 @@ export default {
   tempDirName: '.stryker-tmp',
   concurrency: 2,
   timeoutMS: 10000,
-  // Baseline 2026-10-01: 57.4% (1853 killed+timeout / 3228; audit-and-analytics has
-  // no domain layer). Per context: human-interaction 63.4, notification 61.3,
-  // identity-and-access 57.4, ui-generation 54.6, workflow-orchestration 53.2.
-  thresholds: { high: 80, low: 60, break: 55 },
+  // Baseline 2026-10-01: 57.4% → 65.2% after round-2 loops 6-7 (2175/3337;
+  // audit-and-analytics has no domain layer). Per context: ui-generation 84.8,
+  // workflow-orchestration 67.4, human-interaction 63.4, notification 61.3,
+  // identity-and-access 57.4. Ratchet: raise `break`, never lower it.
+  thresholds: { high: 80, low: 60, break: 63 },
 };
