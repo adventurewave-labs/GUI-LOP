@@ -130,7 +130,7 @@ jobs:
           DATABASE_URL=$SMOKE_DB DRILL_KEEP=1 bash database/scripts/db-backup.sh drill > drill.log 2>&1 || fail "restore drill" drill.log
           cat drill.log
           RESTORED=$(tail -n 1 drill.log)
-          NODE_ENV=production PORT=38081 AUTH_REGISTER_IP_LIMIT=100 JWT_SECRET=$(openssl rand -hex 32) \
+          NODE_ENV=production PORT=38081 RATE_LIMIT_MAX=100000000 AUTH_REGISTER_IP_LIMIT=100 JWT_SECRET=$(openssl rand -hex 32) \
             CORS_ORIGINS=https://app.example.com DATABASE_URL=$RESTORED REDIS_URL=redis://localhost:6379 \
             node src/backend/bootstrap/index.js > restore-server.log 2>&1 &
           for i in $(seq 1 30); do curl -sf localhost:38081/livez >/dev/null && break; sleep 1; done
