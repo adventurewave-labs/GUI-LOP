@@ -20,10 +20,10 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **3. W3C Trace Context** (`8adb9cf`). Dependency-free spec-compliant `traceparent`/`tracestate` handling; inbound traces continued with a new server span, invalid headers start a fresh trace; `trace_id`/`span_id` on every log line; `traceresponse` header (CORS-exposed); AI adapters propagate on outbound calls. OTel SDK deferred (propagator-compatible). 602 → 624 tests.
 - [x] **4. Prometheus `/metrics`** (`c18a472`). prom-client per-bootstrap registry: RED histogram by route template, in-flight, outbox pending/age, WS connections, AI latency/outcome/tokens/circuit state, default runtime metrics. Timing-safe `METRICS_TOKEN` guard, fails closed in prod. Staging Prometheus scrape target now resolves. 624 → 633 tests.
 - [x] **5. Real lint** (`cfba7dc`). ESLint 9 flat config (`@eslint/js` + `n` + `security`), `npm run lint` at zero warnings, CI job. Lint surfaced two real vulns, both fixed with tests: **path traversal in `LocalFsStorage`** and **ReDoS-prone `EMAIL_RE`** in the PII scrubber. 633 → 642 tests.
+- [x] **6. Node LTS** (`16d7bc6`). Off EOL Node 18 → **Node 24 LTS** everywhere (Docker ×6, devcontainer, `.nvmrc`, workflows); `engines >=22.12`; CI backend matrix [22, 24]. Full suite verified on both. Tests unchanged at 642 (runtime-only change).
 
 ## Backlog (priority order)
 
-- [ ] **6. Node 22 LTS.** Node 18 is EOL. Bump CI matrix, Dockerfiles, devcontainer, `engines`, `.nvmrc`; `node --test`-safe flags.
 - [ ] **7. Supply chain.** Dependabot (npm, actions, docker), pin Actions by SHA, CodeQL workflow, `npm audit --omit=dev --audit-level=high` gate, CycloneDX SBOM + build provenance/attestation in `docker.yml`, `permissions:` least-privilege on every workflow.
 - [ ] **8. WebSocket hardening II.** BUG found in loop 1: `ws-server.js` `idleTimer` is never reset on pong/message, so every socket is terminated 30 s after connect regardless of activity — fix first. Then: restrict upgrades to `/ws/v1`, Origin allow-list (reuse `CORS_ORIGINS`), per-user connection cap, `maxPayload`, close 4001 on access-token `exp`, backpressure (`bufferedAmount`) guard.
 - [ ] **9. Frontend WS client → subprotocol auth.** Move token from `?token=` to `Sec-WebSocket-Protocol` so it never lands in proxy/access logs; drop `user_id` param.
