@@ -197,6 +197,15 @@ async function main() {
         const { mine, emitted, entries, broken } = rows[0];
         assert(broken == null, `audit chain broken at seq ${broken}`);
         assert(mine > 0 && mine === emitted, `audit entries for the workflow: ${mine}, events emitted: ${emitted}`);
+        // Identity events are audited too: this run registered and signed in.
+        const identity = await client.query(
+          `SELECT array_agg(DISTINCT event_type) AS types FROM audit_events
+            WHERE aggregate_type IN ('User', 'Session') AND payload->>'username' = $1
+               OR actor_id = (SELECT payload->>'userId' FROM audit_events WHERE event_type = 'user.registered' AND payload->>'username' = $1)`,
+          [user.username],
+        );
+        const types = identity.rows[0].types ?? [];
+        for (const t of ['user.registered', 'user.authenticated']) assert(types.includes(t), `no ${t} entry in the audit trail (found: ${types.join(', ') || 'none'})`);
         return `${mine} entries for the workflow, chain of ${entries} intact`;
       } finally {
         await client.end();

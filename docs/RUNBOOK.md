@@ -176,12 +176,16 @@ reordered entry breaks the chain. `UPDATE`, `DELETE` and `TRUNCATE` on the table
 - **If it is broken:** treat as a security incident. Do not "repair" the table. Take a dump, compare
   with the last backup that verifies (`npm run db:restore` into a scratch database, run the check
   there), and find out who had DDL/owner access.
-- **What is in the trail:** workflow and template events — created, started, every step started /
-  completed, human input required, completed, cancelled, template published / deprecated.
-  **Not yet:** sign-in, session, permission-grant and API-key events, the human response record
-  itself (who answered — the workflow's step-completed event is there, the responder is in
-  `human_responses`), UI-generation and notification-delivery events. Those contexts publish
-  in-process instead of through the outbox.
+- **What is in the trail:** workflow and template events (created, started, every step started /
+  completed, human input required, completed, cancelled, published, deprecated) and identity
+  events (registered, signed in, failed sign-in with identifier and IP, session created /
+  refreshed / revoked, refresh-token reuse, password changed, permission granted / revoked, user
+  deactivated / reactivated, API key minted / revoked). Administrative actions carry the
+  administrator as `actor_id`. Identity events are written right after the change, not in the
+  same transaction: a crash in between can lose one.
+  **Not yet:** the human response record itself (who answered — the workflow's step-completed
+  event is there; the responder is in `human_responses`), UI-generation and notification-delivery
+  events, and per-request API-key use (`api_keys.last_used_at` only).
 - **Cost:** one writer at a time extends the chain, which serialises event-writing transactions for
   the instant of the insert-to-commit. Measured: workflow creation ~375 req/s instead of ~450 on
   the 2-vCPU baseline.

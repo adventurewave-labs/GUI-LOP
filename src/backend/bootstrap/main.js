@@ -112,7 +112,7 @@ export async function bootstrap(envOverride) {
   const rateLimiter = await createRateLimiterFactory({ redis, logger });
   logger.info(`rate limiting: ${rateLimiter.backend} store`);
 
-  const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter });
+  const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter, outbox });
 
   /* -------- metrics (created early so adapters can report into it) -------- */
   let wsHandle = null;

@@ -25,6 +25,7 @@ import { InMemoryTokenBlacklist } from '../contexts/identity-and-access/infrastr
 import { RedisTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/redis-token-blacklist.js';
 import { BcryptPasswordHasher } from '../contexts/identity-and-access/infrastructure/crypto/bcrypt-password-hasher.js';
 import { JwtTokenIssuer } from '../contexts/identity-and-access/infrastructure/tokens/jwt-token-issuer.js';
+import { createPooledOutbox } from '../shared-kernel/infrastructure/pooled-outbox.js';
 import { InMemoryOutbox as IdentityInMemoryOutbox } from '../contexts/identity-and-access/application/ports/outbox.js';
 import { AuthorisationService as IdentityAuthorisationService } from '../contexts/identity-and-access/application/services/authorisation-service.js';
 import { Permission } from '../contexts/identity-and-access/domain/permission/permission.js';
@@ -120,7 +121,7 @@ export function buildAuthLimiters(create, { loginIpLimit = 20, registerIpLimit =
   };
 }
 
-export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter }) {
+export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter, outbox: sharedOutbox }) {
   const userRepository = pool ? new PgUserRepository(pool) : new InMemoryUserRepository();
   const sessionStore = pool
     ? new PgSessionRepository(pool)
@@ -142,7 +143,12 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
   });
   const passwordHasher = new BcryptPasswordHasher({ rounds: config.BCRYPT_WORK_FACTOR });
   const tokenIssuer = new JwtTokenIssuer({ secret: config.JWT_SECRET });
-  const outbox = new IdentityInMemoryOutbox();
+  // With Postgres, identity events go to the durable outbox (and so into the
+  // audit trail). `api_key.used` fires on every API-key request; the key's
+  // last_used_at already records it.
+  const outbox = pool && sharedOutbox
+    ? createPooledOutbox({ pool, outbox: sharedOutbox, skipTypes: ['api_key.used'] })
+    : new IdentityInMemoryOutbox();
 
   const deps = {
     userRepository,

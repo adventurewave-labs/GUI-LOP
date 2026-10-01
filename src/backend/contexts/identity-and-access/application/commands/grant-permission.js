@@ -32,7 +32,7 @@ export class GrantPermissionUseCase {
         scope: perm.scope,
         occurredAt: this.clock.now(),
       }),
-    ]);
+    ], { actorId: cmd.actorId ?? null });
 
     return { permission: perm.value };
   }

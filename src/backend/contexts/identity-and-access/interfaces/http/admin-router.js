@@ -77,6 +77,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.revokePermission.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
         permission: req.params.permission,
         scope: req.query?.scope ?? undefined,
@@ -92,6 +93,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.deactivateUser.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
       });
       res.status(200).json(out);
@@ -105,6 +107,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.reactivateUser.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
       });
       res.status(200).json(out);

@@ -15,7 +15,7 @@ export class ReactivateUserUseCase {
     this.clock = clock;
   }
 
-  /** @param {{ actorRole: string, userId: string }} cmd */
+  /** @param {{ actorRole: string, actorId?: string | null, userId: string }} cmd */
   async execute(cmd) {
     if (!cmd || typeof cmd.userId !== 'string') {
       throw new ValidationError('userId required', 'userId');
@@ -27,7 +27,7 @@ export class ReactivateUserUseCase {
     if (!user) throw new NotFoundError('User not found');
     user.reactivate(this.clock.now());
     await this.userRepository.save(user);
-    await this.outbox.enqueue(user.pullEvents());
+    await this.outbox.enqueue(user.pullEvents(), { actorId: cmd.actorId ?? null });
     return { id: user.id, isActive: user.isActive };
   }
 }
