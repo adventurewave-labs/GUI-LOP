@@ -6,7 +6,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
 2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
-3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` green + `npm run lint:arch` 0 errors (+ `npm run lint` once item 5 lands).
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)).
 4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
 5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
 6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.
@@ -19,10 +19,10 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **2. Request-scoped context** (`10a6905`). AsyncLocalStorage per request (`request_id`, `user_id`, `auth_via`) auto-injected into every log line; recursive credential redaction in the logger; `http_request` access log with bounded route template, status, duration, 499 on abort, never the query string. 589 → 602 tests.
 - [x] **3. W3C Trace Context** (`8adb9cf`). Dependency-free spec-compliant `traceparent`/`tracestate` handling; inbound traces continued with a new server span, invalid headers start a fresh trace; `trace_id`/`span_id` on every log line; `traceresponse` header (CORS-exposed); AI adapters propagate on outbound calls. OTel SDK deferred (propagator-compatible). 602 → 624 tests.
 - [x] **4. Prometheus `/metrics`** (`c18a472`). prom-client per-bootstrap registry: RED histogram by route template, in-flight, outbox pending/age, WS connections, AI latency/outcome/tokens/circuit state, default runtime metrics. Timing-safe `METRICS_TOKEN` guard, fails closed in prod. Staging Prometheus scrape target now resolves. 624 → 633 tests.
+- [x] **5. Real lint** (`cfba7dc`). ESLint 9 flat config (`@eslint/js` + `n` + `security`), `npm run lint` at zero warnings, CI job. Lint surfaced two real vulns, both fixed with tests: **path traversal in `LocalFsStorage`** and **ReDoS-prone `EMAIL_RE`** in the PII scrubber. 633 → 642 tests.
 
 ## Backlog (priority order)
 
-- [ ] **5. Real lint.** ESLint 9 flat config (`@eslint/js` + `eslint-plugin-n` + `eslint-plugin-security`), replace placeholder script, add CI job. Fix or explicitly suppress findings.
 - [ ] **6. Node 22 LTS.** Node 18 is EOL. Bump CI matrix, Dockerfiles, devcontainer, `engines`, `.nvmrc`; `node --test`-safe flags.
 - [ ] **7. Supply chain.** Dependabot (npm, actions, docker), pin Actions by SHA, CodeQL workflow, `npm audit --omit=dev --audit-level=high` gate, CycloneDX SBOM + build provenance/attestation in `docker.yml`, `permissions:` least-privilege on every workflow.
 - [ ] **8. WebSocket hardening II.** BUG found in loop 1: `ws-server.js` `idleTimer` is never reset on pong/message, so every socket is terminated 30 s after connect regardless of activity — fix first. Then: restrict upgrades to `/ws/v1`, Origin allow-list (reuse `CORS_ORIGINS`), per-user connection cap, `maxPayload`, close 4001 on access-token `exp`, backpressure (`bufferedAmount`) guard.
