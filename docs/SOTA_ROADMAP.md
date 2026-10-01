@@ -53,7 +53,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 ### Round 2 candidates (added 2026-10-01; **audit first** — if the repo already does it properly, tick it as "already present" with evidence and move on)
 
-- [ ] **16. SPA token refresh.** Wire the WS client's `onTokenExpired` + HTTP 401 to a single-flight refresh in the SPA auth service; tests for concurrent 401s.
+- [x] **16. SPA token refresh** (`a815f08`). Three refresh paths (401 handler, AuthContext timer via `authApi.refresh()`, nothing for WS 4001) collapsed into one single-flight `refreshAccessToken()`; WS client defaults `onTokenExpired` to it. Bug: a failed refresh made the WS client reconnect-spin on 4001 — now backs off. API client tests (8) never ran in CI — now do (jsdom). Frontend 12 → 25.
 - [ ] **17. Refresh-token rotation with reuse detection.** One-time refresh tokens in families; replay of a used token revokes the family (OAuth 2.0 Security BCP §4.14).
 - [ ] **18. Idempotency-Key** (IETF draft) on non-idempotent POSTs that create resources/trigger workflows: stored response replay, 409 on in-flight, 422 on payload mismatch, Redis/PG backed with TTL.
 - [ ] **19. Optimistic concurrency.** `ETag` / `If-Match` → 412 on workflow/template updates (version column), `428` when required.
