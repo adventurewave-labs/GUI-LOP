@@ -188,6 +188,49 @@ serves traffic. Roll forward by fixing the migration and re-running
 > expand → migrate → contract pattern (add column, dual-write,
 > back-fill, then remove old column in a follow-up release).
 
+### Migration policy: forward-only
+
+- **There are no down migrations.** A bad release is rolled back by redeploying the previous image;
+  the schema stays where it is. That only works if every migration is **backwards compatible with
+  the previous release** (expand → migrate → contract, as above): additive changes first, removals
+  one release later.
+- **Idempotent.** Every migration can be re-run safely (`IF NOT EXISTS`, guarded `DO` blocks,
+  `ON CONFLICT`); CI applies the full set twice against an empty database on every change.
+- **Never edit an applied migration.** Add a new numbered file instead; the ledger is the
+  `schema_migrations` table.
+- **Take a backup before a release that contains a migration** (`npm run db:backup`). The restore is
+  the only "down".
+- Migrations run outside the app's pool (no statement timeout — index builds may legitimately be
+  slow). On Railway they are the service's pre-deploy command; on Kubernetes the Helm hook above.
+
+### Backups, restore and the restore drill
+
+One script, driven by `DATABASE_URL` (`database/scripts/db-backup.sh`; client tools must be at
+least as new as the server):
+
+```bash
+npm run db:backup                               # → backups/gui-lop-<UTC>.dump (+ .sha256), prunes > 30 days
+npm run db:verify  -- backups/gui-lop-….dump    # checksum + archive readable
+npm run db:restore -- backups/gui-lop-….dump "$TARGET_DATABASE_URL"   # empty target only; one transaction
+npm run db:drill                                # dump → restore to scratch DB → compare → drop
+```
+
+- `restore` refuses a target that already has tables (`FORCE=1` overrides) and runs in a single
+  transaction, so a failed restore leaves nothing half-applied.
+- `drill` is the proof that backups work: it restores into a scratch database on the same server,
+  compares **every table's row count** with the source, checks the migration ledger, runs the
+  migrations against the copy (must be a no-op) and prints dump size and timings. CI runs it after
+  the production smoke test and then boots the API on nothing but the restored copy.
+- Reference timing (2026-10-01, 22 tables / 76k rows / 3.6 MB dump): backup 0.6 s, restore 0.8 s.
+  Re-measure on production data; that restore time plus redeploy is your RTO, and your backup
+  frequency is your RPO. On a live source use `DRILL_STRICT=0` (counts may drift during the dump).
+- **Restore procedure (incident):** 1) stop writers (scale the API to 0); 2) create an empty
+  database; 3) `db:restore` the newest verified dump into it; 4) point `DATABASE_URL` at it and
+  deploy (pre-deploy migrations bring it to the current schema); 5) run `scripts/smoke.mjs`;
+  6) Redis needs no restore — sessions re-authenticate and rate-limit counters reset.
+- Managed Postgres (Railway volume backups, RDS snapshots) is the first line; this script is the
+  portable, verifiable second line and the only one exercised in CI.
+
 ---
 
 ## Secrets handling
