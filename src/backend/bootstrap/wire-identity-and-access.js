@@ -14,6 +14,7 @@ import { InMemoryGrantsRepository } from '../contexts/identity-and-access/infras
 import { InMemoryApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-api-key-repository.js';
 import { PgUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-user-repository.js';
 import { PgSessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-session-repository.js';
+import { PgGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-grants-repository.js';
 import { PgRoleRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-role-repository.js';
 import { PgApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-api-key-repository.js';
 import { InMemoryTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/inmemory-token-blacklist.js';
@@ -120,7 +121,9 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     ? new PgSessionRepository(pool)
     : new InMemorySessionRepository();
   const roleRepository = pool ? new PgRoleRepository(pool) : new InMemoryRoleRepository();
-  const grantsRepository = new InMemoryGrantsRepository();
+  // Direct grants must be durable and shared across pods (migration 009);
+  // the in-memory repository is for dev/test only.
+  const grantsRepository = pool ? new PgGrantsRepository(pool) : new InMemoryGrantsRepository();
   const apiKeyRepository = pool
     ? new PgApiKeyRepository(pool)
     : new InMemoryApiKeyRepository();

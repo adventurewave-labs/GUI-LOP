@@ -59,6 +59,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.grantPermission.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
         permission: req.body?.permission,
         scope: req.body?.scope ?? undefined,

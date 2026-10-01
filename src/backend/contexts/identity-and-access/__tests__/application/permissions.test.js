@@ -29,6 +29,18 @@ describe('Grant/Revoke permissions', () => {
     expect(f.outbox.events.map((e) => e.eventType)).toContain('permission.granted');
   });
 
+  test('grant records the granting admin (user_permissions.granted_by)', async () => {
+    const f = makeFixtures();
+    const u = await new RegisterUserUseCase(f).execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const calls = [];
+    const grantsRepository = { add: async (...args) => { calls.push(args); } };
+    await new GrantPermissionUseCase({ ...f, grantsRepository }).execute({
+      actorRole: 'admin', actorId: 'admin-1', userId: u.id, permission: 'workflow:read',
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]).toEqual({ grantedBy: 'admin-1' });
+  });
+
   test('non-admin cannot grant', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
