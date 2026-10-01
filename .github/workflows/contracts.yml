@@ -62,6 +62,10 @@ jobs:
       # service-bound connections rather than spinning up testcontainers).
       DATABASE_URL: postgresql://contracts:contracts@localhost:5432/contracts
       REDIS_URL: redis://localhost:6379
+      # Fixtures use the service containers directly (one throwaway
+      # database per suite) instead of booting testcontainers.
+      CONTRACTS_DATABASE_URL: postgresql://contracts:contracts@localhost:5432/contracts
+      CONTRACTS_REDIS_URL: redis://localhost:6379
       # The testcontainers-node package autodetects Docker via the
       # standard socket; on GitHub-hosted runners docker.sock is exposed
       # and tests can also boot their own containers if preferred.
