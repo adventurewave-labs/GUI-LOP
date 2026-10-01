@@ -6,7 +6,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
 2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
-3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)).
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)).
 4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
 5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
 6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.
@@ -24,10 +24,10 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [x] **7. Supply chain** (`efda201`). Prod advisories 7 (3 high) → 0; unused `uuid` dropped. All Actions SHA-pinned; least-privilege `permissions` everywhere; CodeQL; `npm audit` prod gate + dependency-review; CycloneDX SBOM in docker.yml; Dependabot (npm ×2, actions, docker). Policy test locks it in. 642 → 659 tests. *Deferred:* build provenance attestation needs a registry push first.
 - [x] **8a. CI red-check triage** (`bf23d98`). CodeQL caught a **polynomial ReDoS in Bearer parsing** (`/^Bearer\s+(.+)$/i`, pre-existing in auth middleware) → linear `parseBearer()` everywhere. Actions bumped to Node-24 majors (still SHA-pinned). dependency-review non-blocking until the repo enables Dependency graph. Contract tests red on `main` too (pre-existing → #13).
 - [x] **8. WebSocket hardening II** (`51170fc`). **Realtime delivery was broken in prod wiring** (in-memory test double registered with real sockets → `TypeError` on every push) — fixed with `WsBroadcaster`, E2E-proven. Idle-timer bug fixed. Path lock, Origin allow-list (CSWSH), per-user cap (429), maxPayload (1009), 4001 on token expiry, backpressure (1013). 659 → 684 tests.
+- [x] **9. Frontend WS subprotocol auth** (`473769e`). Token moved from `?token=` to `Sec-WebSocket-Protocol: bearer,<token>`; `user_id` param dropped; 4001 → `onTokenExpired()` + immediate reconnect. Server pins negotiation to `bearer` (default would echo a misordered token). Frontend service tests now run in CI. Backend 684 → 686; frontend WS 6 → 12.
 
 ## Backlog (priority order)
 
-- [ ] **9. Frontend WS client → subprotocol auth.** Move token from `?token=` to `Sec-WebSocket-Protocol` so it never lands in proxy/access logs; drop `user_id` param.
 - [ ] **10. Rate limiting audit.** Verify/route `express-rate-limit` + Redis store on `/auth/*` (login, refresh, register) with per-IP+per-identifier keys and `RateLimit-*` (draft-7) headers; tests.
 - [ ] **11. RFC 9457 problem+json.** Unified `application/problem+json` error envelope (type/title/status/detail/instance + request_id) across contexts, backwards-compatible `error` field.
 - [ ] **12. AI adapter SOTA.** Structured output via tool-use/JSON-schema for UI document drafts (schema already in `ui-document-draft-schema.js`), prompt caching on the static system prompt, configurable model ids per tier, token/cost telemetry. Offline fixture tests only.
