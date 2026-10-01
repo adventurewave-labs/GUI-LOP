@@ -86,6 +86,29 @@ jobs:
       - name: Run contract test suites
         run: npm run test:contracts
 
+      # Production-mode smoke (roadmap P4): fresh database, migrations only
+      # (no seeds), NODE_ENV=production boot, then a real user journey via
+      # scripts/smoke.mjs — the path that exposed the Postgres-only bugs the
+      # unit/contract suites missed.
+      - name: Production-mode smoke
+        env:
+          PGPASSWORD: contracts
+          SMOKE_DB: postgresql://contracts:contracts@localhost:5432/smoke
+        run: |
+          psql -h localhost -U contracts -d contracts -c 'DROP DATABASE IF EXISTS smoke' -c 'CREATE DATABASE smoke'
+          DATABASE_URL=$SMOKE_DB npm run -s db:migrate
+          DATABASE_URL=$SMOKE_DB npm run -s db:migrate   # idempotent re-run
+          export METRICS_TOKEN=$(openssl rand -hex 16)
+          NODE_ENV=production PORT=38080 JWT_SECRET=$(openssl rand -hex 32) \
+            CORS_ORIGINS=https://app.example.com DATABASE_URL=$SMOKE_DB REDIS_URL=redis://localhost:6379 \
+            node src/backend/bootstrap/index.js > smoke-server.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf localhost:38080/livez >/dev/null && break; sleep 1; done
+          node scripts/smoke.mjs --base http://localhost:38080 --metrics-token "$METRICS_TOKEN" --database-url "$SMOKE_DB"
+
+      - name: Smoke server log on failure
+        if: failure()
+        run: tail -n 200 smoke-server.log || true
+
       - name: Upload contract-test artefacts on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

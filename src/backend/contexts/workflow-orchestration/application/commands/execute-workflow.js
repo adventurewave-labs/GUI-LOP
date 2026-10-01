@@ -1,5 +1,5 @@
 // @ts-check
-import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
+import { authoriseWorkflowAction } from '../services/authorise-workflow-action.js';
 import { assertExpectedVersion } from './cancel-workflow.js';
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 import { WorkflowStatus } from '../../domain/workflow/workflow-status.js';
@@ -27,14 +27,13 @@ export class ExecuteWorkflowUseCase {
   }
 
   async execute(input) {
-    if (this._authorisation) {
-      const decision = await this._authorisation.authorise({
-        actor: input.actor,
-        action: 'workflow:execute',
-        resource: { type: 'workflow', id: input.workflowId },
-      });
-      if (!decision.allowed) throw new ForbiddenError(decision.reason ?? 'forbidden');
-    }
+    await authoriseWorkflowAction({
+      authorisation: this._authorisation,
+      workflows: this._workflows,
+      actor: input.actor,
+      action: 'workflow:execute',
+      workflowId: input.workflowId,
+    });
 
     if (input.idempotencyKey && this._idempotency) {
       const existing = await this._idempotency.get({

@@ -88,7 +88,7 @@ class UIGenerationAdapter {
  * @param {{
  *   pool?: any, outbox?: any, clock: any, idGen: any,
  *   identityAuthorisationService?: any, generateUIForStepCommand?: any,
- *   logger?: any, eventSink?: any,
+ *   logger?: any, eventSink?: any, config?: any,
  * }} deps  `eventSink` is only used by the in-memory adapters.
  */
 export async function wireWorkflowOrchestration({
@@ -100,6 +100,7 @@ export async function wireWorkflowOrchestration({
   generateUIForStepCommand,
   logger,
   eventSink,
+  config = undefined,
 }) {
   const workflows = pool
     ? new PgWorkflowRepository({ pool, outbox })
@@ -164,6 +165,18 @@ export async function wireWorkflowOrchestration({
   // the dev server is immediately useful without any external setup.
   if (!pool) {
     await seedDefaultTemplates(templates, { mode: 'repository', clock });
+  } else if (config?.SEED_DEFAULT_TEMPLATES !== false) {
+    // Production bug: with Postgres nothing ever inserted the built-in
+    // templates (`db:seed` crashed at import), so a fresh deployment had no
+    // workflow anyone could start. Insert missing ones at boot; never
+    // overwrite a template an operator has changed.
+    try {
+      // Through the repository, so rows get the real (template_key, version)
+      // identity; the raw-SQL 'pg' mode targets the pre-version schema.
+      await seedDefaultTemplates(templatesDelegate, { mode: 'repository', clock, onConflict: 'keep' });
+    } catch (err) {
+      logger?.warn?.('default workflow templates not seeded', { err: { message: err?.message } });
+    }
   }
 
   const v1Router = createWorkflowRouter({

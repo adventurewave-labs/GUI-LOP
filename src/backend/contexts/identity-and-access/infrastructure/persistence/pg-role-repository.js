@@ -30,7 +30,15 @@ export class PgRoleRepository {
     return {
       name: row.name,
       description: row.description ?? '',
-      permissions: list.map((p) => (typeof p === 'string' ? new Permission(p) : new Permission(`${p.resource}:${p.action}${p.scope ? `@${p.scope}` : ''}`))),
+      // One malformed row entry (e.g. the legacy "read" vocabulary) must not
+      // turn every authorisation check for the role into a 500: skip it.
+      permissions: list.flatMap((p) => {
+        try {
+          return [typeof p === 'string' ? new Permission(p) : new Permission(`${p.resource}:${p.action}${p.scope ? `@${p.scope}` : ''}`)];
+        } catch {
+          return [];
+        }
+      }),
     };
   }
 }

@@ -100,16 +100,25 @@ export function createPgOutboxRepository(pool) {
     /**
      * Persist events transactionally with the aggregate write.
      * @param {Array<{ toJSON?: () => any }>} events
-     * @param {{ client: { query: Function } }} uowCtx
+     * @param {{ client: { query: Function } } | { query: Function }} uowCtx
+     *   The transaction the aggregate is being written in: `{ client }` (unit
+     *   of work) or the checked-out client itself. Required — enqueueing on
+     *   the pool would commit events even if the aggregate write rolls back.
+     *   (Production bug: the workflow repository passed the bare client and
+     *   the template repository passed nothing, so with Postgres every
+     *   workflow create/execute/cancel and every template publish 500'd.)
      */
     async enqueue(events, uowCtx) {
       if (!Array.isArray(events)) {
         throw new TypeError('Outbox.enqueue: events must be an array');
       }
-      if (!uowCtx || !uowCtx.client || typeof uowCtx.client.query !== 'function') {
-        throw new TypeError('Outbox.enqueue: uowCtx.client is required');
+      const ctx = /** @type {any} */ (uowCtx);
+      const client = typeof ctx?.client?.query === 'function'
+        ? ctx.client
+        : typeof ctx?.query === 'function' ? ctx : null;
+      if (!client) {
+        throw new TypeError('Outbox.enqueue: a transaction client ({ client }) is required');
       }
-      const client = uowCtx.client;
       for (const ev of events) {
         const e = typeof ev.toJSON === 'function' ? ev.toJSON() : ev;
         await client.query(ENQUEUE_SQL, [

@@ -135,6 +135,7 @@ export async function bootstrap(envOverride) {
 
   // Wire workflow without an advancer first; we'll fold that in for human-interaction.
   const workflow = await wireWorkflowOrchestration({
+    config,
     pool,
     outbox,
     clock,

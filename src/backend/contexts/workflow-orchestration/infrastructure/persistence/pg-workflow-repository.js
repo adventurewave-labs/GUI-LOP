@@ -163,7 +163,7 @@ export class PgWorkflowRepository {
       }
 
       const events = workflow.pullEvents();
-      if (this._outbox && events.length) await this._outbox.enqueue(events, client);
+      if (this._outbox && events.length) await this._outbox.enqueue(events, { client });
 
       workflow._bumpVersion();
       await client.query('COMMIT');

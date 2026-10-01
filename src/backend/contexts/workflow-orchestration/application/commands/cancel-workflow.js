@@ -1,5 +1,6 @@
 // @ts-check
-import { ForbiddenError, PreconditionFailedError } from '../../../../shared-kernel/domain/errors.js';
+import { authoriseWorkflowAction } from '../services/authorise-workflow-action.js';
+import { PreconditionFailedError } from '../../../../shared-kernel/domain/errors.js';
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 
 export class CancelWorkflowUseCase {
@@ -10,14 +11,13 @@ export class CancelWorkflowUseCase {
   }
 
   async execute(input) {
-    if (this._authorisation) {
-      const decision = await this._authorisation.authorise({
-        actor: input.actor,
-        action: 'workflow:cancel',
-        resource: { type: 'workflow', id: input.workflowId },
-      });
-      if (!decision.allowed) throw new ForbiddenError(decision.reason ?? 'forbidden');
-    }
+    await authoriseWorkflowAction({
+      authorisation: this._authorisation,
+      workflows: this._workflows,
+      actor: input.actor,
+      action: 'workflow:cancel',
+      workflowId: input.workflowId,
+    });
     const wf = await this._workflows.findById(input.workflowId);
     if (!wf) throw new WorkflowNotFoundError(input.workflowId);
     assertExpectedVersion(wf, input.expectedVersions);

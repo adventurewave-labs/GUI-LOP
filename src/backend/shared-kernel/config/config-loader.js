@@ -73,6 +73,8 @@ const SCHEMA = /** @type {const} */ ({
    * - 200 keeps throughput high while bounding per-tick memory.
    */
   OUTBOX_BATCH_SIZE: { type: 'number', default: 200 },
+  /** Insert missing built-in workflow templates at boot (Postgres; never overwrites). */
+  SEED_DEFAULT_TEMPLATES: { type: 'boolean', default: true },
 
   /* -------- AI Provider ACL (ADR 0023) -------- */
   /**

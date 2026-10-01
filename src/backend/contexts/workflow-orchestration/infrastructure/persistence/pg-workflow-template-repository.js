@@ -93,69 +93,79 @@ export class PgWorkflowTemplateRepository {
 
   async save(template) {
     const hasColumn = await this._versionColumnExists();
-    const stepsJson = JSON.stringify(template.steps.map((s) => s.toJSON()));
-    if (hasColumn) {
-      const config = { ...(template.defaultConfig ?? {}) };
-      // Insert-or-update on the (template_key, version) identity. is_active
-      // mirrors the aggregate's `isDeprecated()` flag.
-      await this._pool.query(
-        `INSERT INTO workflow_templates
-          (template_key, version, name, description, steps, default_config,
-           is_active, created_by)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
-         ON CONFLICT (template_key, version) DO UPDATE
-           SET name = EXCLUDED.name,
-               description = EXCLUDED.description,
-               steps = EXCLUDED.steps,
-               default_config = EXCLUDED.default_config,
-               is_active = EXCLUDED.is_active,
-               updated_at = NOW()`,
-        [
-          template.key.value,
-          template.version.value,
-          template.name,
-          template.description,
-          stepsJson,
-          JSON.stringify(config),
-          !template.isDeprecated(),
-          template.createdBy,
-        ],
-      );
-    } else {
-      // Legacy fallback: pre-migration schema with `template_key` UNIQUE
-      // and version smuggled through default_config.__version.
-      const config = {
-        ...(template.defaultConfig ?? {}),
-        __version: template.version.value,
-        __status: template.status,
-      };
-      await this._pool.query(
-        `INSERT INTO workflow_templates
-          (template_key, name, description, steps, default_config, is_active, created_by)
-         VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)
-         ON CONFLICT (template_key) DO UPDATE
-           SET name = EXCLUDED.name,
-               description = EXCLUDED.description,
-               steps = EXCLUDED.steps,
-               default_config = EXCLUDED.default_config,
-               is_active = EXCLUDED.is_active,
-               updated_at = NOW()`,
-        [
-          template.key.value,
-          template.name,
-          template.description,
-          stepsJson,
-          JSON.stringify(config),
-          !template.isDeprecated(),
-          template.createdBy,
-        ],
-      );
-    }
-    if (this._outbox) {
+    // Row + domain events in ONE transaction (transactional outbox). This
+    // used to enqueue on no transaction at all, which the Postgres outbox
+    // rejects, so publishing/deprecating a template 500'd in production.
+    const client = typeof this._pool.connect === 'function' ? await this._pool.connect() : null;
+    const q = client ?? this._pool;
+    try {
+      if (client) await client.query('BEGIN');
+      const stepsJson = JSON.stringify(template.steps.map((s) => s.toJSON()));
+      if (hasColumn) {
+        const config = { ...(template.defaultConfig ?? {}) };
+        // Insert-or-update on the (template_key, version) identity. is_active
+        // mirrors the aggregate's `isDeprecated()` flag.
+        await q.query(
+          `INSERT INTO workflow_templates
+            (template_key, version, name, description, steps, default_config,
+             is_active, created_by)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
+           ON CONFLICT (template_key, version) DO UPDATE
+             SET name = EXCLUDED.name,
+                 description = EXCLUDED.description,
+                 steps = EXCLUDED.steps,
+                 default_config = EXCLUDED.default_config,
+                 is_active = EXCLUDED.is_active,
+                 updated_at = NOW()`,
+          [
+            template.key.value,
+            template.version.value,
+            template.name,
+            template.description,
+            stepsJson,
+            JSON.stringify(config),
+            !template.isDeprecated(),
+            template.createdBy,
+          ],
+        );
+      } else {
+        // Legacy fallback: pre-migration schema with `template_key` UNIQUE
+        // and version smuggled through default_config.__version.
+        const config = {
+          ...(template.defaultConfig ?? {}),
+          __version: template.version.value,
+          __status: template.status,
+        };
+        await q.query(
+          `INSERT INTO workflow_templates
+            (template_key, name, description, steps, default_config, is_active, created_by)
+           VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7)
+           ON CONFLICT (template_key) DO UPDATE
+             SET name = EXCLUDED.name,
+                 description = EXCLUDED.description,
+                 steps = EXCLUDED.steps,
+                 default_config = EXCLUDED.default_config,
+                 is_active = EXCLUDED.is_active,
+                 updated_at = NOW()`,
+          [
+            template.key.value,
+            template.name,
+            template.description,
+            stepsJson,
+            JSON.stringify(config),
+            !template.isDeprecated(),
+            template.createdBy,
+          ],
+        );
+      }
       const events = template.pullEvents();
-      if (events.length) await this._outbox.enqueue(events);
-    } else {
-      template.pullEvents();
+      if (this._outbox && events.length) await this._outbox.enqueue(events, { client: q });
+      if (client) await client.query('COMMIT');
+    } catch (err) {
+      if (client) { try { await client.query('ROLLBACK'); } catch { /* swallow */ } }
+      throw err;
+    } finally {
+      client?.release();
     }
   }
 

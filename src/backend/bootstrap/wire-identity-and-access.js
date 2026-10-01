@@ -60,6 +60,7 @@ class InMemoryRoleRepository {
     this._roles = new Map([
       ['admin', new Set([])], // admins implicitly hold every permission
       ['user', new Set(['workflow:read', 'workflow:create', 'workflow:respond'])],
+      ['viewer', new Set(['workflow:read'])], // matches migration 015 (was missing: viewers had no permissions in dev)
       ['reviewer', new Set(['workflow:read', 'workflow:respond'])],
       ['analyst', new Set(['workflow:read'])],
     ]);
