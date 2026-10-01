@@ -89,6 +89,19 @@ const SCHEMA = {
    * (rate limiting, audit trail).
    */
   TRUST_PROXY: { type: 'string', default: 'false' },
+
+  /* -------- graceful shutdown -------- */
+  /**
+   * After SIGTERM, keep serving while /readyz reports 503 so the LB /
+   * kube-proxy removes this endpoint before we stop accepting. Must be
+   * ≥ endpoint-propagation latency (~2-5s on most clusters).
+   */
+  SHUTDOWN_DRAIN_DELAY_MS: { type: 'number', default: 5000 },
+  /**
+   * Hard deadline for the whole shutdown sequence. Must be below the pod's
+   * terminationGracePeriodSeconds (default 30s) or SIGKILL wins.
+   */
+  SHUTDOWN_TIMEOUT_MS: { type: 'number', default: 25000 },
 };
 
 function coerce(name, raw, spec) {
@@ -181,6 +194,17 @@ export function loadConfig(env = process.env) {
     errors.push(
       new ConfigError('HTTP_HEADERS_TIMEOUT_MS must not exceed HTTP_REQUEST_TIMEOUT_MS', {
         name: 'HTTP_HEADERS_TIMEOUT_MS',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.SHUTDOWN_DRAIN_DELAY_MS) &&
+    Number.isInteger(out.SHUTDOWN_TIMEOUT_MS) &&
+    out.SHUTDOWN_DRAIN_DELAY_MS >= out.SHUTDOWN_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('SHUTDOWN_DRAIN_DELAY_MS must be less than SHUTDOWN_TIMEOUT_MS', {
+        name: 'SHUTDOWN_DRAIN_DELAY_MS',
       }),
     );
   }

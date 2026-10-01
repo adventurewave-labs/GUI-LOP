@@ -44,6 +44,8 @@ import {
   probeWithTimeout,
 } from './http-hardening.js';
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 /** Per-dependency deadline for readiness probes. */
 const PROBE_TIMEOUT_MS = 800;
 
@@ -217,11 +219,19 @@ export async function bootstrap(envOverride) {
 
   /* -------- express app -------- */
 
+  /** Flipped by shutdown(); read by /readyz and the drain middleware. */
+  let draining = false;
+
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', parseTrustProxy(config.TRUST_PROXY));
   // First, so every response — including body-parser errors — carries an id.
   app.use(requestIdMiddleware());
+  // While draining, tell keep-alive clients to reconnect elsewhere.
+  app.use((_req, res, next) => {
+    if (draining) res.set('Connection', 'close');
+    next();
+  });
   // JSON-only API: lock down everything a browser could render.
   app.use(
     helmet({
@@ -251,7 +261,6 @@ export async function bootstrap(envOverride) {
   // Kubernetes-style probes. Liveness never touches dependencies (a DB blip
   // must not restart every pod); readiness fails fast while draining or
   // when a configured dependency is unreachable.
-  let draining = false;
   app.get('/livez', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({ status: 'ok' });
   });
@@ -351,24 +360,64 @@ export async function bootstrap(envOverride) {
 
   /* -------- shutdown -------- */
 
-  let shuttingDown = false;
-  async function shutdown() {
-    if (shuttingDown) return;
-    shuttingDown = true;
+  /**
+   * Graceful shutdown, ordered for zero-dropped-request rollouts:
+   *
+   *   1. drain     — /readyz → 503 and responses carry `Connection: close`,
+   *                  but we KEEP SERVING for `drainDelayMs` so the LB /
+   *                  kube-proxy stops routing here before we stop accepting.
+   *   2. stop bg   — outbox consumer + deadline watcher (no new side effects).
+   *   3. close ws  — 1001 Going Away → clients reconnect to a healthy pod.
+   *   4. close http— stop accepting, drop idle keep-alives, let in-flight
+   *                  requests finish; force-close stragglers at the deadline.
+   *   5. release   — redis, pg pool, bcrypt workers.
+   *
+   * Idempotent: concurrent callers share the same in-flight promise.
+   *
+   * @param {{ drainDelayMs?: number, inFlightTimeoutMs?: number }} [opts]
+   *   Defaults are 0 / 5000 so tests and programmatic callers stay fast;
+   *   `index.js` passes the production values from config.
+   */
+  let shutdownPromise = null;
+  function shutdown(opts = {}) {
+    if (!shutdownPromise) shutdownPromise = runShutdown(opts);
+    return shutdownPromise;
+  }
+
+  async function runShutdown({ drainDelayMs = 0, inFlightTimeoutMs = 5000 } = {}) {
     draining = true;
+    logger.info('shutdown: draining', { drain_delay_ms: drainDelayMs });
+    if (drainDelayMs > 0) await sleep(drainDelayMs);
+
     notification.stopOutboxConsumer();
     if (deadlineWatcher && typeof deadlineWatcher.stop === 'function') {
-      await deadlineWatcher.stop();
+      try { await deadlineWatcher.stop(); } catch { /* ignore */ }
     }
+
     if (wsHandle && typeof wsHandle.close === 'function') {
-      try { wsHandle.close(); } catch { /* ignore */ }
+      try { await wsHandle.close({ code: 1001, reason: 'server shutting down' }); } catch { /* ignore */ }
     }
+
     await new Promise((resolve) => {
-      httpServer.close(() => resolve());
-      // Release idle keep-alive sockets so close() isn't held open for
-      // HTTP_KEEPALIVE_TIMEOUT_MS by pooled LB connections.
+      if (!httpServer.listening) return resolve();
+      const force = setTimeout(() => {
+        logger.warn('shutdown: in-flight deadline reached; force-closing connections');
+        httpServer.closeAllConnections?.();
+      }, inFlightTimeoutMs);
+      force.unref?.();
+      // Sockets become idle as in-flight responses complete; sweep them so
+      // close() resolves as soon as the last request finishes rather than
+      // waiting out HTTP_KEEPALIVE_TIMEOUT_MS on pooled LB connections.
+      const sweep = setInterval(() => httpServer.closeIdleConnections?.(), 50);
+      sweep.unref?.();
+      httpServer.close(() => {
+        clearTimeout(force);
+        clearInterval(sweep);
+        resolve();
+      });
       httpServer.closeIdleConnections?.();
     });
+
     if (redis) {
       try { await redis.quit(); } catch { /* ignore */ }
     }
@@ -377,6 +426,7 @@ export async function bootstrap(envOverride) {
     }
     // Tear down the bcrypt worker-thread pool (if it was lazily spawned).
     try { await disposeBcryptWorkerPool(); } catch { /* ignore */ }
+    logger.info('shutdown: complete');
   }
 
   return {

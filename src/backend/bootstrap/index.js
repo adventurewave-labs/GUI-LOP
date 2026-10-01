@@ -28,9 +28,17 @@ async function main() {
     // eslint-disable-next-line no-console
     console.log(`Received ${signal}, shutting down gracefully...`);
     try {
+      // Drain delay + in-flight budget must fit inside SHUTDOWN_TIMEOUT_MS,
+      // which itself must sit below terminationGracePeriodSeconds.
+      const inFlightTimeoutMs = Math.max(
+        1000,
+        config.SHUTDOWN_TIMEOUT_MS - config.SHUTDOWN_DRAIN_DELAY_MS - 3000,
+      );
       await Promise.race([
-        shutdown(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('shutdown timeout')), 10_000)),
+        shutdown({ drainDelayMs: config.SHUTDOWN_DRAIN_DELAY_MS, inFlightTimeoutMs }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('shutdown timeout')), config.SHUTDOWN_TIMEOUT_MS),
+        ),
       ]);
       // eslint-disable-next-line no-console
       console.log('Shutdown complete.');

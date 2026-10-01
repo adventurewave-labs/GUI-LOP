@@ -110,8 +110,37 @@ export async function attach(httpServer, deps) {
   });
 
   return {
-    close() {
+    /**
+     * Stop accepting upgrades and close live sockets. In `noServer` mode
+     * `WebSocketServer#close()` does NOT close existing clients, so we send
+     * 1001 "Going Away" (clients reconnect to another pod) and hard-terminate
+     * stragglers after `terminateAfterMs`.
+     */
+    async close({ code = 1001, reason = 'server shutting down', terminateAfterMs = 1000 } = {}) {
       if (httpServer?.off) httpServer.off('upgrade', onUpgrade);
+      const clients = WSS.clients ? [...WSS.clients] : [];
+      for (const ws of clients) {
+        try { ws.close?.(code, reason); } catch { /* ignore */ }
+      }
+      if (clients.length > 0 && terminateAfterMs > 0) {
+        await new Promise((resolve) => {
+          const t = setTimeout(resolve, terminateAfterMs);
+          t.unref?.();
+          const check = () => {
+            if (clients.every((ws) => ws.readyState === 3 /* CLOSED */)) {
+              clearTimeout(t);
+              resolve();
+            }
+          };
+          for (const ws of clients) ws.once?.('close', check);
+          check();
+        });
+      }
+      for (const ws of clients) {
+        if (ws.readyState !== 3) {
+          try { ws.terminate?.(); } catch { /* ignore */ }
+        }
+      }
       try { WSS.close?.(); } catch { /* ignore */ }
     },
     wss: WSS
