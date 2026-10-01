@@ -102,6 +102,28 @@ Goal: close the gaps between "tests green" and "safe to run for real users". Sam
 - [ ] **P13. Mutation — identity (57.4) + notification (61.3).**
 - [x] **P-staging. Railway staging** (`17a2912`). Project `gui-lop-staging` (env `staging`): `api` (repo Dockerfile, branch `claude/prod-readiness`, pre-deploy `migrate`, `/readyz` healthcheck, 30 s drain, watch patterns = backend paths), Postgres, Redis; stub AI, no paid keys; https://api-staging-6d66.up.railway.app. `/livez` reports the deployed commit; `staging-smoke.yml` waits for that commit then runs `scripts/smoke.mjs` — **green against real Railway** (register → login → create → execute → stale If-Match 412). Frontend image fixed so it can build (context paths, lockfile, `.npmrc`; bundle verified free of inline scripts/eval). *Open:* add repo secret `STAGING_METRICS_TOKEN` (value = the service's `METRICS_TOKEN`) to enable the outbox-drain check on staging; the SPA is not deployed to staging yet; this sandbox cannot reach `*.up.railway.app` (egress allowlist), so staging checks run from GitHub Actions. Point the service at `main` after PR #11 + round 3 merge.
 
+### Status at end of round 3 (production readiness, 2026-10-01)
+
+**Verdict: not production-ready yet, but the backend is close.** The API on `claude/prod-readiness` runs in production mode on Railway staging (Postgres + Redis, migrations as a pre-deploy step) and passes an end-to-end smoke test after every push. What stands between this and a first production deployment is listed under "Blockers" — the first one is that none of it is on `main`.
+
+- 15 loops on `claude/prod-readiness` (33 commits on top of PR #11's head `8705bc1`; 102 ahead of `main`, 0 behind, merges cleanly). Nothing merged.
+- Backend tests 958 → **1188**; frontend services 25 → **34**; contracts 179 → **203** on real Postgres 16 + Redis; lint, architecture lint and typecheck clean; CI green on the last commit, including production-mode smoke, load tripwire, backup → restore drill and smoke on the restored copy.
+- Done: P1–P11b (see list above) — DB timeouts and 503 mapping, password policy, SPA security headers, production-mode smoke, Railway staging, load baseline + SLOs, production config invariants, backup/restore drill, OpenAPI 3.1 checked against the route table, optimistic concurrency in the SPA, runbook + real alert rules, authorisation sweep, hash-chained audit trail.
+- **Bugs that would have hit production, found by running it for real:** sign-up accepted `{"role":"admin"}` (critical, **still on `main`**); a fresh Postgres deployment could not run a single workflow; the process crashed when the database dropped a connection; passwords were truncated at 72 bytes; the SPA was served without any security header; there was no working backup; template publish overwrote published versions; audit, analytics, dead-letter and subscription routes had no authorisation; webhooks could target internal addresses and receive every user's events; the inbox showed other people's steps to read-only users; the audit trail was empty on Postgres; identity events were never recorded; alert rules watched metrics that did not exist.
+
+**Blockers before go-live**
+
+1. **Merge.** `main` still has the sign-up privilege escalation and cannot run on Postgres. PR #11 alone does not fix either; `claude/prod-readiness` contains PR #11 plus the fixes. Triple-Gate applies.
+2. **The SPA has never been deployed or driven end to end.** Only the API is on staging; SPA component tests are not in CI; `style-src 'unsafe-inline'` is still needed.
+3. **The real AI provider path has never made a live call** (`AI_PROVIDER=stub` everywhere, by decision: no paid calls). First real use needs a budget and a supervised test.
+4. **Audit trail gaps (P11c):** who answered a human step, UI-generation and notification-delivery events are not in the trail; identity events are written after the change, not atomically. The chain head is not anchored outside the database yet and no scheduled integrity check exists.
+5. **Single-replica assumptions:** router-level auth rate limiters and UI-document blob storage are per-process. Fine for one replica; fix before scaling out.
+6. **Operations not wired:** no backup schedule on the production database, alert rules not loaded into a real Prometheus / not routed to an on-call channel (and not run through `promtool`), no first-admin bootstrap other than SQL.
+
+**Not done this round:** P11c, P12 (OpenTelemetry SDK, opt-in), P13 (mutation testing for identity/notification). **Known and accepted:** workflows are readable by everyone with `workflow:read` (one organisation, no tenants); webhook DNS rebinding is left to network egress rules; chain writers are serialised (workflow creation ~375 req/s vs ~450 on the 2-vCPU baseline).
+
+**Decisions for Marcus:** the merge (Triple-Gate — PR #11 is at gate 1/3); whether the Railway staging project keeps running (it costs money while it does); optional `STAGING_METRICS_TOKEN` repository secret so the staging smoke also checks `/metrics`.
+
 ### Round 3 schedule
 
 **Branch:** round 3 works on `claude/prod-readiness` (branched from `claude/sota-loop` at 8705bc1) so PR #11 stays frozen while it is at the merge gate; open a PR for it once #11 lands. **Local infra:** `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/guilop-pg -o '-p 55432 -k /tmp -c listen_addresses=127.0.0.1' -l /var/tmp/guilop-pg/log -w start"` (initdb with `-U contracts --auth=trust` if the dir is missing) and `redis-server --port 56379 --daemonize yes --save ''`; contracts run with `CONTRACTS_DATABASE_URL=postgresql://contracts@127.0.0.1:55432/postgres CONTRACTS_REDIS_URL=redis://127.0.0.1:56379 npx jest --config jest.contracts.config.js`.
