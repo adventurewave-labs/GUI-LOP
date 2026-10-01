@@ -1,0 +1,26 @@
+# SPA security headers — included by every SPA location in default.conf.
+# Rendered by the nginx image's envsubst step at container start
+# (/etc/nginx/templates → /etc/nginx/conf.d). Only ${CSP_CONNECT_EXTRA} is
+# substituted; nginx's own $variables are left alone.
+#
+# CSP: scripts strictly same-origin — the CRA build ships no inline scripts
+# (INLINE_RUNTIME_CHUNK=false) and nothing uses eval, so the previous
+# 'unsafe-inline' 'unsafe-eval' for scripts was pure attack surface.
+# style-src keeps 'unsafe-inline' only because several components render
+# literal <style> elements (follow-up: move them to CSS files, then drop it).
+# connect-src is same-origin (API at /api, WebSocket at /ws are proxied here);
+# set CSP_CONNECT_EXTRA=" https://api.example.com wss://api.example.com"
+# (leading space) if the SPA is built against a separate API origin.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'${CSP_CONNECT_EXTRA}; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'" always;
+# Trusted Types in report-only first: surfaces any DOM-XSS sink use without breaking the app.
+add_header Content-Security-Policy-Report-Only "require-trusted-types-for 'script'" always;
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=(), browsing-topics=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Cross-Origin-Resource-Policy "same-origin" always;
+add_header Origin-Agent-Cluster "?1" always;
+# The legacy XSS auditor is itself an info-leak vector; OWASP recommends disabling it.
+add_header X-XSS-Protection "0" always;
+add_header Strict-Transport-Security $hsts_header always;
