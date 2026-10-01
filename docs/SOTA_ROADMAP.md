@@ -43,3 +43,21 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 - [ ] **13c. Last 11 contract failures** (run: `CONTRACTS_DATABASE_URL=… CONTRACTS_REDIS_URL=… npm run test:contracts`). All but the Redis trio fail identically on the **in-memory** adapters → test/fixture bugs, not infra: ApiKeyRepository ×5 (`isUsable` on null aggregate; hash-collision fixture), WorkflowTemplateRepository `activeOnly` ×2 (TemplateKey 2-100 char fixture), DeliveryAttempt in-memory ordering ×1, RedisEventPublisher pub/sub ×3 (duplicate()/subscribe ordering). Then drop `continue-on-error` in contracts.yml.
 - [ ] **14. Type safety.** `checkJs` + JSDoc on `shared-kernel` and `bootstrap` first; real `npm run typecheck`; remove `continue-on-error`.
 - [ ] **15. Coverage + mutation gates.** CI coverage report with per-context thresholds; Stryker on `*/domain` with a baseline mutation score.
+
+### Round 2 candidates (added 2026-10-01; **audit first** — if the repo already does it properly, tick it as "already present" with evidence and move on)
+
+- [ ] **16. SPA token refresh.** Wire the WS client's `onTokenExpired` + HTTP 401 to a single-flight refresh in the SPA auth service; tests for concurrent 401s.
+- [ ] **17. Refresh-token rotation with reuse detection.** One-time refresh tokens in families; replay of a used token revokes the family (OAuth 2.0 Security BCP §4.14).
+- [ ] **18. Idempotency-Key** (IETF draft) on non-idempotent POSTs that create resources/trigger workflows: stored response replay, 409 on in-flight, 422 on payload mismatch, Redis/PG backed with TTL.
+- [ ] **19. Optimistic concurrency.** `ETag` / `If-Match` → 412 on workflow/template updates (version column), `428` when required.
+- [ ] **20. Outbox robustness.** `FOR UPDATE SKIP LOCKED` claim, exponential backoff + full jitter, max attempts → dead letter, lag metric; verified on real PG with two concurrent consumers.
+- [ ] **21. DB session safety.** `statement_timeout`, `idle_in_transaction_session_timeout`, `application_name`, pool sizing/config + pool metrics.
+- [ ] **22. OpenAPI 3.1.** Single spec for `/api/v1`, served at `/api/v1/openapi.json`, and a contract test that validates real responses against it (no drift).
+- [ ] **23. Password policy (NIST SP 800-63B rev4).** Min 8/15, max ≥64, no composition rules, blocklist of common/breached passwords (offline list, no API calls), Unicode NFKC.
+- [ ] **24. Tamper-evident audit log.** Hash-chained audit entries + verifier, so deletion/edit of history is detectable.
+- [ ] **25. SPA security headers.** nginx CSP (nonce/strict-dynamic or hashed), `Permissions-Policy`, `Referrer-Policy`, COOP/CORP, HSTS in the frontend image; test the config.
+- [ ] **26. OTel SDK (opt-in).** OTLP trace export behind `OTEL_EXPORTER_OTLP_ENDPOINT`, reusing the W3C context from loop 3; no-op when unset.
+
+## Round 2 schedule
+
+15 loops, ~24 min apart, 2026-10-01 12:15Z → 17:51Z. Same contract and rules; first unchecked item each loop. Local contract infra: Postgres 16 on `:55432` (`postgresql://contracts@127.0.0.1:55432/postgres`), Redis on `:56379`.
