@@ -176,6 +176,13 @@ export class InMemoryOutbox {
     return n;
   }
 
+  /** Number of dead-lettered records (retries exhausted). */
+  async getDeadLetterCount() {
+    let n = 0;
+    for (const r of this._records) if (r.status === 'dead_letter') n += 1;
+    return n;
+  }
+
   /** Test helper: return a copy of every record. */
   all() {
     return this._records.map((r) => ({ ...r }));

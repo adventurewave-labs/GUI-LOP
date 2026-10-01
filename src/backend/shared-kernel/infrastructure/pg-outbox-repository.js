@@ -226,5 +226,16 @@ export function createPgOutboxRepository(pool) {
       const n = Number(rows[0]?.pending ?? 0);
       return Number.isFinite(n) ? n : 0;
     },
+
+    /**
+     * Events that exhausted their retries. Each one is a notification,
+     * webhook or projection update that did NOT happen — it needs a human
+     * (see the runbook: "Outbox dead letters").
+     */
+    async getDeadLetterCount() {
+      const { rows } = await pool.query("SELECT COUNT(*)::bigint AS n FROM outbox WHERE status = 'dead_letter'");
+      const n = Number(rows[0]?.n ?? 0);
+      return Number.isFinite(n) ? n : 0;
+    },
   };
 }

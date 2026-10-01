@@ -30,7 +30,7 @@ const CIRCUIT_STATES = ['closed', 'open', 'half_open'];
 
 /**
  * @param {object} deps
- * @param {{ getPendingCount(): Promise<number>, getOldestPendingAge(now: Date): Promise<number> }} [deps.outbox]
+ * @param {{ getPendingCount(): Promise<number>, getOldestPendingAge(now: Date): Promise<number>, getDeadLetterCount?(): Promise<number> }} [deps.outbox]
  * @param {() => number} [deps.wsConnectionCount]
  * @param {() => ({ total: number, idle: number, waiting: number, max: number } | null)} [deps.dbPool]
  * @param {() => ({ name: string, circuitState: string } | null)} [deps.aiProvider]
@@ -70,6 +70,15 @@ export function createMetrics({ outbox, wsConnectionCount, dbPool, aiProvider, l
     async collect() {
       if (!outbox) return;
       try { this.set((await outbox.getOldestPendingAge(new Date())) / 1000); } catch { this.set(-1); }
+    },
+  });
+  new client.Gauge({
+    name: 'outbox_dead_letter_events',
+    help: 'Outbox events that exhausted their retries and need manual replay (-1 on lookup failure)',
+    registers: [registry],
+    async collect() {
+      if (!outbox || typeof outbox.getDeadLetterCount !== 'function') return;
+      try { this.set(await outbox.getDeadLetterCount()); } catch { this.set(-1); }
     },
   });
   new client.Gauge({

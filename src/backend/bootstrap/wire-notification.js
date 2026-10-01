@@ -90,6 +90,8 @@ export function wireNotification({
     registerWebhookCommand: useCases.registerWebhook,
     listDeadLettersQuery: useCases.listDeadLetters,
     retryDeadLetterCommand: useCases.retryDeadLetter,
+    // Plain http and private targets are only acceptable outside production.
+    allowInsecureWebhooks: config?.NODE_ENV !== 'production',
   });
 
   let consumerStop = null;

@@ -100,7 +100,12 @@ export function buildAuthRouter({
 
   router.post('/register', registerLimiter, idem, async (req, res) => {
     try {
-      const out = await useCases.registerUser.execute(req.body ?? {});
+      // Only these fields come from the client. The whole body used to be
+      // passed through, including `role` — so anyone could self-register as
+      // `admin` (full privilege escalation from an unauthenticated request).
+      // Roles are assigned by an existing admin, never chosen at sign-up.
+      const { email, username, password, fullName } = req.body ?? {};
+      const out = await useCases.registerUser.execute({ email, username, password, fullName });
       res.status(201).json(out);
     } catch (err) {
       sendError(res, err);

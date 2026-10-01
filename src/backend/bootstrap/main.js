@@ -17,6 +17,7 @@
  * `config.PORT` with graceful SIGTERM/SIGINT handling.
  */
 
+import { requirePermission, selfOrPermission } from './route-guards.js';
 import { buildOpenApiDocument } from './openapi.js';
 import { createPgPool, pgPoolStats } from '../shared-kernel/infrastructure/pg-pool.js';
 import http from 'node:http';
@@ -325,6 +326,15 @@ export async function bootstrap(envOverride) {
   // mounted at /api/v1/ui, so the real paths were /api/v1/ui/ui/generate
   // etc. and the documented /api/v1/ui/* returned 404.
   app.use('/api/v1', identity.authMiddleware, ui.router);
+  // Authorisation for routers that have none of their own (see route-guards.js).
+  const guarded = (permission) => [identity.authMiddleware, requirePermission(identity.authorisationService, permission)];
+  app.use('/api/v1/audit', ...guarded('audit:read'));
+  app.use('/api/v1/audit/exports', ...guarded('audit:export'));
+  app.use('/api/v1/analytics/users/:id', identity.authMiddleware,
+    selfOrPermission(identity.authorisationService, 'audit:read', (req) => req.params.id));
+  app.use('/api/v1/analytics/workflows', ...guarded('workflow:read'));
+  app.use('/api/v1/dashboards', ...guarded('workflow:read'));
+  app.use('/api/v1/dead-letters', ...guarded('notification:admin'));
   app.use('/api/v1', identity.authMiddleware, audit.routers.analytics);
   app.use('/api/v1', identity.authMiddleware, audit.routers.audit);
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
