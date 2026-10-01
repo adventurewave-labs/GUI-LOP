@@ -119,6 +119,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.1",
     "@types/supertest": "^6.0.3",
+    "ajv": "^8.20.0",
     "artillery-plugin-expect": "^2.20.0",
     "async": "^3.2.6",
     "autocannon": "^8.0.0",

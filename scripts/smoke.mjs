@@ -89,6 +89,12 @@ async function main() {
     expectStatus(r, 200, '/readyz');
     return JSON.stringify(r.json?.checks ?? {});
   });
+  await step('OpenAPI document served', async () => {
+    const r = await call('GET', '/api/v1/openapi.json');
+    expectStatus(r, 200, 'openapi.json');
+    assert(r.json?.openapi?.startsWith('3.1') && Object.keys(r.json.paths ?? {}).length > 20, 'not an OpenAPI 3.1 document');
+    return `${Object.keys(r.json.paths).length} paths, version ${r.json.info?.version}`;
+  });
   if (METRICS_TOKEN) {
     await step('/metrics refuses anonymous scrapes', async () => {
       const r = await call('GET', '/metrics');

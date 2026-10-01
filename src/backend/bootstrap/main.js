@@ -17,6 +17,7 @@
  * `config.PORT` with graceful SIGTERM/SIGINT handling.
  */
 
+import { buildOpenApiDocument } from './openapi.js';
 import { createPgPool, pgPoolStats } from '../shared-kernel/infrastructure/pg-pool.js';
 import http from 'node:http';
 import express from 'express';
@@ -306,6 +307,11 @@ export async function bootstrap(envOverride) {
   );
 
   // Identity & Access (public + protected).
+  // Machine-readable API description (public; contains no secrets).
+  const openApiDocument = buildOpenApiDocument({ version: config.GIT_SHA ?? config.RAILWAY_GIT_COMMIT_SHA });
+  app.get('/api/v1/openapi.json', (_req, res) => {
+    res.set('Cache-Control', 'public, max-age=300').json(openApiDocument);
+  });
   app.use('/api/v1/auth', identity.router);
   // Self-service API key management (auth required) and admin user routes.
   app.use('/api/v1/auth/api-keys', identity.apiKeyRouter);
@@ -315,7 +321,10 @@ export async function bootstrap(envOverride) {
   // Express middlewares are mounted by router, so protect at mount time.
   app.use('/api/v1/workflows', identity.authMiddleware, workflow.v1Router);
   app.use('/api/v1', identity.authMiddleware, humanInteraction.router);
-  app.use('/api/v1/ui', identity.authMiddleware, ui.router);
+  // Mounted at /api/v1: the router's own paths start with /ui. It used to be
+  // mounted at /api/v1/ui, so the real paths were /api/v1/ui/ui/generate
+  // etc. and the documented /api/v1/ui/* returned 404.
+  app.use('/api/v1', identity.authMiddleware, ui.router);
   app.use('/api/v1', identity.authMiddleware, audit.routers.analytics);
   app.use('/api/v1', identity.authMiddleware, audit.routers.audit);
   app.use('/api/v1', identity.authMiddleware, audit.routers.dashboards);
