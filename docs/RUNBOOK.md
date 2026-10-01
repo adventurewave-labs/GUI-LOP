@@ -158,6 +158,34 @@ returns errors. Check the provider's status and `AI_API_KEY`/quota. Workflows wa
 UI resume when the circuit closes; nothing needs replaying. To stop spend or errors entirely, set
 `AI_PROVIDER=stub` and restart.
 
+## Audit trail integrity
+
+Every domain event is copied into `audit_events` by a database trigger, in the same transaction as
+the change it records. Each entry carries the hash of the previous one, so an edited, removed or
+reordered entry breaks the chain. `UPDATE`, `DELETE` and `TRUNCATE` on the table are refused.
+
+- **Check:** `GET /api/v1/audit/integrity` (permission `audit:read`) — `200` intact, `409` broken
+  (`firstBrokenSeq` is where). Or in SQL: `SELECT audit_chain_first_break();` (NULL = intact).
+  The check reads the whole table; run it on a schedule (daily), not per request.
+- **Anchor the head.** The response contains `head: { seq, hash }`. Store it somewhere the database
+  administrators cannot write (ticket, object-lock bucket, another system) after each check. On the
+  next check the chain must still contain that `seq` with that `hash`:
+  `SELECT hash FROM audit_events WHERE seq = <anchored seq>;`. This is what catches the two things
+  the chain alone cannot: the newest entries being cut off, and the whole chain being rewritten by
+  someone who can drop the triggers.
+- **If it is broken:** treat as a security incident. Do not "repair" the table. Take a dump, compare
+  with the last backup that verifies (`npm run db:restore` into a scratch database, run the check
+  there), and find out who had DDL/owner access.
+- **What is in the trail:** workflow and template events — created, started, every step started /
+  completed, human input required, completed, cancelled, template published / deprecated.
+  **Not yet:** sign-in, session, permission-grant and API-key events, the human response record
+  itself (who answered — the workflow's step-completed event is there, the responder is in
+  `human_responses`), UI-generation and notification-delivery events. Those contexts publish
+  in-process instead of through the outbox.
+- **Cost:** one writer at a time extends the chain, which serialises event-writing transactions for
+  the instant of the insert-to-commit. Measured: workflow creation ~375 req/s instead of ~450 on
+  the 2-vCPU baseline.
+
 ## Incidents
 
 - **Security incident** (leaked secret, suspicious access): `SECURITY_INCIDENT_RESPONSE_PROCEDURES.md`,

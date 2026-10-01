@@ -102,6 +102,7 @@ export function buildOpenApiDocument({ version } = {}) {
           id: uuid, template_key: str, template_version: { type: 'integer' }, status: ref('WorkflowStatus'),
           context: anyObject, steps: { type: 'array', items: ref('WorkflowStep') }, version: { type: 'integer' },
         }, ['id', 'template_key', 'status', 'steps']),
+        AuditIntegrity: obj({ supported: { type: 'boolean' }, ok: { type: 'boolean' }, entries: { type: 'integer' }, firstBrokenSeq: { type: ['integer', 'null'] }, head: { type: ['object', 'null'] } }),
         PendingStep: obj({
           workflowId: uuid, stepId: uuid, uiDocumentId: nullable(str),
           eligibility: obj({ requiredRole: nullable(str), requiredPermissions: { type: 'array', items: str }, scope: nullable(str) }),
@@ -197,6 +198,7 @@ export function buildOpenApiDocument({ version } = {}) {
       '/api/v1/analytics/users/{id}': { get: op('audit', 'Per-user analytics', { parameters: [pathParam('id')], responses: { 200: json(anyObject), ...errs(401, 403) } }) },
       '/api/v1/audit/workflows/{id}': { get: op('audit', 'Audit trail of a workflow', { parameters: [pathParam('id'), ...paging], responses: { 200: json(anyObject), ...errs(401, 403) } }) },
       '/api/v1/audit/aggregates/{type}/{id}': { get: op('audit', 'Audit trail of any aggregate', { parameters: [pathParam('type'), pathParam('id'), ...paging], responses: { 200: json(anyObject), ...errs(401, 403) } }) },
+      '/api/v1/audit/integrity': { get: op('audit', 'Verify the audit hash chain (200 intact, 409 broken, 501 no chain in in-memory mode)', { responses: { 200: json(ref('AuditIntegrity')), 409: json(ref('AuditIntegrity'), 'Chain broken'), 501: json(ref('AuditIntegrity'), 'Not supported'), ...errs(401, 403) } }) },
       '/api/v1/audit/exports': { post: op('audit', 'Export audit entries', { requestBody: { required: false, content: { 'application/json': { schema: anyObject } } }, responses: { 200: json(anyObject), 202: json(anyObject, 'Accepted'), ...errs(400, 401, 403) } }) },
       '/api/v1/dashboards/active-workflows': { get: op('audit', 'Dashboard: active workflows', { responses: { 200: json(anyObject), ...errs(401, 403) } }) },
     },

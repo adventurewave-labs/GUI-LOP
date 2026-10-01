@@ -46,6 +46,15 @@ export async function truncateAll(pool) {
        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`,
   );
   const present = new Set(rows.map((r) => r.table_name));
+  // audit_events is append-only in production (TRUNCATE is refused by a
+  // trigger). Tests own their throwaway database, so they may reset it —
+  // by switching the guard off explicitly, which is exactly what an
+  // attacker would have to do too.
+  if (present.has('audit_events')) {
+    await pool.query('ALTER TABLE audit_events DISABLE TRIGGER trg_audit_events_no_truncate');
+    await pool.query('TRUNCATE TABLE audit_events');
+    await pool.query('ALTER TABLE audit_events ENABLE TRIGGER trg_audit_events_no_truncate');
+  }
   const list = TRUNCATABLE.filter((t) => present.has(t));
   if (list.length === 0) return;
   await pool.query(

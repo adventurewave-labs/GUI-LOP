@@ -48,4 +48,9 @@ export class InMemoryEventStore extends EventStore {
     const { limit, offset } = page(range);
     return out.slice(offset, offset + limit);
   }
+
+  /** No chain in memory (development/tests only): reported as unsupported, never as "intact". */
+  async verifyChain() {
+    return { supported: false, ok: false, entries: this._events.length, firstBrokenSeq: null, head: null };
+  }
 }

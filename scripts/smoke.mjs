@@ -182,6 +182,26 @@ async function main() {
         await client.end();
       }
     });
+    await step('audit trail: this run is recorded and the hash chain is intact (database)', async () => {
+      const pg = (await import('pg')).default;
+      const client = new pg.Client({ connectionString: DATABASE_URL });
+      await client.connect();
+      try {
+        const { rows } = await client.query(
+          `SELECT (SELECT count(*)::int FROM audit_events WHERE aggregate_id = $1) AS mine,
+                  (SELECT count(*)::int FROM outbox WHERE aggregate_id = $1) AS emitted,
+                  (SELECT count(*)::int FROM audit_events) AS entries,
+                  audit_chain_first_break() AS broken`,
+          [workflowId],
+        );
+        const { mine, emitted, entries, broken } = rows[0];
+        assert(broken == null, `audit chain broken at seq ${broken}`);
+        assert(mine > 0 && mine === emitted, `audit entries for the workflow: ${mine}, events emitted: ${emitted}`);
+        return `${mine} entries for the workflow, chain of ${entries} intact`;
+      } finally {
+        await client.end();
+      }
+    });
   }
 }
 

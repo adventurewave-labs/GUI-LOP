@@ -57,6 +57,7 @@ export function wireAuditAndAnalytics({
       getWorkflowTrailQuery: useCases.getWorkflowTrail,
       getAuditTrailQuery: useCases.getAuditTrail,
       exportComplianceDataCommand: useCases.exportComplianceData,
+      eventStore,
     }),
     analytics: createAnalyticsRouter({
       getWorkflowAnalyticsQuery: useCases.getWorkflowAnalytics,

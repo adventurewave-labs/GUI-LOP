@@ -91,6 +91,14 @@ describe('route authorisation (booted app)', () => {
     expect((await api.post('/api/v1/audit/exports').set(tokens.bob.auth).send({})).status).toBe(403);
   });
 
+  test('audit integrity: audit:read only; in-memory mode has no chain and says so (501, never "intact")', async () => {
+    expect((await api.get('/api/v1/audit/integrity')).status).toBe(401);
+    expect((await api.get('/api/v1/audit/integrity').set(tokens.alice.auth)).status).toBe(403);
+    const res = await api.get('/api/v1/audit/integrity').set(tokens.admin.auth);
+    expect(res.status).toBe(501);
+    expect(res.body).toMatchObject({ supported: false, ok: false, head: null });
+  });
+
   test('analytics: workflow readers may see workflow analytics and the dashboard; per-user activity is self or audit:read', async () => {
     expect((await api.get('/api/v1/analytics/workflows').set(tokens.vera.auth)).status).toBe(200);
     expect((await api.get('/api/v1/dashboards/active-workflows').set(tokens.alice.auth)).status).toBe(200);

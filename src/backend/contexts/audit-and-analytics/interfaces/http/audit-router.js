@@ -5,7 +5,8 @@ import { parsePaging } from './paging.js';
 export function createAuditRouter({
   getWorkflowTrailQuery,
   getAuditTrailQuery,
-  exportComplianceDataCommand
+  exportComplianceDataCommand,
+  eventStore
 }) {
   const router = express.Router();
   router.use(express.json());
@@ -30,6 +31,18 @@ export function createAuditRouter({
         range: parseRange(req.query)
       });
       res.json(trail);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Recomputes the hash chain. 200 + ok:true when intact; 409 when an entry
+  // was changed, removed or reordered (so a monitor can alert on status
+  // alone); 501 where there is no chain (in-memory mode).
+  router.get('/audit/integrity', async (_req, res, next) => {
+    try {
+      const result = await eventStore.verifyChain();
+      res.status(!result.supported ? 501 : result.ok ? 200 : 409).json(result);
     } catch (err) {
       next(err);
     }
