@@ -29,7 +29,7 @@ export class StubAIProvider extends BaseAIAdapter {
    * @param {object} [opts.logger]
    */
   constructor(opts = {}) {
-    super({ logger: opts.logger, scrubPii: false });
+    super({ logger: opts.logger, onTelemetry: opts.onTelemetry, scrubPii: false });
     this._model = opts.model ?? 'stub-v1';
     this.calls = [];
   }

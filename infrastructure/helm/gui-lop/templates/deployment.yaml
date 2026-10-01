@@ -73,6 +73,13 @@ spec:
                   name: {{ include "gui-lop.secretName" . }}
                   key: REDIS_URL
                   optional: true
+            # Bearer token for GET /metrics (fails closed in production when unset).
+            - name: METRICS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "gui-lop.secretName" . }}
+                  key: METRICS_TOKEN
+                  optional: true
           livenessProbe:
             httpGet:
               path: {{ .Values.probes.liveness.path }}

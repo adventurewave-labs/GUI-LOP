@@ -35,6 +35,7 @@ import { wireUIGeneration } from './wire-ui-generation.js';
 import { wireHumanInteraction } from './wire-human-interaction.js';
 import { wireNotification } from './wire-notification.js';
 import { wireAuditAndAnalytics } from './wire-audit-and-analytics.js';
+import { createMetrics } from './metrics.js';
 import { traceContextMiddleware } from '../shared-kernel/infrastructure/trace-context.js';
 import { makeWsPrincipalResolver } from '../contexts/identity-and-access/interfaces/websocket/ws-principal-resolver.js';
 import {
@@ -101,7 +102,26 @@ export async function bootstrap(envOverride) {
 
   const identity = wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger });
 
-  const ui = wireUIGeneration({ pool, clock, idGen, logger, config });
+  /* -------- metrics (created early so adapters can report into it) -------- */
+  let wsHandle = null;
+  let uiRef = null;
+  const metrics = createMetrics({
+    outbox,
+    wsConnectionCount: () => wsHandle?.wss?.clients?.size ?? 0,
+    aiProvider: () => uiRef?.aiProvider ?? null,
+    logger,
+    defaultMetrics: config.METRICS_ENABLED,
+  });
+
+  const ui = wireUIGeneration({
+    pool,
+    clock,
+    idGen,
+    logger,
+    config,
+    onAITelemetry: metrics.onAITelemetry,
+  });
+  uiRef = ui;
 
   // Wire workflow without an advancer first; we'll fold that in for human-interaction.
   const workflow = await wireWorkflowOrchestration({
@@ -231,6 +251,7 @@ export async function bootstrap(envOverride) {
   app.use(requestIdMiddleware());
   app.use(traceContextMiddleware());
   app.use(accessLogMiddleware({ logger }));
+  if (config.METRICS_ENABLED) app.use(metrics.httpMiddleware());
   // While draining, tell keep-alive clients to reconnect elsewhere.
   app.use((_req, res, next) => {
     if (draining) res.set('Connection', 'close');
@@ -272,6 +293,16 @@ export async function bootstrap(envOverride) {
   // Kubernetes-style probes. Liveness never touches dependencies (a DB blip
   // must not restart every pod); readiness fails fast while draining or
   // when a configured dependency is unreachable.
+  if (config.METRICS_ENABLED) {
+    app.get(
+      '/metrics',
+      metrics.handler({
+        token: config.METRICS_TOKEN,
+        failClosed: config.NODE_ENV === 'production',
+      }),
+    );
+  }
+
   app.get('/livez', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({ status: 'ok' });
   });
@@ -359,7 +390,7 @@ export async function bootstrap(envOverride) {
   if (config.WS_ALLOW_HEADER_AUTH) {
     logger.warn('WS_ALLOW_HEADER_AUTH=true: WebSocket upgrades accept unauthenticated X-User-Id (dev only)');
   }
-  const wsHandle = await notification.attachWebSocket(httpServer, {
+  wsHandle = await notification.attachWebSocket(httpServer, {
     principalFromUpgrade: makeWsPrincipalResolver({
       tokenIssuer: identity.tokenIssuer,
       tokenBlacklist: identity.tokenBlacklist,
@@ -447,6 +478,7 @@ export async function bootstrap(envOverride) {
     config,
     ctx: {
       logger,
+      metrics,
       pool,
       redis,
       outbox,

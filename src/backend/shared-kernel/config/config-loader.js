@@ -90,6 +90,15 @@ const SCHEMA = {
    */
   TRUST_PROXY: { type: 'string', default: 'false' },
 
+  /* -------- metrics -------- */
+  /** Expose Prometheus metrics at GET /metrics. */
+  METRICS_ENABLED: { type: 'boolean', default: true },
+  /**
+   * Bearer token required to scrape /metrics. When unset, /metrics is
+   * open in non-production and 404 in production (fail closed).
+   */
+  METRICS_TOKEN: { type: 'string', required: false, secret: true },
+
   /* -------- graceful shutdown -------- */
   /**
    * After SIGTERM, keep serving while /readyz reports 503 so the LB /

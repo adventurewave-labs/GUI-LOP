@@ -41,7 +41,7 @@ export function routeTemplate(req) {
 }
 
 /** Paths logged at debug instead of info (probe noise). */
-const QUIET_PATHS = new Set(['/livez', '/readyz', '/health']);
+const QUIET_PATHS = new Set(['/livez', '/readyz', '/health', '/metrics']);
 
 /**
  * One structured line per completed (or aborted) request. Logs the path

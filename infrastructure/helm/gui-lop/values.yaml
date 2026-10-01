@@ -128,6 +128,8 @@ secrets:
   JWT_SECRET: ""
   DATABASE_URL: ""
   REDIS_URL: ""
+  # Prometheus scrape token for GET /metrics (Authorization: Bearer).
+  METRICS_TOKEN: ""
 
 # Pre-install/pre-upgrade Job that runs `database/migrations/migrate.js`.
 # Uses the same image as the API. Disable for in-memory dev installs.

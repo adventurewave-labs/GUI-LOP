@@ -44,6 +44,7 @@ export class BaseAIAdapter extends AIProvider {
   constructor(opts = {}) {
     super();
     this._logger = opts.logger ?? NOOP_LOGGER;
+    this._onTelemetry = typeof opts.onTelemetry === 'function' ? opts.onTelemetry : undefined;
     this._retry = opts.retry ?? {};
     this._scrubPii = opts.scrubPii !== false;
     this._breaker = opts.circuitBreaker
@@ -55,6 +56,9 @@ export class BaseAIAdapter extends AIProvider {
 
   /** Active vendor model id. Subclasses override. */
   get model() { return 'unknown'; }
+
+  /** Circuit breaker state (`closed` | `open` | `half_open`) for metrics. */
+  get circuitState() { return this._breaker?.state ?? 'closed'; }
 
   /* -------- AIProvider implementation -------- */
 
@@ -113,7 +117,7 @@ export class BaseAIAdapter extends AIProvider {
         () => withRetry((signal) => run(signal), this._retry),
       ),
       meta,
-      { logger: this._logger },
+      { logger: this._logger, onCall: this._onTelemetry },
     );
   }
 }
