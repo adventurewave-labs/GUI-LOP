@@ -6,7 +6,7 @@ Working branch: `claude/sota-loop` (draft PR → `main`). **Never merged by an a
 
 1. `git fetch origin && git rebase origin/claude/sota-loop` — pick the **first unchecked** item below.
 2. Implement it end-to-end: code + tests + config/infra/docs touch-points. Scope to one item; split if it won't fit in ~20 min.
-3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js` + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)) + `npm run typecheck` 0 errors. Check every gate by **exit code**.
+3. Gate: `NODE_ENV=test JWT_SECRET=x npx jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/` (or `npm run test:coverage:backend`) + `npm run test:frontend-services` green + `npm run lint:arch` 0 errors (+ `npm run lint` (0 warnings)) + `npm run typecheck` 0 errors. Check every gate by **exit code**.
 4. Commit (conventional), push to `claude/sota-loop`, tick the item here with a one-line result + commit sha.
 5. Blocked / 3 failed attempts → mark `[!]` with the blocker and move to the next item.
 6. No paid API calls (AI adapters are verified offline against recorded fixtures / stub). No secrets in output.

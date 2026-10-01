@@ -17,7 +17,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:mutation": "stryker run",
-    "test:coverage:backend": "jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/bootstrap-smoke.test.js --coverage --silent",
+    "test:coverage:backend": "jest --config jest.backend.config.js src/backend/ tests/backend/contexts/ tests/integration/ --coverage --silent",
     "test:security": "node tests/security/security-test-runner.js",
     "test:security:ci": "node tests/security/security-test-runner.js --ci",
     "test:security:coverage": "jest tests/security/ --coverage --coverageReporters=json --coverageReporters=html",

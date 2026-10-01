@@ -99,4 +99,14 @@ describe('quality ratchets (roadmap #15)', () => {
     const stryker = readFileSync(path.join(ROOT, 'stryker.config.mjs'), 'utf8');
     expect(stryker).toMatch(/break:\s*[1-9]\d/);
   });
+
+  test('the backend gate runs every integration test, not a hand-picked one (roadmap 18b)', () => {
+    const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const gate = pkg.scripts['test:coverage:backend'];
+    expect(gate).toMatch(/(^|\s)tests\/integration\/(\s|$)/);
+    // Every file in tests/integration must be matched by the jest config too.
+    const files = readdirSync(path.join(ROOT, 'tests/integration')).filter((f) => f.endsWith('.test.js'));
+    const cfg = readFileSync(path.join(ROOT, 'jest.backend.config.js'), 'utf8');
+    for (const f of files) expect(cfg).toContain(`tests/integration/${f}`);
+  });
 });
