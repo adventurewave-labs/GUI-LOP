@@ -9,6 +9,16 @@ name: staging-smoke
 on:
   push:
     branches: [claude/prod-readiness]
+    # Same paths as the Railway service's watch patterns: a commit that does
+    # not trigger a deploy must not wait for one.
+    paths:
+      - "src/backend/**"
+      - "database/**"
+      - "scripts/**"
+      - "infrastructure/scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
   workflow_dispatch:
 
 permissions:

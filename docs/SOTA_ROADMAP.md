@@ -97,7 +97,7 @@ Goal: close the gaps between "tests green" and "safe to run for real users". Sam
 - [ ] **P11. Tamper-evident audit log** (= item 24).
 - [ ] **P12. OTel SDK, opt-in** (= item 26).
 - [ ] **P13. Mutation — identity (57.4) + notification (61.3).**
-- [ ] **P-staging. Railway staging deploy — approved by Marcus 2026-10-01.** Do right after P4 (smoke script exists): project `gui-lop-staging` with Postgres + Redis, deploy `claude/sota-loop`/`main`, run smoke + load against it, verify the outbox drains. Staging only; no custom domain, no paid AI keys.
+- [x] **P-staging. Railway staging** (`17a2912`). Project `gui-lop-staging` (env `staging`): `api` (repo Dockerfile, branch `claude/prod-readiness`, pre-deploy `migrate`, `/readyz` healthcheck, 30 s drain, watch patterns = backend paths), Postgres, Redis; stub AI, no paid keys; https://api-staging-6d66.up.railway.app. `/livez` reports the deployed commit; `staging-smoke.yml` waits for that commit then runs `scripts/smoke.mjs` — **green against real Railway** (register → login → create → execute → stale If-Match 412). Frontend image fixed so it can build (context paths, lockfile, `.npmrc`; bundle verified free of inline scripts/eval). *Open:* add repo secret `STAGING_METRICS_TOKEN` (value = the service's `METRICS_TOKEN`) to enable the outbox-drain check on staging; the SPA is not deployed to staging yet; this sandbox cannot reach `*.up.railway.app` (egress allowlist), so staging checks run from GitHub Actions. Point the service at `main` after PR #11 + round 3 merge.
 
 ### Round 3 schedule
 
