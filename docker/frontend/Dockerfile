@@ -16,15 +16,16 @@ ENV INLINE_RUNTIME_CHUNK=false
 # Create app directory
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package*.json ./
+# Build context is the REPO ROOT (docker-compose.staging.yml, CI). This used
+# to copy the root package.json / src/ / public/ — i.e. the backend — so the
+# image could not build; there was also no frontend lockfile for `npm ci`.
+COPY src/frontend/package.json src/frontend/package-lock.json src/frontend/.npmrc ./
 
-# Install dependencies
-RUN npm ci --only=production=false && npm cache clean --force
+# Dev dependencies are needed to build (react-scripts).
+RUN npm ci --include=dev --no-audit --no-fund && npm cache clean --force
 
-# Copy source code
-COPY public/ ./public/
-COPY src/ ./src/
+COPY src/frontend/public/ ./public/
+COPY src/frontend/src/ ./src/
 
 # Build the React application
 RUN npm run build
