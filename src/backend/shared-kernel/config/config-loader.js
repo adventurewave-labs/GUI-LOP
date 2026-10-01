@@ -74,6 +74,10 @@ const SCHEMA = {
    * Default false: upgrades must carry a verifiable access token.
    */
   WS_ALLOW_HEADER_AUTH: { type: 'boolean', default: false },
+  /** Live WebSocket connections allowed per principal (429 beyond). */
+  WS_MAX_CONNECTIONS_PER_USER: { type: 'number', default: 10 },
+  /** Max inbound WebSocket frame size; larger frames close with 1009. */
+  WS_MAX_PAYLOAD_BYTES: { type: 'number', default: 65536 },
   /** Max time to receive the full request headers (slowloris guard). */
   HTTP_HEADERS_TIMEOUT_MS: { type: 'number', default: 15000 },
   /** Max time to receive the full request (headers + body). */
