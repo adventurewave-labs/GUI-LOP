@@ -8,20 +8,20 @@ describe('ChangePasswordUseCase', () => {
   test('rotates hash on success and emits user.password_changed', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'old-pass-12' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'old-passphrase-2025' });
     f.outbox.events.length = 0;
     const change = new ChangePasswordUseCase(f);
-    await change.execute({ userId: u.id, oldPassword: 'old-pass-12', newPassword: 'new-pass-34' });
+    await change.execute({ userId: u.id, oldPassword: 'old-passphrase-2025', newPassword: 'new-passphrase-2034' });
     expect(f.outbox.events.map((e) => e.eventType)).toContain('user.password_changed');
   });
 
   test('rejects wrong old password', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'old-pass-12' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'old-passphrase-2025' });
     const change = new ChangePasswordUseCase(f);
     await expect(
-      change.execute({ userId: u.id, oldPassword: 'wrong', newPassword: 'new-pass-34' }),
+      change.execute({ userId: u.id, oldPassword: 'wrong', newPassword: 'new-passphrase-2034' }),
     ).rejects.toThrow(InvalidCredentialsError);
   });
 
@@ -29,7 +29,7 @@ describe('ChangePasswordUseCase', () => {
     const f = makeFixtures();
     const change = new ChangePasswordUseCase(f);
     await expect(
-      change.execute({ userId: 'missing', oldPassword: 'x', newPassword: 'new-pass-34' }),
+      change.execute({ userId: 'missing', oldPassword: 'x', newPassword: 'new-passphrase-2034' }),
     ).rejects.toThrow(NotFoundError);
   });
 });

@@ -43,6 +43,11 @@ const SCHEMA = /** @type {const} */ ({
   JWT_REFRESH_TTL_SECONDS: { type: 'number', default: 604800 },
   BCRYPT_WORK_FACTOR: { type: 'number', default: 12 },
   /**
+   * NIST SP 800-63B rev. 4: 15 when the password is the only factor (today);
+   * may drop to 8 (the floor) once MFA exists. See password-policy.js.
+   */
+  PASSWORD_MIN_LENGTH: { type: 'number', default: 15 },
+  /**
    * Override BCRYPT_WORK_FACTOR when NODE_ENV === 'test'. Defaults to 4 so
    * test suites don't pay 150-300 ms per hash. Production picks
    * BCRYPT_WORK_FACTOR (default 12); the bcrypt-password-hasher uses a

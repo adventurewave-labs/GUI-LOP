@@ -23,9 +23,35 @@ import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import bcrypt from 'bcrypt';
+import { createHash } from 'node:crypto';
 import { PasswordHash } from '../../domain/user/password-hash.js';
 
 const DEFAULT_ROUNDS = 12;
+
+/** bcrypt only reads the first 72 bytes of its input (and stops at NUL). */
+export const BCRYPT_MAX_BYTES = 72;
+
+/**
+ * The exact string handed to bcrypt for a given password.
+ *
+ *  1. NFKC-normalise (NIST 800-63B rev. 4: normalise before hashing) so the
+ *     same password typed on different keyboards/IMEs verifies.
+ *  2. If the normalised UTF-8 is longer than bcrypt's 72-byte window, hash
+ *     it with SHA-256 first and feed bcrypt the base64 digest (44 bytes).
+ *     Without this, everything after byte 72 was silently ignored: two
+ *     different 100-character passphrases sharing a 72-byte prefix were the
+ *     same password, and a 64-char password in a multi-byte script was cut
+ *     to ~24 characters.
+ *
+ * Passwords ≤ 72 bytes are hashed exactly as before, so existing hashes
+ * keep verifying (see `verify` for the long-password legacy path).
+ * @param {string} plaintext
+ */
+export function bcryptInput(plaintext) {
+  const nf = plaintext.normalize('NFKC');
+  if (Buffer.byteLength(nf, 'utf8') <= BCRYPT_MAX_BYTES) return nf;
+  return createHash('sha256').update(nf, 'utf8').digest('base64');
+}
 
 /**
  * Resolve the worker entry path. Uses `import.meta.url` when running as
@@ -161,7 +187,7 @@ export class BcryptPasswordHasher {
     if (typeof plaintext !== 'string' || plaintext.length === 0) {
       throw new Error('plaintext must be a non-empty string');
     }
-    const digest = await this._runHash(plaintext, this.rounds);
+    const digest = await this._runHash(bcryptInput(plaintext), this.rounds);
     return PasswordHash.fromTrustedHash(digest);
   }
 
@@ -176,7 +202,12 @@ export class BcryptPasswordHasher {
     if (typeof plaintext !== 'string' || plaintext.length === 0) {
       return false;
     }
-    return this._runCompare(plaintext, hash.value);
+    const input = bcryptInput(plaintext);
+    if (await this._runCompare(input, hash.value)) return true;
+    // Legacy hashes were computed on the raw string (no NFKC, no pre-hash).
+    // Only worth a second bcrypt when that string actually differs.
+    if (input !== plaintext) return this._runCompare(plaintext, hash.value);
+    return false;
   }
 
   async _runHash(plaintext, rounds) {

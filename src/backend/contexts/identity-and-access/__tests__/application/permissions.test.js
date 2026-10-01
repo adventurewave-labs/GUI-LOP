@@ -17,7 +17,7 @@ describe('Grant/Revoke permissions', () => {
   test('admin can grant a scoped permission', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const grant = new GrantPermissionUseCase(f);
     const out = await grant.execute({
       actorRole: 'admin',
@@ -31,7 +31,7 @@ describe('Grant/Revoke permissions', () => {
 
   test('grant records the granting admin (user_permissions.granted_by)', async () => {
     const f = makeFixtures();
-    const u = await new RegisterUserUseCase(f).execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await new RegisterUserUseCase(f).execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const calls = [];
     const grantsRepository = { add: async (...args) => { calls.push(args); } };
     await new GrantPermissionUseCase({ ...f, grantsRepository }).execute({
@@ -44,7 +44,7 @@ describe('Grant/Revoke permissions', () => {
   test('non-admin cannot grant', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const grant = new GrantPermissionUseCase(f);
     await expect(
       grant.execute({ actorRole: 'user', userId: u.id, permission: 'workflow:read' }),
@@ -54,7 +54,7 @@ describe('Grant/Revoke permissions', () => {
   test('revoke removes the grant', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const grant = new GrantPermissionUseCase(f);
     const revoke = new RevokePermissionUseCase(f);
     await grant.execute({ actorRole: 'admin', userId: u.id, permission: 'workflow:read', scope: 'wf-1' });
@@ -69,7 +69,7 @@ describe('AuthorisationService', () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
     const u = await reg.execute({
-      email: 'a@b.com', username: 'alice', password: 'longenuf1', role: 'admin',
+      email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1', role: 'admin',
     });
     const svc = new AuthorisationService({
       userRepository: f.userRepository,
@@ -82,7 +82,7 @@ describe('AuthorisationService', () => {
   test('user with role permission allowed', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const svc = new AuthorisationService({
       userRepository: f.userRepository,
       roleRepository: fakeRoleRepo({ user: ['workflow:read'] }),
@@ -94,7 +94,7 @@ describe('AuthorisationService', () => {
   test('user without permission denied', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     const svc = new AuthorisationService({
       userRepository: f.userRepository,
       roleRepository: fakeRoleRepo({ user: [] }),
@@ -106,7 +106,7 @@ describe('AuthorisationService', () => {
   test('direct grant satisfies authorisation', async () => {
     const f = makeFixtures();
     const reg = new RegisterUserUseCase(f);
-    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    const u = await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     await f.grantsRepository.add(u.id, new Permission('workflow:respond@wf-1'));
     const svc = new AuthorisationService({
       userRepository: f.userRepository,

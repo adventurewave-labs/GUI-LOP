@@ -22,7 +22,8 @@ export function mapErrorToHttp(err) {
       body: {
         error: 'validation_error',
         message: err.message,
-        field: err.field,
+        field: err.field ?? err.details?.field,
+        ...(err.details?.reason ? { reason: err.details.reason } : {}),
       },
     };
   }

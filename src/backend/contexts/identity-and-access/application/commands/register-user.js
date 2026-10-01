@@ -4,12 +4,14 @@ import { EmailAddress } from '../../domain/user/email-address.js';
 import { Username } from '../../domain/user/username.js';
 import { RoleName } from '../../domain/user/role-name.js';
 import { User } from '../../domain/user/user.js';
+import { PasswordPolicy } from '../../domain/user/password-policy.js';
 
 /**
  * RegisterUser use case.
  */
 export class RegisterUserUseCase {
-  constructor({ userRepository, passwordHasher, outbox, idGenerator, clock }) {
+  constructor({ userRepository, passwordHasher, outbox, idGenerator, clock, passwordPolicy = new PasswordPolicy() }) {
+    this.passwordPolicy = passwordPolicy;
     this.userRepository = userRepository;
     this.passwordHasher = passwordHasher;
     this.outbox = outbox;
@@ -25,12 +27,7 @@ export class RegisterUserUseCase {
     const username = new Username(cmd.username);
     const role = cmd.role ? new RoleName(cmd.role) : RoleName.user();
 
-    if (typeof cmd.password !== 'string' || cmd.password.length < 8) {
-      const err = new Error('password must be at least 8 characters');
-      /** @type {any} */ (err).code = 'VALIDATION';
-      /** @type {any} */ (err).field = 'password';
-      throw err;
-    }
+    this.passwordPolicy.assertAcceptable(cmd.password, { field: 'password', email: email.value, username: username.value });
 
     const [byEmail, byUsername] = await Promise.all([
       this.userRepository.findByEmail(email),

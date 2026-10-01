@@ -6,7 +6,7 @@ import {
 } from '../../domain/errors.js';
 import { makeFixtures } from './test-fixtures.js';
 
-async function seedUser(f, password = 'hunter2-pw') {
+async function seedUser(f, password = 'hunter2-but-longer') {
   const reg = new RegisterUserUseCase(f);
   return reg.execute({
     email: 'alice@example.com',
@@ -22,7 +22,7 @@ describe('AuthenticateUserUseCase', () => {
     const auth = new AuthenticateUserUseCase(f);
     const out = await auth.execute({
       identifier: 'alice@example.com',
-      password: 'hunter2-pw',
+      password: 'hunter2-but-longer',
       ip: '1.2.3.4',
       userAgent: 'jest',
     });
@@ -38,7 +38,7 @@ describe('AuthenticateUserUseCase', () => {
     const f = makeFixtures();
     await seedUser(f);
     const auth = new AuthenticateUserUseCase(f);
-    const out = await auth.execute({ identifier: 'alice', password: 'hunter2-pw' });
+    const out = await auth.execute({ identifier: 'alice', password: 'hunter2-but-longer' });
     expect(out.user.id).toBeTruthy();
   });
 
@@ -70,7 +70,7 @@ describe('AuthenticateUserUseCase', () => {
     await f.userRepository.save(u);
     const auth = new AuthenticateUserUseCase(f);
     await expect(
-      auth.execute({ identifier: 'alice', password: 'hunter2-pw' }),
+      auth.execute({ identifier: 'alice', password: 'hunter2-but-longer' }),
     ).rejects.toThrow(UserDeactivatedError);
   });
 });

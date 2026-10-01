@@ -7,6 +7,8 @@
  * composition root. Picks Postgres adapters when `pool` is non-null, else
  * falls back to in-memory.
  */
+import { PasswordPolicy } from '../contexts/identity-and-access/domain/user/password-policy.js';
+import { isCommonPassword } from '../contexts/identity-and-access/infrastructure/password-blocklist/common-passwords.js';
 import { identifierKey, ipBucket } from '../shared-kernel/infrastructure/rate-limiters.js';
 import { InMemoryUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-user-repository.js';
 import { InMemorySessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-session-repository.js';
@@ -155,6 +157,7 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     clock,
     accessTtlSeconds: config.JWT_ACCESS_TTL_SECONDS,
     refreshTtlSeconds: config.JWT_REFRESH_TTL_SECONDS,
+    passwordPolicy: new PasswordPolicy({ minLength: config.PASSWORD_MIN_LENGTH, isCommon: isCommonPassword }),
   };
 
   const useCases = {
