@@ -102,6 +102,7 @@ jobs:
           NODE_ENV=production PORT=38080 RATE_LIMIT_MAX=100000000 AUTH_REGISTER_IP_LIMIT=100 JWT_SECRET=$(openssl rand -hex 32) \
             CORS_ORIGINS=https://app.example.com DATABASE_URL=$SMOKE_DB REDIS_URL=redis://localhost:6379 \
             node src/backend/bootstrap/index.js > smoke-server.log 2>&1 &
+          echo $! > smoke-server.pid
           for i in $(seq 1 30); do curl -sf localhost:38080/livez >/dev/null && break; sleep 1; done
           node scripts/smoke.mjs --base http://localhost:38080 --metrics-token "$METRICS_TOKEN" --database-url "$SMOKE_DB"
 
@@ -116,9 +117,13 @@ jobs:
         env:
           SMOKE_DB: postgresql://contracts:contracts@localhost:5432/smoke
         run: |
-          fuser -k 38080/tcp || true   # no writers while row counts are compared
-          sleep 1
-          RESTORED=$(DATABASE_URL=$SMOKE_DB DRILL_KEEP=1 bash database/scripts/db-backup.sh drill | tail -n 1)
+          # No writers while row counts are compared: stop the API (graceful
+          # drain) and wait for it to exit.
+          kill "$(cat smoke-server.pid)" || true
+          for i in $(seq 1 40); do kill -0 "$(cat smoke-server.pid)" 2>/dev/null || break; sleep 1; done
+          pg_dump --version
+          DATABASE_URL=$SMOKE_DB DRILL_KEEP=1 bash database/scripts/db-backup.sh drill | tee drill.log
+          RESTORED=$(tail -n 1 drill.log)
           NODE_ENV=production PORT=38081 AUTH_REGISTER_IP_LIMIT=100 JWT_SECRET=$(openssl rand -hex 32) \
             CORS_ORIGINS=https://app.example.com DATABASE_URL=$RESTORED REDIS_URL=redis://localhost:6379 \
             node src/backend/bootstrap/index.js > restore-server.log 2>&1 &
