@@ -120,6 +120,8 @@ Goal: close the gaps between "tests green" and "safe to run for real users". Sam
 5. **Single-replica assumptions:** router-level auth rate limiters and UI-document blob storage are per-process. Fine for one replica; fix before scaling out.
 6. **Operations not wired:** no backup schedule on the production database, alert rules not loaded into a real Prometheus / not routed to an on-call channel (and not run through `promtool`), no first-admin bootstrap other than SQL.
 
+**Open check on PR #12:** CodeQL reports 3 "missing rate limiting" alerts (per-user analytics guard, webhook registration, audit integrity). All three are behind the general `/api/v1` limiter and a dedicated 30/min limiter; CodeQL does not recognise limiters built by `createRateLimiterFactory`. Either dismiss as false positives or make the factory visible to CodeQL — not resolved this round.
+
 **Not done this round:** P11c, P12 (OpenTelemetry SDK, opt-in), P13 (mutation testing for identity/notification). **Known and accepted:** workflows are readable by everyone with `workflow:read` (one organisation, no tenants); webhook DNS rebinding is left to network egress rules; chain writers are serialised (workflow creation ~375 req/s vs ~450 on the 2-vCPU baseline).
 
 **Decisions for Marcus:** the merge (Triple-Gate — PR #11 is at gate 1/3); whether the Railway staging project keeps running (it costs money while it does); optional `STAGING_METRICS_TOKEN` repository secret so the staging smoke also checks `/metrics`.
