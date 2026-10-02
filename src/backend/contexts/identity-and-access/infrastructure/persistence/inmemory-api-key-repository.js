@@ -15,7 +15,8 @@ export class InMemoryApiKeyRepository {
   }
 
   async findById(id) {
-    return this._byId.get(id) ?? null;
+    // Accept the ApiKeyId value object as well as a raw string, like the Pg adapter.
+    return this._byId.get(id?.value ?? id) ?? null;
   }
 
   async findByHash(hash) {

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * WorkflowReader port — read-only summary of a workflow needed for step
  * lookup, payload schema retrieval and scope computation.

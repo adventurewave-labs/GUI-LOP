@@ -27,9 +27,10 @@ export class StubAIProvider extends BaseAIAdapter {
    * @param {object} [opts]
    * @param {string} [opts.model]
    * @param {object} [opts.logger]
+   * @param {Function} [opts.onTelemetry]  per-call telemetry sink (metrics)
    */
   constructor(opts = {}) {
-    super({ logger: opts.logger, scrubPii: false });
+    super({ logger: opts.logger, onTelemetry: opts.onTelemetry, scrubPii: false });
     this._model = opts.model ?? 'stub-v1';
     this.calls = [];
   }

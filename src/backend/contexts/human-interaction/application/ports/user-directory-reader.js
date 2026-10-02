@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * UserDirectoryReader port — read-only access to user attributes used for
  * eligibility computation (role, permissions, scopes).

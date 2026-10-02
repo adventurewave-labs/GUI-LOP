@@ -34,6 +34,7 @@ export const POSTGRES_IMAGE = 'postgres:15-alpine';
  * unchanged so Jest reports a clean failure.
  */
 export async function startPostgres(opts = {}) {
+  if (process.env.CONTRACTS_DATABASE_URL) return startExternalPostgres(opts);
   // Dynamic import so test files that get fully skipped (no Docker)
   // never load testcontainers — saves a noisy import in the
   // skipped-output path.
@@ -74,6 +75,56 @@ export async function startPostgres(opts = {}) {
       stopped = true;
       try { await pool.end(); } catch { /* swallow */ }
       try { await container.stop({ timeout: 5_000 }); } catch { /* swallow */ }
+    },
+  };
+}
+
+/**
+ * External-infrastructure mode (`CONTRACTS_DATABASE_URL`): CI service
+ * containers or a local server instead of testcontainers. Each suite gets
+ * its own throwaway database (CREATE/DROP DATABASE) so suites stay as
+ * isolated as with per-file containers.
+ */
+async function startExternalPostgres(opts = {}) {
+  const pgMod = await import('pg');
+  const Pool = pgMod.Pool ?? pgMod.default?.Pool;
+  const adminUrl = new URL(process.env.CONTRACTS_DATABASE_URL);
+  const dbName = `contracts_${process.pid}_${Math.random().toString(36).slice(2, 10)}`;
+
+  const admin = new Pool({ connectionString: adminUrl.toString(), max: 1 });
+  await admin.query(`CREATE DATABASE "${dbName}"`);
+
+  const url = new URL(adminUrl.toString());
+  url.pathname = `/${dbName}`;
+  const pool = new Pool({ connectionString: url.toString(), max: 8 });
+  // DROP DATABASE … WITH (FORCE) at cleanup terminates any client a suite
+  // still holds; without listeners that surfaces as an unhandled 'error'.
+  pool.on('error', () => {});
+  admin.on('error', () => {});
+
+  await applyMigrations(pool, { logger: { warn: () => {}, info: () => {} } });
+  if (opts.applyAnalytics !== false) {
+    await applyAnalyticsProjections(pool);
+  }
+
+  let stopped = false;
+  return {
+    pool,
+    getPool: () => pool,
+    url: url.toString(),
+    container: null,
+    async truncate() {
+      await truncateAll(pool);
+    },
+    async applyMigrations() {
+      await applyMigrations(pool);
+    },
+    async cleanup() {
+      if (stopped) return;
+      stopped = true;
+      try { await pool.end(); } catch { /* swallow */ }
+      try { await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`); } catch { /* swallow */ }
+      try { await admin.end(); } catch { /* swallow */ }
     },
   };
 }

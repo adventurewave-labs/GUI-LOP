@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ProjectionUpdater — subscribes to all event types and dispatches to
  * registered per-type handlers. Default behaviour is no-op so that downstream

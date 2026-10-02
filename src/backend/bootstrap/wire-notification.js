@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-notification.js — composition for the Notification context.
  */
@@ -8,7 +9,7 @@ import { PgSubscriptionRepository } from '../contexts/notification/infrastructur
 import { PgDeliveryAttemptRepository } from '../contexts/notification/infrastructure/persistence/pg-delivery-attempt-repository.js';
 import { PgDeadLetterRepository } from '../contexts/notification/infrastructure/persistence/pg-dead-letter-repository.js';
 
-import { InMemoryWebSocketBroadcaster } from '../contexts/notification/infrastructure/transport/inmemory-ws-broadcaster.js';
+import { WsBroadcaster } from '../contexts/notification/infrastructure/transport/ws-broadcaster.js';
 import { InMemoryEventPublisher } from '../contexts/notification/infrastructure/transport/inmemory-event-publisher.js';
 import { RedisEventPublisher } from '../contexts/notification/infrastructure/transport/redis-event-publisher.js';
 import { MockEmailSender } from '../contexts/notification/infrastructure/transport/mock-email-sender.js';
@@ -45,10 +46,13 @@ export function wireNotification({
     ? new PgDeadLetterRepository(pool)
     : new InMemoryDeadLetterRepository();
 
-  const websocketBroadcaster = new InMemoryWebSocketBroadcaster();
   const eventPublisher = redis
     ? new RedisEventPublisher({ pubClient: redis, subClient: redis.duplicate?.() ?? redis })
     : new InMemoryEventPublisher();
+  // Real `ws` sockets. (Previously the in-memory test double was wired here;
+  // it invokes `handler(envelope)` on the registered object, which threw for
+  // every real WebSocket — so pushes to browsers never arrived.)
+  const websocketBroadcaster = new WsBroadcaster({ eventPublisher });
   const emailSender = new MockEmailSender();
   const webhookSender = new MockWebhookSender();
 
@@ -86,9 +90,12 @@ export function wireNotification({
     registerWebhookCommand: useCases.registerWebhook,
     listDeadLettersQuery: useCases.listDeadLetters,
     retryDeadLetterCommand: useCases.retryDeadLetter,
+    // Plain http and private targets are only acceptable outside production.
+    allowInsecureWebhooks: config?.NODE_ENV !== 'production',
   });
 
   let consumerStop = null;
+  /** @param {{ intervalMs?: number, batchSize?: number }} [opts] */
   function startOutboxConsumer({ intervalMs = 250, batchSize } = {}) {
     if (!outbox) return null;
     const consumer = new OutboxConsumer({
@@ -108,13 +115,24 @@ export function wireNotification({
     }
   }
 
+  /**
+   * @param {import('node:http').Server} httpServer
+   * @param {{ principalFromUpgrade?: Function, [k: string]: any }} [opts]
+   */
   async function attachWebSocket(httpServer, { principalFromUpgrade } = {}) {
     if (!httpServer) return null;
+    if (typeof principalFromUpgrade !== 'function') {
+      // Fail closed: an unauthenticated WebSocket would let any client
+      // subscribe to any user's event stream.
+      throw new TypeError('attachWebSocket: principalFromUpgrade is required');
+    }
     return attachWsServer(httpServer, {
-      principalFromUpgrade:
-        principalFromUpgrade ?? (async (req) => ({ id: req.headers?.['x-user-id'] ?? 'anonymous' })),
+      principalFromUpgrade,
       subscriptionRepository,
       websocketBroadcaster,
+      allowedOrigins: config?.CORS_ORIGINS ?? null,
+      maxConnectionsPerUser: config?.WS_MAX_CONNECTIONS_PER_USER ?? 10,
+      maxPayloadBytes: config?.WS_MAX_PAYLOAD_BYTES ?? 64 * 1024,
     });
   }
 

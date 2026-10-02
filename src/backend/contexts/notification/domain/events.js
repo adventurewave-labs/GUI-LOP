@@ -35,7 +35,7 @@ function envelope({
 }
 
 export class NotificationDelivered extends DomainEvent {
-  constructor({ subscriptionId, eventId, channel, attemptNumber, occurredAt, correlationId, actor }) {
+  constructor({ subscriptionId, eventId, channel, attemptNumber, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'notification.delivered',
       aggregateId: subscriptionId,
@@ -49,7 +49,7 @@ export class NotificationDelivered extends DomainEvent {
 }
 
 export class NotificationFailed extends DomainEvent {
-  constructor({ subscriptionId, eventId, channel, attemptNumber, error, deadLettered, occurredAt, correlationId, actor }) {
+  constructor({ subscriptionId, eventId, channel, attemptNumber, error, deadLettered, occurredAt, correlationId = undefined, actor = undefined }) { // optional: envelope() defaults both
     super(envelope({
       eventType: 'notification.failed',
       aggregateId: subscriptionId,

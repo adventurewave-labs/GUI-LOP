@@ -1,3 +1,4 @@
+// @ts-check
 import { EmailAddress } from '../../domain/user/email-address.js';
 import { Username } from '../../domain/user/username.js';
 import { RefreshTokenSecret } from '../../domain/session/refresh-token-secret.js';

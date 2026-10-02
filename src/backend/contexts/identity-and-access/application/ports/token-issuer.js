@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * TokenIssuer — port for issuing/verifying JWT access tokens.
  *

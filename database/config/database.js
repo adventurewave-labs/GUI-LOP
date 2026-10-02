@@ -12,12 +12,22 @@ const { Pool } = pkg;
 dotenv.config();
 
 // Database configuration
+// DATABASE_URL (what the app, Helm secret and compose files provide) takes
+// precedence; the discrete DB_* variables remain as a fallback. Previously
+// only DB_* was read, so the Helm migration Job (DATABASE_URL only) always
+// dialled localhost:5432.
+const connectionFields = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      database: process.env.DB_NAME || 'gui_lop',
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '',
+    };
+
 const dbConfig = {
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'gui_lop',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || '',
+  ...connectionFields,
   ssl: process.env.DB_SSL === 'true' ? {
     rejectUnauthorized: false
   } : false,

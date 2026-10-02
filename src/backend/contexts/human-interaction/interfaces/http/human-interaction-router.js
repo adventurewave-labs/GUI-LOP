@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * HTTP router for the Human Interaction bounded context.
  *
@@ -74,8 +75,7 @@ export function createHumanInteractionRouter(deps) {
 
   router.get('/inbox', auth, async (req, res) => {
     try {
-      const userId = req.actor?.userId ?? req.user?.id;
-      const steps = await deps.listPendingStepsForUser.execute({ userId, filter: { openOnly: true } });
+      const steps = await deps.listPendingStepsForUser.execute({ actor: actorOf(req), filter: { openOnly: true } });
       res.json({ data: steps.map(serialiseStep) });
     } catch (err) {
       const { status, body } = mapError(err);
@@ -88,6 +88,8 @@ export function createHumanInteractionRouter(deps) {
       const step = await deps.getPendingStep.execute({
         workflowId: req.params.workflowId,
         stepId: req.params.stepId,
+        // Visible only to a possible responder or the workflow's owner.
+        actor: actorOf(req) ?? { userId: '' },
       });
       if (!step) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Pending step not found' } });
@@ -100,6 +102,13 @@ export function createHumanInteractionRouter(deps) {
   });
 
   return router;
+}
+
+/** The authenticated caller, including an API key's permission ceiling. */
+function actorOf(req) {
+  const userId = req.actor?.userId ?? req.user?.id;
+  if (!userId) return null;
+  return { userId, apiKeyPermissions: req.actor?.apiKeyPermissions ?? req.user?.apiKeyPermissions ?? null };
 }
 
 function serialiseResponse(response) {

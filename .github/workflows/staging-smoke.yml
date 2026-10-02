@@ -1,0 +1,62 @@
+name: staging-smoke
+
+# Post-deploy smoke against the Railway staging API (roadmap P-staging).
+# Railway deploys every push to the staging branch; this job waits until
+# /livez reports this exact commit, then runs scripts/smoke.mjs against it.
+# Optional secret STAGING_METRICS_TOKEN enables the /metrics + outbox-drain
+# checks; without it those steps are skipped.
+
+on:
+  push:
+    branches: [claude/prod-readiness]
+    # Same paths as the Railway service's watch patterns: a commit that does
+    # not trigger a deploy must not wait for one.
+    paths:
+      - "src/backend/**"
+      - "database/**"
+      - "scripts/**"
+      - "infrastructure/scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      STAGING_URL: ${{ vars.STAGING_URL || 'https://api-staging-6d66.up.railway.app' }}
+      METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
+      - name: Wait for this commit to be live on staging
+        run: |
+          for i in $(seq 1 80); do
+            v=$(curl -fsS --max-time 10 "$STAGING_URL/livez" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).version||"")}catch{console.log("")}})' || true)
+            if [ "$v" = "$GITHUB_SHA" ]; then echo "live: $v"; exit 0; fi
+            echo "waiting (serving: ${v:-unknown})"; sleep 15
+          done
+          echo "staging never served $GITHUB_SHA"; exit 1
+
+      - name: Smoke test
+        run: |
+          if [ -n "$METRICS_TOKEN" ]; then
+            node scripts/smoke.mjs --base "$STAGING_URL" --metrics-token "$METRICS_TOKEN"
+          else
+            node scripts/smoke.mjs --base "$STAGING_URL"
+          fi

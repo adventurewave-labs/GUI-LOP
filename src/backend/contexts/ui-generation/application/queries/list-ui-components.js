@@ -1,3 +1,4 @@
+// @ts-check
 export class ListUIComponentsQuery {
   constructor({ componentCatalogueRepository }) {
     this._cat = componentCatalogueRepository;

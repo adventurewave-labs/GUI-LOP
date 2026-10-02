@@ -158,7 +158,9 @@ describeIfDocker('Outbox contract', () => {
       );
       expect(rows[0].retry_count).toBe(1);
       expect(rows[0].last_error).toBe('kaboom');
-      expect(rows[0].status).toBe('failed');
+      // Retryable with backoff (migration 014); the old terminal 'failed'
+      // status was never picked again, so the event was silently lost.
+      expect(rows[0].status).toBe('pending');
     });
 
     test('getOldestPendingAge returns ms', async () => {

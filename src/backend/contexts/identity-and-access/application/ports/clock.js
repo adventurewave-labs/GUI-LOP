@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {Object} Clock
  * @property {() => Date} now

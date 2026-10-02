@@ -2,12 +2,9 @@
 -- Populates the database with initial data for GUI-LOP platform
 -- Week 3, Phase 1 - Default seeds for development and production
 
--- Insert default roles
-INSERT INTO roles (id, name, description, permissions) VALUES
-  (uuid_generate_v4(), 'admin', 'System administrator with full access', '["read", "write", "execute", "admin"]'),
-  (uuid_generate_v4(), 'user', 'Regular user with standard permissions', '["read", "write", "execute"]'),
-  (uuid_generate_v4(), 'viewer', 'Read-only access to workflows and data', '["read"]')
-ON CONFLICT (name) DO NOTHING;
+-- Roles are owned by migration 015 (canonical `resource:action` permissions).
+-- The legacy "read"/"write"/"execute" vocabulary that used to be seeded here
+-- is not understood by the app and broke every authorisation check.
 
 -- Insert default system configuration
 INSERT INTO system_config (config_key, config_value, description, is_public) VALUES

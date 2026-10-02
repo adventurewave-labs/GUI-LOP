@@ -76,8 +76,8 @@ export default function WorkflowDetail() {
       )}
       {!TERMINAL_STATUSES.has(status) && (
         <div className="actions">
-          <ExecuteButton workflowId={id} onExecuted={refresh} />
-          <CancelButton workflowId={id} onCancelled={refresh} />
+          <ExecuteButton workflowId={id} version={workflow.version} onExecuted={refresh} onStale={refresh} />
+          <CancelButton workflowId={id} version={workflow.version} onCancelled={refresh} onStale={refresh} />
         </div>
       )}
       {status === 'waiting_for_human' && (

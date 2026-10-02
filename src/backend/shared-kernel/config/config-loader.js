@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * config-loader — single, schema-validated entry point for environment config
  * (ADR 0022). The only place in the codebase permitted to read process.env.
@@ -14,15 +15,50 @@ export class ConfigError extends Error {
 }
 
 /** Schema entries: type, optional default, required flag, parser. */
-const SCHEMA = {
-  NODE_ENV: { type: 'string', default: 'development' },
+const SCHEMA = /** @type {const} */ ({
+  /**
+   * Only these three. A typo such as `prod` or `Production` used to be
+   * accepted and silently ran the server in non-production mode: /metrics
+   * open, dev escape hatches allowed, in-memory fallbacks without complaint.
+   */
+  NODE_ENV: { type: 'string', default: 'development', enum: ['development', 'test', 'production'] },
+  /**
+   * Production refuses to start without DATABASE_URL and REDIS_URL, because
+   * the fallbacks are per-process memory: all data is lost on restart and
+   * logout / rate limits / idempotency stop working across replicas. Set
+   * this to `true` only for a throw-away container (e.g. the image smoke test).
+   */
+  ALLOW_EPHEMERAL_STATE: { type: 'boolean', default: false },
   PORT: { type: 'number', default: 3001 },
   DATABASE_URL: { type: 'string', required: false },
   REDIS_URL: { type: 'string', required: false },
+  /* -------- Postgres session safety (roadmap 21; see pg-pool.js) -------- */
+  /**
+   * Connections per process. Keep replicas × DB_POOL_MAX (+ migrations,
+   * admin) under the server's max_connections (Railway/Postgres default 100).
+   */
+  DB_POOL_MAX: { type: 'number', default: 10 },
+  DB_POOL_IDLE_TIMEOUT_MS: { type: 'number', default: 10000 },
+  /** Max wait to acquire a connection; fail fast (503) rather than queue forever. */
+  DB_CONNECT_TIMEOUT_MS: { type: 'number', default: 5000 },
+  /** Recycle connections (picks up failover / DNS changes). 0 = never. */
+  DB_POOL_MAX_LIFETIME_S: { type: 'number', default: 1800 },
+  /** Server-side per-statement limit. 0 disables. */
+  DB_STATEMENT_TIMEOUT_MS: { type: 'number', default: 15000 },
+  /** Max wait for a row/table lock. 0 disables. */
+  DB_LOCK_TIMEOUT_MS: { type: 'number', default: 5000 },
+  /** Reap transactions left open by a crashed/hung handler. 0 disables. */
+  DB_IDLE_IN_TX_TIMEOUT_MS: { type: 'number', default: 30000 },
+  DB_APPLICATION_NAME: { type: 'string', default: 'gui-lop-api' },
   JWT_SECRET: { type: 'string', required: true, secret: true },
   JWT_ACCESS_TTL_SECONDS: { type: 'number', default: 900 },
   JWT_REFRESH_TTL_SECONDS: { type: 'number', default: 604800 },
   BCRYPT_WORK_FACTOR: { type: 'number', default: 12 },
+  /**
+   * NIST SP 800-63B rev. 4: 15 when the password is the only factor (today);
+   * may drop to 8 (the floor) once MFA exists. See password-policy.js.
+   */
+  PASSWORD_MIN_LENGTH: { type: 'number', default: 15 },
   /**
    * Override BCRYPT_WORK_FACTOR when NODE_ENV === 'test'. Defaults to 4 so
    * test suites don't pay 150-300 ms per hash. Production picks
@@ -30,8 +66,23 @@ const SCHEMA = {
    * worker-thread pool so factor 12 doesn't block the event loop.
    */
   BCRYPT_WORK_FACTOR_TEST: { type: 'number', default: 4 },
-  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 900000 },
-  RATE_LIMIT_MAX: { type: 'number', default: 100 },
+  /**
+   * General /api/v1 budget per client IP (ADR 0015). Previously declared
+   * but never enforced; defaults sized for an interactive SPA (10 req/s
+   * sustained) rather than the old 100 per 15 min, which would throttle
+   * normal dashboard use. Auth routes carry their own stricter limits.
+   */
+  RATE_LIMIT_WINDOW_MS: { type: 'number', default: 60000 },
+  RATE_LIMIT_MAX: { type: 'number', default: 600 },
+  /**
+   * Login attempts per client IP per 15 min (successful ones included — a
+   * bcrypt verification costs ~250 ms of CPU whether or not it succeeds).
+   * Raise it when many users share one egress IP (office NAT, VPN).
+   * Failed logins are additionally limited to 5 per account.
+   */
+  AUTH_LOGIN_IP_LIMIT: { type: 'number', default: 20 },
+  /** Registrations per client IP per hour. */
+  AUTH_REGISTER_IP_LIMIT: { type: 'number', default: 5 },
   CORS_ORIGINS: { type: 'csv', default: 'http://localhost:3000' },
   LOG_LEVEL: { type: 'string', default: 'info', enum: ['debug', 'info', 'warn', 'error'] },
   /**
@@ -43,6 +94,14 @@ const SCHEMA = {
    * - 200 keeps throughput high while bounding per-tick memory.
    */
   OUTBOX_BATCH_SIZE: { type: 'number', default: 200 },
+  /** Insert missing built-in workflow templates at boot (Postgres; never overwrites). */
+  SEED_DEFAULT_TEMPLATES: { type: 'boolean', default: true },
+  /**
+   * Deployed commit, reported by /livez so deploy pipelines can wait for
+   * the new build (Railway injects RAILWAY_GIT_COMMIT_SHA; others set GIT_SHA).
+   */
+  GIT_SHA: { type: 'string', required: false },
+  RAILWAY_GIT_COMMIT_SHA: { type: 'string', required: false },
 
   /* -------- AI Provider ACL (ADR 0023) -------- */
   /**
@@ -62,11 +121,82 @@ const SCHEMA = {
   AI_BASE_URL: { type: 'string', required: false },
   /** Optional override of the vendor model id. */
   AI_MODEL: { type: 'string', required: false },
+  /** Optional cheaper/faster model for the classify op (defaults to AI_MODEL). */
+  AI_MODEL_CLASSIFY: { type: 'string', required: false },
   /** Per-call timeout enforced via AbortController. Default 30s. */
   AI_TIMEOUT_MS: { type: 'number', default: 30000 },
   /** Number of retries (initial try not counted). Default 2. */
   AI_MAX_RETRIES: { type: 'number', default: 2 },
-};
+
+  /* -------- HTTP server hardening -------- */
+  /**
+   * Allow the legacy `X-User-Id` header to authenticate WebSocket upgrades.
+   * Dev-only escape hatch; refused at load time when NODE_ENV=production.
+   * Default false: upgrades must carry a verifiable access token.
+   */
+  WS_ALLOW_HEADER_AUTH: { type: 'boolean', default: false },
+  /** Live WebSocket connections allowed per principal (429 beyond). */
+  WS_MAX_CONNECTIONS_PER_USER: { type: 'number', default: 10 },
+  /** Max inbound WebSocket frame size; larger frames close with 1009. */
+  WS_MAX_PAYLOAD_BYTES: { type: 'number', default: 65536 },
+  /** Max time to receive the full request headers (slowloris guard). */
+  HTTP_HEADERS_TIMEOUT_MS: { type: 'number', default: 15000 },
+  /** Max time to receive the full request (headers + body). */
+  HTTP_REQUEST_TIMEOUT_MS: { type: 'number', default: 30000 },
+  /**
+   * Idle keep-alive timeout. Must exceed the upstream LB idle timeout
+   * (AWS ALB default 60s) to avoid sporadic 502s on reused sockets.
+   */
+  HTTP_KEEPALIVE_TIMEOUT_MS: { type: 'number', default: 65000 },
+  /**
+   * Express `trust proxy` setting. `false` (default) | `true` | hop count
+   * (e.g. `1`) | CSV of subnets. Required behind an LB for correct req.ip
+   * (rate limiting, audit trail).
+   */
+  TRUST_PROXY: { type: 'string', default: 'false' },
+
+  /* -------- metrics -------- */
+  /** Expose Prometheus metrics at GET /metrics. */
+  METRICS_ENABLED: { type: 'boolean', default: true },
+  /**
+   * Bearer token required to scrape /metrics. When unset, /metrics is
+   * open in non-production and 404 in production (fail closed).
+   */
+  METRICS_TOKEN: { type: 'string', required: false, secret: true },
+
+  /* -------- graceful shutdown -------- */
+  /**
+   * After SIGTERM, keep serving while /readyz reports 503 so the LB /
+   * kube-proxy removes this endpoint before we stop accepting. Must be
+   * ≥ endpoint-propagation latency (~2-5s on most clusters).
+   */
+  SHUTDOWN_DRAIN_DELAY_MS: { type: 'number', default: 5000 },
+  /**
+   * Hard deadline for the whole shutdown sequence. Must be below the pod's
+   * terminationGracePeriodSeconds (default 30s) or SIGKILL wins.
+   */
+  SHUTDOWN_TIMEOUT_MS: { type: 'number', default: 25000 },
+});
+
+/**
+ * Value type for one schema entry.
+ * @template S
+ * @typedef {S extends { type: 'number' } ? number
+ *   : S extends { type: 'boolean' } ? boolean
+ *   : S extends { type: 'csv' } ? string[]
+ *   : S extends { enum: readonly (infer E)[] } ? E
+ *   : string} ConfigValue
+ */
+
+/**
+ * The loaded configuration, derived from SCHEMA so the type cannot drift
+ * from the loader: entries with a default or `required: true` are always
+ * present; optional entries without a default may be `null`.
+ * @typedef {{ readonly [K in keyof typeof SCHEMA]:
+ *   (typeof SCHEMA)[K] extends { default: any } | { required: true }
+ *     ? ConfigValue<(typeof SCHEMA)[K]>
+ *     : ConfigValue<(typeof SCHEMA)[K]> | null }} AppConfig
+ */
 
 function coerce(name, raw, spec) {
   if (raw === undefined || raw === null || raw === '') {
@@ -109,6 +239,12 @@ function coerceValue(name, raw, spec) {
       }
       return n;
     }
+    case 'boolean': {
+      const v = String(raw).trim().toLowerCase();
+      if (['true', '1', 'yes', 'on'].includes(v)) return true;
+      if (['false', '0', 'no', 'off'].includes(v)) return false;
+      throw new ConfigError(`Env var ${name} must be a boolean`, { name, value: raw });
+    }
     case 'csv': {
       return String(raw)
         .split(',')
@@ -124,9 +260,12 @@ function coerceValue(name, raw, spec) {
  * Load + validate config from a source object (defaults to process.env).
  * Returns a frozen plain object. Throws ConfigError on any problem.
  * @param {NodeJS.ProcessEnv | Record<string,string|undefined>} [env]
+ * @returns {AppConfig}
  */
 export function loadConfig(env = process.env) {
+  /** @type {Record<string, any>} */
   const out = {};
+  /** @type {any[]} */
   const errors = [];
   for (const [name, spec] of Object.entries(SCHEMA)) {
     try {
@@ -134,6 +273,40 @@ export function loadConfig(env = process.env) {
     } catch (e) {
       errors.push(e);
     }
+  }
+  // Cross-field invariants.
+  if (out.NODE_ENV === 'production' && out.WS_ALLOW_HEADER_AUTH === true) {
+    errors.push(
+      new ConfigError('WS_ALLOW_HEADER_AUTH must not be enabled when NODE_ENV=production', {
+        name: 'WS_ALLOW_HEADER_AUTH',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.HTTP_HEADERS_TIMEOUT_MS) &&
+    Number.isInteger(out.HTTP_REQUEST_TIMEOUT_MS) &&
+    out.HTTP_REQUEST_TIMEOUT_MS > 0 &&
+    out.HTTP_HEADERS_TIMEOUT_MS > out.HTTP_REQUEST_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('HTTP_HEADERS_TIMEOUT_MS must not exceed HTTP_REQUEST_TIMEOUT_MS', {
+        name: 'HTTP_HEADERS_TIMEOUT_MS',
+      }),
+    );
+  }
+  if (
+    Number.isInteger(out.SHUTDOWN_DRAIN_DELAY_MS) &&
+    Number.isInteger(out.SHUTDOWN_TIMEOUT_MS) &&
+    out.SHUTDOWN_DRAIN_DELAY_MS >= out.SHUTDOWN_TIMEOUT_MS
+  ) {
+    errors.push(
+      new ConfigError('SHUTDOWN_DRAIN_DELAY_MS must be less than SHUTDOWN_TIMEOUT_MS', {
+        name: 'SHUTDOWN_DRAIN_DELAY_MS',
+      }),
+    );
+  }
+  if (out.NODE_ENV === 'production') {
+    for (const message of productionViolations(out)) errors.push(new ConfigError(message.message, { name: message.name }));
   }
   if (errors.length > 0) {
     const msg = errors.map((e) => `- ${e.message}`).join('\n');
@@ -148,7 +321,87 @@ export function loadConfig(env = process.env) {
   if (out.NODE_ENV === 'test' && env.BCRYPT_WORK_FACTOR === undefined) {
     out.BCRYPT_WORK_FACTOR = out.BCRYPT_WORK_FACTOR_TEST;
   }
-  return Object.freeze(out);
+  return /** @type {AppConfig} */ (Object.freeze(out));
+}
+
+/** Values that are documentation placeholders, not secrets. */
+const PLACEHOLDER_SECRET = /change[-_ ]?me|changeme|your[-_ ]|example|placeholder|secret[-_ ]?key|^(?:dev|test|ci)[-_]|^x+$/i;
+const MIN_JWT_SECRET_LENGTH = 32; // HS256: at least 256 bits of key material
+const MIN_METRICS_TOKEN_LENGTH = 16;
+
+/**
+ * Invariants enforced only when NODE_ENV=production: fail at boot, loudly,
+ * instead of running insecurely or losing data quietly.
+ * @param {Record<string, any>} c  coerced config
+ * @returns {{ name: string, message: string }[]}
+ */
+function productionViolations(c) {
+  /** @type {{ name: string, message: string }[]} */
+  const v = [];
+  const add = (name, message) => v.push({ name, message });
+
+  if (typeof c.JWT_SECRET === 'string') {
+    if (c.JWT_SECRET.length < MIN_JWT_SECRET_LENGTH) {
+      add('JWT_SECRET', `JWT_SECRET must be at least ${MIN_JWT_SECRET_LENGTH} characters in production (use \`openssl rand -hex 32\`)`);
+    } else if (PLACEHOLDER_SECRET.test(c.JWT_SECRET) || new Set(c.JWT_SECRET).size < 8) {
+      add('JWT_SECRET', 'JWT_SECRET looks like a placeholder or low-entropy value; generate one with `openssl rand -hex 32`');
+    }
+  }
+  if (!c.ALLOW_EPHEMERAL_STATE) {
+    if (!c.DATABASE_URL) add('DATABASE_URL', 'DATABASE_URL is required in production (the in-memory fallback loses all data on restart); set ALLOW_EPHEMERAL_STATE=true only for throw-away containers');
+    if (!c.REDIS_URL) add('REDIS_URL', 'REDIS_URL is required in production (without it logout, rate limits and cross-replica events are per-process); set ALLOW_EPHEMERAL_STATE=true only for throw-away containers');
+  }
+  if (Array.isArray(c.CORS_ORIGINS)) {
+    if (c.CORS_ORIGINS.some((o) => o === '*' || o.includes('*'))) {
+      add('CORS_ORIGINS', 'CORS_ORIGINS must list exact origins in production (wildcards are refused: the API allows credentials)');
+    }
+    if (c.CORS_ORIGINS.some((o) => o === 'null')) {
+      add('CORS_ORIGINS', 'CORS_ORIGINS must not contain "null" (sandboxed documents and local files send it)');
+    }
+  }
+  if (Number.isInteger(c.BCRYPT_WORK_FACTOR) && (c.BCRYPT_WORK_FACTOR < 10 || c.BCRYPT_WORK_FACTOR > 15)) {
+    add('BCRYPT_WORK_FACTOR', 'BCRYPT_WORK_FACTOR must be between 10 and 15 in production');
+  }
+  if (typeof c.METRICS_TOKEN === 'string' && c.METRICS_TOKEN.length < MIN_METRICS_TOKEN_LENGTH) {
+    add('METRICS_TOKEN', `METRICS_TOKEN must be at least ${MIN_METRICS_TOKEN_LENGTH} characters in production`);
+  }
+  if (Number.isInteger(c.JWT_ACCESS_TTL_SECONDS) && (c.JWT_ACCESS_TTL_SECONDS < 60 || c.JWT_ACCESS_TTL_SECONDS > 3600)) {
+    add('JWT_ACCESS_TTL_SECONDS', 'JWT_ACCESS_TTL_SECONDS must be between 60 and 3600 in production (access tokens cannot be revoked individually)');
+  }
+  if (Number.isInteger(c.JWT_REFRESH_TTL_SECONDS) && Number.isInteger(c.JWT_ACCESS_TTL_SECONDS) && c.JWT_REFRESH_TTL_SECONDS <= c.JWT_ACCESS_TTL_SECONDS) {
+    add('JWT_REFRESH_TTL_SECONDS', 'JWT_REFRESH_TTL_SECONDS must be longer than JWT_ACCESS_TTL_SECONDS');
+  }
+  if (c.AI_PROVIDER && c.AI_PROVIDER !== 'stub' && !c.AI_API_KEY) {
+    add('AI_API_KEY', `AI_API_KEY is required when AI_PROVIDER=${c.AI_PROVIDER}`);
+  }
+  if (c.RATE_LIMIT_MAX === 0 || c.AUTH_LOGIN_IP_LIMIT === 0 || c.AUTH_REGISTER_IP_LIMIT === 0) {
+    add('RATE_LIMIT_MAX', 'rate limits must be positive in production (0 disables or blocks everything)');
+  }
+  return v;
+}
+
+/**
+ * Settings that are allowed but worth a line in the boot log.
+ * @param {Record<string, any>} c  loaded config
+ * @returns {string[]}
+ */
+export function configWarnings(c) {
+  /** @type {string[]} */
+  const w = [];
+  if (c.NODE_ENV !== 'production') return w;
+  if (c.ALLOW_EPHEMERAL_STATE) w.push('ALLOW_EPHEMERAL_STATE=true: missing DATABASE_URL/REDIS_URL fall back to per-process memory');
+  if (c.TRUST_PROXY === 'true') w.push('TRUST_PROXY=true trusts every X-Forwarded-For hop (client-spoofable IPs defeat rate limits); use the hop count, e.g. 1');
+  if (c.TRUST_PROXY === 'false') w.push('TRUST_PROXY=false: behind a load balancer every client shares the proxy IP for rate limiting');
+  if (c.LOG_LEVEL === 'debug') w.push('LOG_LEVEL=debug in production is verbose and may log request details');
+  if (!c.METRICS_TOKEN && c.METRICS_ENABLED) w.push('METRICS_TOKEN unset: /metrics answers 404 (fail closed), so nothing can scrape this instance');
+  if (Array.isArray(c.CORS_ORIGINS) && c.CORS_ORIGINS.some((o) => /^http:\/\//.test(o) && !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(o))) {
+    w.push('CORS_ORIGINS contains a plain-http origin');
+  }
+  if (Array.isArray(c.CORS_ORIGINS) && c.CORS_ORIGINS.some((o) => /^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(o))) {
+    w.push('CORS_ORIGINS still contains a localhost origin (the default); set it to the SPA origin');
+  }
+  if (c.AI_PROVIDER === 'stub') w.push('AI_PROVIDER=stub: UI generation returns deterministic stub output, not model output');
+  return w;
 }
 
 /** Returns the schema for documentation / .env.example checks. */

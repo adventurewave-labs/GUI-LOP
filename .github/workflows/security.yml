@@ -1,0 +1,57 @@
+name: security
+
+# Supply-chain gates:
+#   - npm audit on production dependencies (blocks on high/critical)
+#   - dependency-review on PRs (blocks new high-severity or copyleft deps)
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    # Weekly re-audit catches advisories published after merge.
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  npm-audit:
+    name: npm audit (prod deps)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Audit production dependency tree
+        run: npm audit --omit=dev --audit-level=high
+
+  dependency-review:
+    name: dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Requires Settings → Code security → Dependency graph. Non-blocking
+      # until that is enabled (it currently fails with "not supported on
+      # this repository"); drop continue-on-error afterwards.
+      - name: Review dependency changes
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          deny-licenses: AGPL-3.0, GPL-3.0

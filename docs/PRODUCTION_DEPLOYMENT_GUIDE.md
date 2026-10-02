@@ -188,6 +188,49 @@ serves traffic. Roll forward by fixing the migration and re-running
 > expand → migrate → contract pattern (add column, dual-write,
 > back-fill, then remove old column in a follow-up release).
 
+### Migration policy: forward-only
+
+- **There are no down migrations.** A bad release is rolled back by redeploying the previous image;
+  the schema stays where it is. That only works if every migration is **backwards compatible with
+  the previous release** (expand → migrate → contract, as above): additive changes first, removals
+  one release later.
+- **Idempotent.** Every migration can be re-run safely (`IF NOT EXISTS`, guarded `DO` blocks,
+  `ON CONFLICT`); CI applies the full set twice against an empty database on every change.
+- **Never edit an applied migration.** Add a new numbered file instead; the ledger is the
+  `schema_migrations` table.
+- **Take a backup before a release that contains a migration** (`npm run db:backup`). The restore is
+  the only "down".
+- Migrations run outside the app's pool (no statement timeout — index builds may legitimately be
+  slow). On Railway they are the service's pre-deploy command; on Kubernetes the Helm hook above.
+
+### Backups, restore and the restore drill
+
+One script, driven by `DATABASE_URL` (`database/scripts/db-backup.sh`; client tools must be at
+least as new as the server):
+
+```bash
+npm run db:backup                               # → backups/gui-lop-<UTC>.dump (+ .sha256), prunes > 30 days
+npm run db:verify  -- backups/gui-lop-….dump    # checksum + archive readable
+npm run db:restore -- backups/gui-lop-….dump "$TARGET_DATABASE_URL"   # empty target only; one transaction
+npm run db:drill                                # dump → restore to scratch DB → compare → drop
+```
+
+- `restore` refuses a target that already has tables (`FORCE=1` overrides) and runs in a single
+  transaction, so a failed restore leaves nothing half-applied.
+- `drill` is the proof that backups work: it restores into a scratch database on the same server,
+  compares **every table's row count** with the source, checks the migration ledger, runs the
+  migrations against the copy (must be a no-op) and prints dump size and timings. CI runs it after
+  the production smoke test and then boots the API on nothing but the restored copy.
+- Reference timing (2026-10-01, 22 tables / 76k rows / 3.6 MB dump): backup 0.6 s, restore 0.8 s.
+  Re-measure on production data; that restore time plus redeploy is your RTO, and your backup
+  frequency is your RPO. On a live source use `DRILL_STRICT=0` (counts may drift during the dump).
+- **Restore procedure (incident):** 1) stop writers (scale the API to 0); 2) create an empty
+  database; 3) `db:restore` the newest verified dump into it; 4) point `DATABASE_URL` at it and
+  deploy (pre-deploy migrations bring it to the current schema); 5) run `scripts/smoke.mjs`;
+  6) Redis needs no restore — sessions re-authenticate and rate-limit counters reset.
+- Managed Postgres (Railway volume backups, RDS snapshots) is the first line; this script is the
+  portable, verifiable second line and the only one exercised in CI.
+
 ---
 
 ## Secrets handling
@@ -207,6 +250,28 @@ Production checklist (ADR 0022):
 - [ ] No secret literal anywhere in git, including overlay values files.
 - [ ] Rotation runbook in place. The bootstrap re-reads env on restart,
       so a rolling restart is sufficient after rotating a Secret.
+
+### What production refuses to start with
+
+With `NODE_ENV=production` the config loader fails at boot (listing every problem at once, never
+echoing a value) instead of running insecurely or losing data quietly:
+
+| Setting | Refused when |
+| --- | --- |
+| `NODE_ENV` | not exactly `development`, `test` or `production` (a typo such as `prod` used to run in non-production mode) |
+| `JWT_SECRET` | shorter than 32 characters, a documentation placeholder (`change-me…`, `your-…`, `ci-…`), or low entropy |
+| `DATABASE_URL`, `REDIS_URL` | missing — unless `ALLOW_EPHEMERAL_STATE=true` (throw-away containers only: data is lost on restart, logout and rate limits are per-process) |
+| `CORS_ORIGINS` | contains `*` or `null` (the API allows credentials) |
+| `BCRYPT_WORK_FACTOR` | outside 10–15 |
+| `METRICS_TOKEN` | set but shorter than 16 characters (unset = `/metrics` answers 404) |
+| `JWT_ACCESS_TTL_SECONDS` | outside 60–3600; `JWT_REFRESH_TTL_SECONDS` not longer than it |
+| `AI_PROVIDER` ≠ `stub` | `AI_API_KEY` missing |
+| rate limits | any of `RATE_LIMIT_MAX`, `AUTH_LOGIN_IP_LIMIT`, `AUTH_REGISTER_IP_LIMIT` is 0 |
+| `WS_ALLOW_HEADER_AUTH` | `true` |
+
+Allowed but logged as `config:` warnings at boot: `TRUST_PROXY=true` or `false`, `LOG_LEVEL=debug`,
+no `METRICS_TOKEN`, plain-http or localhost CORS origins, `AI_PROVIDER=stub`, `ALLOW_EPHEMERAL_STATE=true`.
+`.env.example` documents every setting and is checked against the schema in CI.
 
 ---
 
@@ -255,6 +320,47 @@ helm -n gui-lop upgrade gui-lop infrastructure/helm/gui-lop \
 ```
 
 ---
+
+## Performance: SLOs, baseline and load testing
+
+**Service-level objectives** (per API instance, measured at the server; alert rules follow in the runbook):
+
+| Objective | Target |
+| --- | --- |
+| API latency (all `/api/v1` routes except login) | p95 < 250 ms, p99 < 600 ms |
+| Login latency (bcrypt cost 12, by design CPU-bound) | p95 < 800 ms |
+| Error rate (5xx + timeouts) | < 0.1 % |
+| Liveness / readiness probes | p99 < 50 ms |
+| Outbox delivery lag (`outbox_oldest_pending_age_seconds`) | < 30 s |
+
+**Baseline** — 2026-10-01, `NODE_ENV=production`, one API process, Postgres 16 + Redis on the same
+2-vCPU sandbox as the load generator (so these are conservative), 20 closed-loop virtual users, 15 s:
+
+| Scenario | Throughput | p50 | p95 | p99 | Errors |
+| --- | --- | --- | --- | --- | --- |
+| `health` — `GET /livez` | 4 631 req/s | 3.1 ms | 10.3 ms | 15.3 ms | 0 |
+| `read` — `GET /workflows/:id` (auth + 2 DB round-trips) | 1 381 req/s | 13.6 ms | 22.2 ms | 29.1 ms | 0 |
+| `write` — `POST /workflows` (txn + steps + outbox, ~5 round-trips) | 450 req/s | 43.5 ms | 58.9 ms | 70.1 ms | 0 |
+| `mixed` — 70 % read · 20 % templates · 10 % write | 1 048 req/s | 16.2 ms | 42.7 ms | 55.1 ms | 0 |
+
+Unloaded single-request latency: read 1.8 ms, write 4 ms. Under 20 users the process is CPU-bound,
+not waiting on the database (pool never queued), so the first scaling lever is replicas, then
+`DB_POOL_MAX`. A login flood from one IP is absorbed by the auth limiter (300/min per IP): 2 575 req/s
+answered with 429 at p99 11 ms without reaching bcrypt. Legitimate login capacity is bounded by
+bcrypt: ~250 ms of CPU each, i.e. roughly 4 logins/s per core.
+
+**Run it** (`scripts/load.mjs`, no dependencies; exits non-zero when an SLO is missed):
+
+```bash
+# The default 600 req/min per-IP budget would turn a load run into a 429 test.
+RATE_LIMIT_MAX=100000000 NODE_ENV=production ... node src/backend/bootstrap/index.js &
+node scripts/load.mjs --base http://localhost:3001 --scenario mixed \
+  --concurrency 20 --duration 20 --p95 250 --p99 600 --max-error-rate 0.001
+```
+
+CI runs a short `mixed` pass after the production-mode smoke test as a regression tripwire (generous
+thresholds: shared runners are noisy). Do not point a real load run at staging without raising its
+`RATE_LIMIT_MAX` first.
 
 ## CI/CD reference
 

@@ -88,25 +88,25 @@ describeIfDocker('DeliveryAttemptRepository contract', () => {
     });
 
     test('record then listForEvent returns the attempts ordered by attempted_at', async () => {
-      await repo.record(attempt({ id: 'a-2', n: 2, attemptedAt: T2 }));
-      await repo.record(attempt({ id: 'a-1', n: 1, attemptedAt: T1 }));
-      await repo.record(attempt({ id: 'a-3', n: 3, attemptedAt: T3 }));
+      await repo.record(attempt({ id: 'a8906abf-816c-44a6-81f3-43db848ac092' /* a-2 */, n: 2, attemptedAt: T2 }));
+      await repo.record(attempt({ id: '366b7a5d-c5b9-4dd3-8035-565a63880d86' /* a-1 */, n: 1, attemptedAt: T1 }));
+      await repo.record(attempt({ id: '0b07c4c4-2df9-4e4e-83f6-5e9efd99fc0a' /* a-3 */, n: 3, attemptedAt: T3 }));
       const rows = await repo.listForEvent(EVENT_ID);
-      expect(rows.map((r) => r.id)).toEqual(['a-1', 'a-2', 'a-3']);
+      expect(rows.map((r) => r.id)).toEqual(['366b7a5d-c5b9-4dd3-8035-565a63880d86' /* a-1 */, 'a8906abf-816c-44a6-81f3-43db848ac092' /* a-2 */, '0b07c4c4-2df9-4e4e-83f6-5e9efd99fc0a' /* a-3 */]);
       expect(rows.map((r) => r.attemptNumber)).toEqual([1, 2, 3]);
     });
 
     test('countForSubscription is a per-(sub, event) count', async () => {
-      await repo.record(attempt({ id: 'x-1', n: 1, attemptedAt: T1 }));
-      await repo.record(attempt({ id: 'x-2', n: 2, attemptedAt: T2 }));
-      await repo.record(attempt({ id: 'y-1', n: 1, attemptedAt: T1, eventId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' }));
+      await repo.record(attempt({ id: '42a84e8e-2dc4-4f90-858d-94e5d96edc16' /* x-1 */, n: 1, attemptedAt: T1 }));
+      await repo.record(attempt({ id: 'bfbbdc0d-7018-45af-8b02-4eee82a83720' /* x-2 */, n: 2, attemptedAt: T2 }));
+      await repo.record(attempt({ id: 'c1d2e3f4-0000-4000-8000-0000000000y1'.replace('y1','01'), n: 1, attemptedAt: T1, eventId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' }));
       expect(await repo.countForSubscription(SUB_ID, EVENT_ID)).toBe(2);
       expect(await repo.countForSubscription(SUB_ID, 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb')).toBe(1);
     });
 
     test('append-only: re-recording with a new id is a new row', async () => {
-      await repo.record(attempt({ id: 'r-1', n: 1, attemptedAt: T1 }));
-      await repo.record(attempt({ id: 'r-1b', n: 2, attemptedAt: T2 }));
+      await repo.record(attempt({ id: '4b401584-2750-4a34-85af-0cc61a279818' /* r-1 */, n: 1, attemptedAt: T1 }));
+      await repo.record(attempt({ id: 'b90ad9c3-7cd8-41c3-85f0-b1a483e1d849' /* r-1b */, n: 2, attemptedAt: T2 }));
       const rows = await repo.listForEvent(EVENT_ID);
       expect(rows.length).toBe(2);
     });

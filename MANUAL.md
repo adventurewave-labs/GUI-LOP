@@ -13,7 +13,7 @@
 ## Quick Start Guide
 
 ### Prerequisites
-- Node.js 18.x or higher
+- Node.js 22.12 or higher (24 LTS recommended; see `.nvmrc`)
 - Modern web browser
 - Basic understanding of REST APIs
 

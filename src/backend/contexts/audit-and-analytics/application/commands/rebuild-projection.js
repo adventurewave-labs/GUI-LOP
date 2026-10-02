@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * RebuildProjection — admin-only stub. Streams events from the event store and
  * passes each through a registered handler. Most projections in GUI-LOP are
@@ -10,6 +11,7 @@ export class RebuildProjectionCommand {
     this._handler = projectionUpdater;
   }
 
+  /** @param {{ aggregateType?: string, aggregateId?: string, range?: { from?: any, to?: any } }} [q] */
   async execute({ aggregateType, aggregateId, range } = {}) {
     const events = await this._events.query({ aggregateType, aggregateId, range });
     let processed = 0;

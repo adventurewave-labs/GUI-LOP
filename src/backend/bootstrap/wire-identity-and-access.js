@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-identity-and-access.js — composition for the Identity & Access context.
  *
@@ -6,18 +7,25 @@
  * composition root. Picks Postgres adapters when `pool` is non-null, else
  * falls back to in-memory.
  */
+import { PasswordPolicy } from '../contexts/identity-and-access/domain/user/password-policy.js';
+import { isCommonPassword } from '../contexts/identity-and-access/infrastructure/password-blocklist/common-passwords.js';
+import { identifierKey, ipBucket } from '../shared-kernel/infrastructure/rate-limiters.js';
 import { InMemoryUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-user-repository.js';
 import { InMemorySessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-session-repository.js';
 import { InMemoryGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-grants-repository.js';
 import { InMemoryApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-api-key-repository.js';
 import { PgUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-user-repository.js';
 import { PgSessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-session-repository.js';
+import { PgGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-grants-repository.js';
 import { PgRoleRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-role-repository.js';
 import { PgApiKeyRepository } from '../contexts/identity-and-access/infrastructure/persistence/pg-api-key-repository.js';
+import { PgHttpIdempotencyStore } from '../shared-kernel/infrastructure/http-idempotency.js';
+import { withAccessTokenRevocation } from '../contexts/identity-and-access/application/services/access-token-revocation.js';
 import { InMemoryTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/inmemory-token-blacklist.js';
 import { RedisTokenBlacklist } from '../contexts/identity-and-access/infrastructure/cache/redis-token-blacklist.js';
 import { BcryptPasswordHasher } from '../contexts/identity-and-access/infrastructure/crypto/bcrypt-password-hasher.js';
 import { JwtTokenIssuer } from '../contexts/identity-and-access/infrastructure/tokens/jwt-token-issuer.js';
+import { createPooledOutbox } from '../shared-kernel/infrastructure/pooled-outbox.js';
 import { InMemoryOutbox as IdentityInMemoryOutbox } from '../contexts/identity-and-access/application/ports/outbox.js';
 import { AuthorisationService as IdentityAuthorisationService } from '../contexts/identity-and-access/application/services/authorisation-service.js';
 import { Permission } from '../contexts/identity-and-access/domain/permission/permission.js';
@@ -53,6 +61,7 @@ class InMemoryRoleRepository {
     this._roles = new Map([
       ['admin', new Set([])], // admins implicitly hold every permission
       ['user', new Set(['workflow:read', 'workflow:create', 'workflow:respond'])],
+      ['viewer', new Set(['workflow:read'])], // matches migration 015 (was missing: viewers had no permissions in dev)
       ['reviewer', new Set(['workflow:read', 'workflow:respond'])],
       ['analyst', new Set(['workflow:read'])],
     ]);
@@ -73,22 +82,73 @@ class InMemoryRoleRepository {
   }
 }
 
-export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger }) {
+/**
+ * ADR 0015 auth limits. All fail closed: if the limiter store is down we
+ * refuse auth traffic rather than allow unlimited guessing.
+ */
+export function buildAuthLimiters(create, { loginIpLimit = 20, registerIpLimit = 5 } = {}) {
+  const FIFTEEN_MIN = 15 * 60 * 1000;
+  return {
+    loginIp: create('login-ip', {
+      windowMs: FIFTEEN_MIN, limit: loginIpLimit, failClosed: true, message: 'Too many login attempts',
+    }),
+    loginIdentifier: create('login-id', {
+      windowMs: FIFTEEN_MIN,
+      limit: 5,
+      failClosed: true,
+      // Only failures count, so a legitimate user isn't locked out by their
+      // own successful logins; keyed on a hash of the normalised identifier.
+      skipSuccessfulRequests: true,
+      keyGenerator: (req) => {
+        const raw = req.body?.identifier ?? req.body?.email ?? req.body?.username;
+        return `id:${identifierKey(raw) ?? `ip:${ipBucket(req.ip)}`}`;
+      },
+      message: 'Too many failed login attempts for this account',
+    }),
+    refresh: create('refresh', {
+      windowMs: FIFTEEN_MIN, limit: 30, failClosed: true, message: 'Too many refresh attempts',
+    }),
+    register: create('register', {
+      windowMs: 60 * 60 * 1000, limit: registerIpLimit, failClosed: true, message: 'Too many registrations',
+    }),
+    password: create('password', {
+      windowMs: FIFTEEN_MIN,
+      limit: 5,
+      failClosed: true,
+      keyGenerator: (req) => `user:${req.principal?.userId ?? ipBucket(req.ip)}`,
+      message: 'Too many password change attempts',
+    }),
+  };
+}
+
+export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logger, rateLimiter, outbox: sharedOutbox }) {
   const userRepository = pool ? new PgUserRepository(pool) : new InMemoryUserRepository();
-  const sessionRepository = pool
+  const sessionStore = pool
     ? new PgSessionRepository(pool)
     : new InMemorySessionRepository();
   const roleRepository = pool ? new PgRoleRepository(pool) : new InMemoryRoleRepository();
-  const grantsRepository = new InMemoryGrantsRepository();
+  // Direct grants must be durable and shared across pods (migration 009);
+  // the in-memory repository is for dev/test only.
+  const grantsRepository = pool ? new PgGrantsRepository(pool) : new InMemoryGrantsRepository();
   const apiKeyRepository = pool
     ? new PgApiKeyRepository(pool)
     : new InMemoryApiKeyRepository();
   const tokenBlacklist = redis
     ? new RedisTokenBlacklist(redis)
     : new InMemoryTokenBlacklist();
+  // Revoking a session (logout, refresh-token reuse, …) also revokes every
+  // access token already issued for it, for one access-token lifetime.
+  const sessionRepository = withAccessTokenRevocation(sessionStore, tokenBlacklist, {
+    accessTtlSeconds: config?.JWT_ACCESS_TTL_SECONDS ?? 15 * 60,
+  });
   const passwordHasher = new BcryptPasswordHasher({ rounds: config.BCRYPT_WORK_FACTOR });
   const tokenIssuer = new JwtTokenIssuer({ secret: config.JWT_SECRET });
-  const outbox = new IdentityInMemoryOutbox();
+  // With Postgres, identity events go to the durable outbox (and so into the
+  // audit trail). `api_key.used` fires on every API-key request; the key's
+  // last_used_at already records it.
+  const outbox = pool && sharedOutbox
+    ? createPooledOutbox({ pool, outbox: sharedOutbox, skipTypes: ['api_key.used'] })
+    : new IdentityInMemoryOutbox();
 
   const deps = {
     userRepository,
@@ -104,6 +164,7 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     clock,
     accessTtlSeconds: config.JWT_ACCESS_TTL_SECONDS,
     refreshTtlSeconds: config.JWT_REFRESH_TTL_SECONDS,
+    passwordPolicy: new PasswordPolicy({ minLength: config.PASSWORD_MIN_LENGTH, isCommon: isCommonPassword }),
   };
 
   const useCases = {
@@ -134,6 +195,12 @@ export function wireIdentityAndAccess({ pool, redis, clock, idGen, config, logge
     useCases,
     tokenIssuer,
     tokenBlacklist,
+    limiters: rateLimiter
+      ? buildAuthLimiters(rateLimiter, { loginIpLimit: config.AUTH_LOGIN_IP_LIMIT, registerIpLimit: config.AUTH_REGISTER_IP_LIMIT })
+      : undefined,
+    // Shared across replicas when Postgres is configured (a retry that lands
+    // on another pod must replay, not re-register).
+    idempotencyStore: pool ? new PgHttpIdempotencyStore(pool) : undefined,
   });
 
   const authMiddleware = makeAuthMiddleware({

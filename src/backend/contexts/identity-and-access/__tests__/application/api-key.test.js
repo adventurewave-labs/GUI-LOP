@@ -20,7 +20,7 @@ async function registerAlice(f) {
   return reg.execute({
     email: 'alice@example.com',
     username: 'alice',
-    password: 'longenuf1',
+    password: 'long-enough-passphrase-1',
   });
 }
 

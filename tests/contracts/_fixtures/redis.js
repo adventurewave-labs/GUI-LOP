@@ -10,15 +10,27 @@
 export const REDIS_IMAGE = 'redis:7-alpine';
 
 export async function startRedis(opts = {}) {
-  const tcMod = await import('@testcontainers/redis');
   const ioMod = await import('ioredis');
-  const RedisContainer = tcMod.RedisContainer;
   const Redis = ioMod.default ?? ioMod;
 
-  const image = opts.image ?? REDIS_IMAGE;
-  const container = await new RedisContainer(image).start();
-  const port = container.getMappedPort(6379);
-  const host = container.getHost();
+  // External-infrastructure mode (`CONTRACTS_REDIS_URL`): CI service
+  // container or local server. Suites run with maxWorkers: 1 and flush
+  // between tests, so a shared instance is safe.
+  let container = null;
+  let host;
+  let port;
+  if (process.env.CONTRACTS_REDIS_URL) {
+    const u = new URL(process.env.CONTRACTS_REDIS_URL);
+    host = u.hostname;
+    port = Number(u.port || 6379);
+  } else {
+    const tcMod = await import('@testcontainers/redis');
+    const RedisContainer = tcMod.RedisContainer;
+    const image = opts.image ?? REDIS_IMAGE;
+    container = await new RedisContainer(image).start();
+    port = container.getMappedPort(6379);
+    host = container.getHost();
+  }
   const url = `redis://${host}:${port}`;
 
   const client = new Redis({ host, port, lazyConnect: false });
@@ -51,7 +63,9 @@ export async function startRedis(opts = {}) {
       for (const c of [client, pub, sub]) {
         try { await c.quit(); } catch { /* swallow */ }
       }
-      try { await container.stop({ timeout: 5_000 }); } catch { /* swallow */ }
+      if (container) {
+        try { await container.stop({ timeout: 5_000 }); } catch { /* swallow */ }
+      }
     },
   };
 }

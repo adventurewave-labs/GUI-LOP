@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/user/password-hash.js').PasswordHash} PasswordHash
  */

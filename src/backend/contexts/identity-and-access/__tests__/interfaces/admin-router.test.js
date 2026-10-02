@@ -50,11 +50,14 @@ function buildApp() {
     }),
   );
   app.use('/api/v1/admin', buildAdminRouter({ useCases, requireAuth }));
+  app.locals.useCases = useCases;
   return { app, fixtures, useCases };
 }
 
 async function registerAndLogin(app, { username, role }) {
-  await request(app).post('/api/v1/auth/register').send({
+  // Roles cannot be chosen at sign-up over HTTP (that was a privilege
+  // escalation); privileged users are created through the use case.
+  await app.locals.useCases.registerUser.execute({
     email: `${username}@example.com`,
     username,
     password: 'super-secret-pw',

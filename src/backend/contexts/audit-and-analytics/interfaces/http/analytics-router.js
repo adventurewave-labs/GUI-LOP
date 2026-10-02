@@ -1,4 +1,6 @@
+// @ts-check
 import express from 'express';
+import { parsePaging } from './paging.js';
 
 export function createAnalyticsRouter({
   getWorkflowAnalyticsQuery,
@@ -9,8 +11,7 @@ export function createAnalyticsRouter({
   router.get('/analytics/workflows', async (req, res, next) => {
     try {
       const items = await getWorkflowAnalyticsQuery.execute({
-        limit: parseInt(req.query.limit, 10) || 100,
-        offset: parseInt(req.query.offset, 10) || 0
+        ...parsePaging(req.query),
       });
       res.json({ items });
     } catch (err) {
@@ -22,8 +23,7 @@ export function createAnalyticsRouter({
     try {
       const items = await getUserActivityQuery.execute({
         userId: req.params.id,
-        limit: parseInt(req.query.limit, 10) || 100,
-        offset: parseInt(req.query.offset, 10) || 0
+        ...parsePaging(req.query),
       });
       res.json({ items });
     } catch (err) {

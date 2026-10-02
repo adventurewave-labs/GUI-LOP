@@ -62,8 +62,10 @@ export class CachedWorkflowTemplateRepository {
     return value;
   }
 
-  async save(template) {
-    const out = await this._delegate.save(template);
+  async save(template, opts) {
+    // Options (e.g. `createOnly`) must reach the real repository: dropping
+    // them here would turn a create-only publish back into an upsert.
+    const out = await this._delegate.save(template, opts);
     // Invalidate every entry tied to this template key.
     const key = template?.key?.value ?? template?.key ?? null;
     if (key != null) this._invalidateKey(key);

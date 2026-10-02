@@ -22,6 +22,8 @@ services:
   # (skipped automatically when DATABASE_URL is empty / in-memory mode).
   # ---------------------------------------------------------------------------
   app:
+    # App drains for up to SHUTDOWN_TIMEOUT_MS (25s); Docker default is 10s.
+    stop_grace_period: 30s
     build:
       context: .
       dockerfile: Dockerfile

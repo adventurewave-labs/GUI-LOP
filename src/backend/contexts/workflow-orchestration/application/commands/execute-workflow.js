@@ -1,4 +1,6 @@
-import { ForbiddenError } from '../../../../shared-kernel/domain/errors.js';
+// @ts-check
+import { authoriseWorkflowAction } from '../services/authorise-workflow-action.js';
+import { assertExpectedVersion } from './cancel-workflow.js';
 import { WorkflowNotFoundError } from '../../domain/errors.js';
 import { WorkflowStatus } from '../../domain/workflow/workflow-status.js';
 import { WorkflowEngine } from '../services/engine.js';
@@ -25,14 +27,13 @@ export class ExecuteWorkflowUseCase {
   }
 
   async execute(input) {
-    if (this._authorisation) {
-      const decision = await this._authorisation.authorise({
-        actor: input.actor,
-        action: 'workflow:execute',
-        resource: { type: 'workflow', id: input.workflowId },
-      });
-      if (!decision.allowed) throw new ForbiddenError(decision.reason ?? 'forbidden');
-    }
+    await authoriseWorkflowAction({
+      authorisation: this._authorisation,
+      workflows: this._workflows,
+      actor: input.actor,
+      action: 'workflow:execute',
+      workflowId: input.workflowId,
+    });
 
     if (input.idempotencyKey && this._idempotency) {
       const existing = await this._idempotency.get({
@@ -45,6 +46,7 @@ export class ExecuteWorkflowUseCase {
 
     const wf = await this._workflows.findById(input.workflowId);
     if (!wf) throw new WorkflowNotFoundError(input.workflowId);
+    assertExpectedVersion(wf, input.expectedVersions);
 
     if (wf.status === WorkflowStatus.CREATED) {
       wf.start(this._clock.now(), { actor: input.actor, correlationId: input.correlationId });
@@ -66,6 +68,7 @@ export class ExecuteWorkflowUseCase {
       status: wf.status,
       stoppedReason: result.stoppedReason,
       ranSteps: result.ranSteps,
+      version: wf.version,
     };
     if (input.idempotencyKey && this._idempotency) {
       await this._idempotency.put(

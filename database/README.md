@@ -30,8 +30,7 @@ database/
 │   ├── 01_default_data.sql  # Default seed data
 │   └── seed.js               # Seeding runner
 ├── scripts/
-│   ├── backup.sh             # Backup script (bash)
-│   └── restore.js            # Restore script (Node.js)
+│   └── db-backup.sh          # backup / verify / restore / list / drill (DATABASE_URL)
 ├── utils/
 │   ├── error-handler.js      # Error handling utilities
 │   └── transaction-manager.js # Transaction management
@@ -112,10 +111,13 @@ The following npm scripts are available for database management:
 
 ### Backup Scripts
 
-- `npm run db:backup` - Create database backup
-- `npm run db:restore` - Restore from backup
-- `npm run db:list` - List available backups
-- `npm run db:verify` - Verify backup integrity
+- `npm run db:backup` - Create a backup of `DATABASE_URL` (custom-format dump + SHA-256)
+- `npm run db:verify -- <file>` - Verify a backup (checksum + readable archive)
+- `npm run db:restore -- <file> <target-url>` - Restore into an **empty** database, in one transaction
+- `npm run db:list` - List backups in `BACKUP_DIR`
+- `npm run db:drill` - Prove restorability: dump → restore to a scratch database → compare every table → drop
+
+See "Backups, restore and migration policy" in `docs/PRODUCTION_DEPLOYMENT_GUIDE.md`.
 
 ### Utility Scripts
 

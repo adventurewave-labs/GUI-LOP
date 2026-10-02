@@ -1,3 +1,4 @@
+// @ts-check
 import { Router } from 'express';
 import { sendError } from './error-mapper.js';
 import { adminGuard } from './admin-guard.js';
@@ -19,6 +20,7 @@ import { adminGuard } from './admin-guard.js';
  *   }
  *   requireAuth: middleware (already authenticates principal)
  */
+/** @param {{ useCases?: any, requireAuth?: Function }} [deps] */
 export function buildAdminRouter({ useCases, requireAuth } = {}) {
   if (!useCases) throw new Error('useCases required');
   if (typeof requireAuth !== 'function') {
@@ -59,6 +61,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.grantPermission.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
         permission: req.body?.permission,
         scope: req.body?.scope ?? undefined,
@@ -74,6 +77,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.revokePermission.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
         permission: req.params.permission,
         scope: req.query?.scope ?? undefined,
@@ -89,6 +93,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.deactivateUser.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
       });
       res.status(200).json(out);
@@ -102,6 +107,7 @@ export function buildAdminRouter({ useCases, requireAuth } = {}) {
     try {
       const out = await useCases.reactivateUser.execute({
         actorRole: req.principal.role,
+        actorId: req.principal.userId ?? null,
         userId: req.params.id,
       });
       res.status(200).json(out);

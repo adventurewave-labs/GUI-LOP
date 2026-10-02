@@ -4,6 +4,7 @@ import {
   SessionCreated,
   SessionRefreshed,
   SessionRevoked,
+  SessionRefreshTokenReused,
 } from '../events.js';
 
 /**
@@ -45,6 +46,15 @@ export class Session {
     this.id = props.id;
     this.userId = props.userId;
     this.refreshTokenHash = props.refreshTokenHash;
+    /**
+     * Hash as loaded/issued — the compare-and-set guard for persistence: a
+     * repository must only write a rotation if the stored hash still equals
+     * this (two concurrent refreshes must not silently overwrite each other).
+     * Repositories advance it after a successful write.
+     */
+    this.loadedRefreshTokenHash = props.refreshTokenHash;
+    /** @private hashes rotated away since load; persisted for reuse detection */
+    this._superseded = [];
     this.ip = props.ip ?? null;
     this.userAgent = props.userAgent ?? null;
     this.createdAt = props.createdAt ?? new Date();
@@ -110,6 +120,7 @@ export class Session {
     if (!newHash || typeof newHash !== 'string') {
       throw new ValidationError('newHash required', 'refreshTokenHash');
     }
+    this._superseded.push(this.refreshTokenHash);
     this.refreshTokenHash = newHash;
     this.lastSeenAt = now;
     if (typeof ttlMs === 'number' && ttlMs > 0) {
@@ -138,6 +149,31 @@ export class Session {
         occurredAt: this.lastSeenAt,
       }),
     );
+  }
+
+  /**
+   * A superseded refresh token for this session was presented: treat it as
+   * leaked. Revokes the session (killing every token descended from it) and
+   * records the security event — even if already revoked, so repeated replay
+   * attempts stay visible in the audit trail.
+   * @param {Date} now
+   */
+  revokeForReuse(now) {
+    this.revoke(now);
+    this._enqueue(
+      new SessionRefreshTokenReused({ sessionId: this.id, userId: this.userId, occurredAt: now }),
+    );
+  }
+
+  /**
+   * Hashes rotated away since this aggregate was loaded. The repository
+   * persists them so a later replay can be recognised; draining is its job.
+   * @returns {string[]}
+   */
+  takeSupersededHashes() {
+    const out = this._superseded;
+    this._superseded = [];
+    return out;
   }
 
   /** Update last-seen timestamp without emitting an event. */

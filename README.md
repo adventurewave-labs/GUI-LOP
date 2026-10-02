@@ -11,7 +11,7 @@ human decision points. Built as a domain-driven backend (6 bounded
 contexts, hexagonal architecture, transactional outbox) with a React SPA
 and a WebSocket-based real-time channel.
 
-- **Backend:** Node.js 18+, Express, WebSocket (`ws`), Postgres + Redis
+- **Backend:** Node.js 22+ (24 LTS recommended), Express, WebSocket (`ws`), Postgres + Redis
   (with in-memory fall-backs for dev), JWT auth, OpenAI/Anthropic ACL.
 - **Frontend:** React 18 SPA at `src/frontend/`.
 - **Status:** 560 backend tests passing across 75 suites; 25/25 SLO

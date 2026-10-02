@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * RetryDeadLetterCommand — re-feeds a stored dead-letter envelope into the
  * delivery pipeline. On success, removes it from the DLQ.

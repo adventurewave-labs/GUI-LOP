@@ -18,11 +18,11 @@ const registerSchema = yup.object().shape({
     .required('Email is required'),
   password: yup
     .string()
-    .min(8, 'Password must be at least 8 characters long')
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
-    )
+    // NIST SP 800-63B rev. 4: length, not composition. The server is
+    // authoritative (it also checks a common-password blocklist, your
+    // username/email, and repeated/sequential patterns).
+    .test('min-length', 'Use at least 15 characters — a few words make a good passphrase', (v) => [...(v ?? '')].length >= 15)
+    .test('max-length', 'Password cannot exceed 128 characters', (v) => [...(v ?? '')].length <= 128)
     .required('Password is required'),
   confirmPassword: yup
     .string()
@@ -63,15 +63,13 @@ const RegisterForm = ({ onToggleForm, onRegisterSuccess }) => {
 
     let strength = 0;
 
-    // Length check
-    if (password.length >= 8) strength++;
-    if (password.length >= 12) strength++;
-
-    // Character variety checks
-    if (/[a-z]/.test(password)) strength++;
-    if (/[A-Z]/.test(password)) strength++;
-    if (/\d/.test(password)) strength++;
-    if (/[@$!%*?&]/.test(password)) strength++;
+    // Length is what makes a password strong (NIST SP 800-63B rev. 4);
+    // character-class "variety" meters reward Password1! over a passphrase.
+    const len = [...password].length;
+    if (len >= 15) strength++;
+    if (len >= 20) strength++;
+    if (len >= 28) strength++;
+    if (len >= 15 && /\s/.test(password.trim())) strength++; // multi-word passphrase
 
     setPasswordStrength(Math.min(4, strength));
   }, [password]);

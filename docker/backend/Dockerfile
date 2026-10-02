@@ -4,7 +4,7 @@
 # ==========================================
 
 # Build stage - Install dependencies and build the application
-FROM node:18-alpine AS builder
+FROM node:24-alpine AS builder
 
 # Set environment variables for build
 ENV NODE_ENV=production
@@ -37,7 +37,7 @@ COPY scripts/ ./scripts/
 RUN npm run build
 
 # Production stage - Minimal runtime image
-FROM node:18-alpine AS production
+FROM node:24-alpine AS production
 
 # Set environment variables
 ENV NODE_ENV=production

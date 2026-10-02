@@ -72,7 +72,8 @@ export default function Register() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            minLength={8}
+            minLength={15}
+            maxLength={128}
           />
         </label>
         <button type="submit" data-testid="register-submit" disabled={submitting || isLoading}>

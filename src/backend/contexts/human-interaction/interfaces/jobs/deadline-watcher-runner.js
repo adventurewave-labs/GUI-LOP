@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Deadline watcher runner — bootstrap-style entry point that wires the
  * watcher service against composed dependencies.

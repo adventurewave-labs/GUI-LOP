@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AuthorisationService port (Identity & Access).
  *

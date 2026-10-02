@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {{ name: string, description?: string, permissions: import('../../domain/permission/permission.js').Permission[] }} Role
  */

@@ -45,7 +45,10 @@ export class PgAuditLogStore extends AuditLogStore {
       const { rows } = await this._pool.query(sql, args);
       return rows;
     } catch (err) {
-      if (err?.code === '42P01') return [];
+      // 42P01: no table. 42703: the legacy `audit_logs` (a row-change log with
+      // table_name/operation/old_values columns that nothing writes to) — not
+      // this shape. Either way there are no entries; the trail is audit_events.
+      if (err?.code === '42P01' || err?.code === '42703') return [];
       throw err;
     }
   }

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Clock port — abstracts wall-clock reads. Domain code stays pure; tests
  * use a frozen clock for determinism.

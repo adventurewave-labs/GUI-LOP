@@ -1,3 +1,4 @@
+// @ts-check
 export class ListWorkflowTemplatesQuery {
   constructor({ templates }) {
     this._templates = templates;

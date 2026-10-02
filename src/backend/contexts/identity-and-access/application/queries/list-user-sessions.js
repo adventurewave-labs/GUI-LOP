@@ -1,3 +1,4 @@
+// @ts-check
 export class ListUserSessionsQuery {
   constructor({ sessionRepository }) {
     this.sessionRepository = sessionRepository;

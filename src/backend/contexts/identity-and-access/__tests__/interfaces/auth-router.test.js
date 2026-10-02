@@ -28,7 +28,7 @@ describe('Auth HTTP router', () => {
     const { app } = buildTestApp();
     const res = await request(app)
       .post('/api/v1/auth/register')
-      .send({ email: 'bad', username: 'alice', password: 'longenuf1' });
+      .send({ email: 'bad', username: 'alice', password: 'long-enough-passphrase-1' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('validation_error');
   });
@@ -109,7 +109,7 @@ describe('Auth HTTP router', () => {
     const res = await request(app)
       .post('/api/v1/auth/password')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
-      .send({ oldPassword: 'wrong', newPassword: 'new-pass-12' });
+      .send({ oldPassword: 'wrong', newPassword: 'new-passphrase-2026' });
     expect(res.status).toBe(401);
   });
 
@@ -122,7 +122,7 @@ describe('Auth HTTP router', () => {
     const res = await request(app)
       .post('/api/v1/auth/password')
       .set('Authorization', `Bearer ${login.body.accessToken}`)
-      .send({ oldPassword: creds.password, newPassword: 'new-pass-12' });
+      .send({ oldPassword: creds.password, newPassword: 'new-passphrase-2026' });
     expect(res.status).toBe(204);
   });
 
@@ -142,7 +142,7 @@ describe('Auth HTTP router', () => {
     expect(second.body).toEqual(first.body);
   });
 
-  test('Idempotency-Key with different body returns 409', async () => {
+  test('Idempotency-Key with different body returns 422 (IETF idempotency-key draft)', async () => {
     const { app } = buildTestApp();
     const key = 'idem-key-2';
     await request(app)
@@ -153,7 +153,7 @@ describe('Auth HTTP router', () => {
       .post('/api/v1/auth/register')
       .set('Idempotency-Key', key)
       .send({ ...creds, email: 'other@example.com' });
-    expect(conflict.status).toBe(409);
-    expect(conflict.body.error).toBe('idempotency_conflict');
+    expect(conflict.status).toBe(422);
+    expect(conflict.body.error).toBe('idempotency_key_reused');
   });
 });

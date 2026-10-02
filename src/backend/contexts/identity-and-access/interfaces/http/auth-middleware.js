@@ -1,7 +1,10 @@
+// @ts-check
 import { sendError } from './error-mapper.js';
+import { accessTokenRevocation } from '../../application/services/access-token-revocation.js';
+import { setContextField } from '../../../../shared-kernel/infrastructure/request-context.js';
+import { parseBearer } from '../../../../shared-kernel/infrastructure/bearer.js';
 import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
 import { ApiKeySecret } from '../../domain/api-key/api-key-secret.js';
-const BEARER_RE = /^Bearer\s+(.+)$/i;
 
 /**
  * Build the auth middleware. Verifies `Authorization: Bearer <token>`,
@@ -30,6 +33,9 @@ const BEARER_RE = /^Bearer\s+(.+)$/i;
  *
  * The three views are populated in lock-step from the same source.
  */
+/**
+ * @param {{ tokenIssuer?: any, tokenBlacklist?: any, authenticateWithApiKey?: any }} [deps]
+ */
 export function makeAuthMiddleware({
   tokenIssuer,
   tokenBlacklist,
@@ -39,10 +45,8 @@ export function makeAuthMiddleware({
     try {
       const header = req.headers?.authorization ?? req.headers?.Authorization;
       if (!header) throw new UnauthorisedError('Missing Authorization header');
-      const m = BEARER_RE.exec(header);
-      if (!m) throw new UnauthorisedError('Malformed Authorization header');
-
-      const raw = m[1];
+      const raw = parseBearer(header);
+      if (!raw) throw new UnauthorisedError('Malformed Authorization header');
 
       let principal;
       if (ApiKeySecret.looksLikeApiKey(raw)) {
@@ -62,10 +66,9 @@ export function makeAuthMiddleware({
           throw new UnauthorisedError('JWT verifier not configured');
         }
         const claims = await tokenIssuer.verifyAccess(raw);
-        if (claims.jti && tokenBlacklist) {
-          const denied = await tokenBlacklist.isBlacklisted(claims.jti);
-          if (denied) throw new UnauthorisedError('Token has been revoked');
-        }
+        const revoked = await accessTokenRevocation(claims, tokenBlacklist);
+        if (revoked === 'token') throw new UnauthorisedError('Token has been revoked');
+        if (revoked === 'session') throw new UnauthorisedError('Session has been revoked');
         principal = {
           userId: claims.sub,
           role: claims.role,
@@ -77,15 +80,27 @@ export function makeAuthMiddleware({
       }
 
       req.principal = principal;
+      // Enrich the ambient request context so every subsequent log line
+      // (and the access log) is attributable to the caller.
+      setContextField('user_id', principal.userId);
+      setContextField('auth_via', principal.via);
       // Compatibility views for routers that haven't migrated to req.principal.
+      // A key minted with an explicit permission list is a ceiling on what
+      // the request may do (enforced by AuthorisationService); an unscoped
+      // key or a session token carries none.
+      const apiKeyPermissions = principal.via === 'api-key' && principal.permissions.length > 0
+        ? principal.permissions
+        : undefined;
       req.user = {
         id: principal.userId,
         role: principal.role,
         sessionId: principal.sessionId,
+        ...(apiKeyPermissions ? { apiKeyPermissions } : {}),
       };
       req.actor = {
         userId: principal.userId,
         sessionId: principal.sessionId,
+        ...(apiKeyPermissions ? { apiKeyPermissions } : {}),
       };
       next();
     } catch (err) {

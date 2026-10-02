@@ -25,10 +25,14 @@ import { PgEventStore } from '../../../src/backend/contexts/audit-and-analytics/
 const WF_A = 'aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa';
 const WF_B = 'bbbbbbbb-1111-1111-1111-bbbbbbbbbbbb';
 
+// The real write path: a domain event is inserted into `outbox`; the trigger
+// from migration 017 appends it to the hash-chained `audit_events` in the same
+// transaction. (This suite used to insert into a hand-made `events` table
+// that exists only in the test fixture.)
 async function seedPg(pool, events) {
   for (const e of events) {
     await pool.query(
-      `INSERT INTO events (id, type, version, aggregate_type, aggregate_id, payload, occurred_at)
+      `INSERT INTO outbox (event_id, event_type, event_version, aggregate_type, aggregate_id, payload, occurred_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
       [
         e.id,
@@ -155,4 +159,76 @@ describeIfDocker('EventStore contract', () => {
       expect(first[0].id).not.toBe(second[0]?.id);
     });
   });
+
+  describe('hash chain (postgres)', () => {
+    const tamper = async (sql, args) => {
+      await pg.pool.query('ALTER TABLE audit_events DISABLE TRIGGER trg_audit_events_immutable');
+      try { await pg.pool.query(sql, args); } finally {
+        await pg.pool.query('ALTER TABLE audit_events ENABLE TRIGGER trg_audit_events_immutable');
+      }
+    };
+
+    test('every outbox insert appends a linked entry; the chain verifies', async () => {
+      const store = new PgEventStore(pg.pool);
+      const rows = (await pg.pool.query('SELECT seq, prev_hash, hash, actor_id FROM audit_events ORDER BY seq')).rows;
+      expect(rows.map((r) => Number(r.seq))).toEqual([1, 2, 3, 4]);
+      expect(rows[0].prev_hash).toBe('0'.repeat(64));
+      for (let i = 1; i < rows.length; i++) expect(rows[i].prev_hash).toBe(rows[i - 1].hash);
+      for (const r of rows) expect(r.hash).toMatch(/^[0-9a-f]{64}$/);
+      const v = await store.verifyChain();
+      expect(v).toMatchObject({ supported: true, ok: true, entries: 4, firstBrokenSeq: null, head: { seq: 4, hash: rows[3].hash } });
+    });
+
+    test('the audit entry commits or rolls back with the business transaction', async () => {
+      const client = await pg.pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(`INSERT INTO outbox (event_id, event_type, payload) VALUES ('11111111-2222-3333-4444-0000000000aa', 'x.rolled_back', '{}')`);
+        expect((await client.query('SELECT count(*)::int AS n FROM audit_events')).rows[0].n).toBe(5);
+        await client.query('ROLLBACK');
+      } finally { client.release(); }
+      const v = await new PgEventStore(pg.pool).verifyChain();
+      expect(v).toMatchObject({ ok: true, entries: 4, head: { seq: 4 } });
+    });
+
+    test('UPDATE, DELETE and TRUNCATE are refused', async () => {
+      await expect(pg.pool.query(`UPDATE audit_events SET payload = '{"x":1}' WHERE seq = 2`)).rejects.toThrow(/append-only/);
+      await expect(pg.pool.query('DELETE FROM audit_events WHERE seq = 2')).rejects.toThrow(/append-only/);
+      await expect(pg.pool.query('TRUNCATE audit_events')).rejects.toThrow(/append-only/);
+      expect((await new PgEventStore(pg.pool).verifyChain()).ok).toBe(true);
+    });
+
+    test.each([
+      ['an edited payload', `UPDATE audit_events SET payload = '{"wf":"forged"}' WHERE seq = 2`, 2],
+      ['an edited actor', `UPDATE audit_events SET actor_id = 'someone-else' WHERE seq = 3`, 3],
+      ['an edited timestamp', `UPDATE audit_events SET occurred_at = occurred_at - interval '1 day' WHERE seq = 1`, 1],
+      ['a row deleted from the middle', 'DELETE FROM audit_events WHERE seq = 2', 3],
+      ['a forged hash on an edited row', `UPDATE audit_events SET event_type = 'forged', hash = audit_event_hash(prev_hash, seq, event_id, 'forged', event_version, aggregate_type, aggregate_id, actor_id, payload, correlation_id, occurred_at) WHERE seq = 2`, 3],
+    ])('with the guard switched off, %s is detected', async (_what, sql, brokenAt) => {
+      await tamper(sql);
+      const v = await new PgEventStore(pg.pool).verifyChain();
+      expect(v).toMatchObject({ ok: false, firstBrokenSeq: brokenAt });
+    });
+
+    test('cutting the newest entries leaves a valid chain — only a recorded head exposes it', async () => {
+      const before = await new PgEventStore(pg.pool).verifyChain();
+      await tamper('DELETE FROM audit_events WHERE seq = 4');
+      const after = await new PgEventStore(pg.pool).verifyChain();
+      expect(after.ok).toBe(true);                       // the documented limit
+      expect(after.head.seq).toBeLessThan(before.head.seq); // what an external anchor catches
+    });
+
+    test('concurrent writers produce one gapless, valid chain', async () => {
+      await Promise.all(Array.from({ length: 40 }, (_, i) => pg.pool.query(
+        `INSERT INTO outbox (event_id, event_type, aggregate_type, aggregate_id, payload) VALUES (uuid_generate_v4(), 'load.event', 'Workflow', $1, $2::jsonb)`,
+        [`wf-${i % 5}`, JSON.stringify({ i, actorId: `user-${i % 3}` })],
+      )));
+      const v = await new PgEventStore(pg.pool).verifyChain();
+      expect(v).toMatchObject({ ok: true, entries: 44, head: { seq: 44 } });
+      const mine = await new PgEventStore(pg.pool).query({ actorId: 'user-1' });
+      expect(mine.length).toBe(13);
+      expect((await new PgEventStore(pg.pool).query({ aggregateType: 'Workflow', aggregateId: 'wf-2' })).length).toBe(8);
+    });
+  });
 });
+

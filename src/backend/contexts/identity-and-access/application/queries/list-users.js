@@ -1,3 +1,4 @@
+// @ts-check
 import { ValidationError } from '../../../../shared-kernel/domain/errors.js';
 
 const DEFAULT_LIMIT = 50;

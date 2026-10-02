@@ -1,3 +1,4 @@
+// @ts-check
 import { ForbiddenError, NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 import { Permission } from '../../domain/permission/permission.js';
 import { PermissionRevoked } from '../../domain/events.js';
@@ -10,7 +11,7 @@ export class RevokePermissionUseCase {
     this.clock = clock;
   }
 
-  /** @param {{ actorRole: string, userId: string, permission: string, scope?: string }} cmd */
+  /** @param {{ actorRole: string, actorId?: string | null, userId: string, permission: string, scope?: string }} cmd */
   async execute(cmd) {
     if (cmd.actorRole !== 'admin') {
       throw new ForbiddenError('Only admins may revoke permissions');
@@ -30,7 +31,7 @@ export class RevokePermissionUseCase {
         scope: perm.scope,
         occurredAt: this.clock.now(),
       }),
-    ]);
+    ], { actorId: cmd.actorId ?? null });
 
     return { permission: perm.value };
   }

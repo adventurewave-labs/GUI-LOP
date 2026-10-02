@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/template/workflow-template.js').WorkflowTemplate} WorkflowTemplate
  *

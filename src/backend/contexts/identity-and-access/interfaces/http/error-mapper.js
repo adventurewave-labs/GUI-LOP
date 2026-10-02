@@ -1,6 +1,10 @@
+// @ts-check
+import { isTransientDbError } from '../../../../shared-kernel/infrastructure/transient-errors.js';
 import { ConflictError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 import {
   InvalidCredentialsError,
+  RefreshConflictError,
+  RefreshTokenReusedError,
   SessionExpiredError,
   SessionRevokedError,
   UserDeactivatedError,
@@ -18,7 +22,8 @@ export function mapErrorToHttp(err) {
       body: {
         error: 'validation_error',
         message: err.message,
-        field: err.field,
+        field: err.field ?? err.details?.field,
+        ...(err.details?.reason ? { reason: err.details.reason } : {}),
       },
     };
   }
@@ -34,6 +39,12 @@ export function mapErrorToHttp(err) {
   if (err instanceof SessionExpiredError) {
     return { status: 401, body: { error: 'session_expired', message: err.message } };
   }
+  if (err instanceof RefreshTokenReusedError) {
+    return { status: 401, body: { error: 'refresh_token_reused', message: err.message } };
+  }
+  if (err instanceof RefreshConflictError) {
+    return { status: 409, body: { error: 'refresh_conflict', message: err.message } };
+  }
   if (err instanceof SessionRevokedError) {
     return { status: 401, body: { error: 'session_revoked', message: err.message } };
   }
@@ -45,6 +56,9 @@ export function mapErrorToHttp(err) {
   }
   if (err instanceof ConflictError) {
     return { status: 409, body: { error: 'conflict', message: err.message } };
+  }
+  if (isTransientDbError(err)) {
+    return { status: 503, body: { error: 'service_unavailable', message: 'Temporarily unavailable; retry shortly' } };
   }
   return null;
 }

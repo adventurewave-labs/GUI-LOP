@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Event handler: closes any pending steps for a workflow that has been
  * cancelled (or has otherwise ended without recording a human response).

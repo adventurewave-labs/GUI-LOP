@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * WebSocketBroadcaster — sends envelopes to live WebSocket connections.
  *

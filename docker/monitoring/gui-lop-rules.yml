@@ -4,6 +4,168 @@
 # ==========================================
 
 groups:
+  # ---------------------------------------------------------------------
+  # API (metrics the application really exports at /metrics; checked by
+  # src/backend/bootstrap/__tests__/alert-rules.test.js so an alert can
+  # never again reference a metric that does not exist).
+  # SLOs: docs/PRODUCTION_DEPLOYMENT_GUIDE.md "Performance".
+  # ---------------------------------------------------------------------
+  - name: gui-lop-api
+    rules:
+      - alert: ApiDown
+        expr: up{job="gui-lop-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "API instance {{ $labels.instance }} is not being scraped"
+          description: "Prometheus cannot scrape /metrics (process down, or METRICS_TOKEN mismatch)."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apidown"
+
+      - alert: ApiHighErrorRate
+        expr: sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m])) / sum(rate(http_request_duration_seconds_count[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "More than 1% of API requests are failing (5xx)"
+          description: "{{ $value | humanizePercentage }} of requests returned 5xx over 5 minutes (SLO: < 0.1%)."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apihigherrorrate"
+
+      - alert: ApiLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{route!~"/api/v1/auth/(login|register|password)"}[5m]))) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "API p95 latency is above the 250 ms SLO"
+          description: "p95 is {{ $value | humanizeDuration }} (login/register/password excluded: bcrypt is slow by design)."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apilatencyhigh"
+
+      - alert: ApiLatencyP99High
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route!~"/api/v1/auth/(login|register|password)"}[5m]))) > 0.6
+        for: 10m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "API p99 latency is above the 600 ms SLO"
+          description: "p99 is {{ $value | humanizeDuration }}."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apilatencyhigh"
+
+      - alert: ApiOverloaded
+        expr: sum(rate(http_request_duration_seconds_count{status_code="503"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "API is shedding load (503)"
+          description: "{{ $value }} req/s are answered 503 + Retry-After: database timeouts, exhausted pool, or failover."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apioverloaded"
+
+      - alert: ApiRestarting
+        expr: changes(process_start_time_seconds{job="gui-lop-backend"}[15m]) > 2
+        for: 0m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "API process restarted {{ $value }} times in 15 minutes"
+          description: "Crash loop: check the boot log for a ConfigError or an unhandled error."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#apirestarting"
+
+      - alert: EventLoopLagHigh
+        expr: nodejs_eventloop_lag_p99_seconds{job="gui-lop-backend"} > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Node.js event loop is blocked"
+          description: "p99 event-loop lag is {{ $value | humanizeDuration }}: synchronous work on the request path or CPU saturation."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#eventlooplaghigh"
+
+      - alert: DbPoolSaturated
+        expr: db_pool_connections{state="waiting"} > 0
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Requests are queueing for a database connection"
+          description: "{{ $value }} callers have been waiting for a pooled connection for 5 minutes."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#dbpoolsaturated"
+
+      - alert: OutboxLagHigh
+        expr: outbox_oldest_pending_age_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Outbox delivery is lagging"
+          description: "The oldest undelivered event is {{ $value | humanizeDuration }} old (SLO: < 30 s)."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#outboxlaghigh"
+
+      - alert: OutboxStalled
+        expr: outbox_oldest_pending_age_seconds > 600
+        for: 5m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Outbox is not draining"
+          description: "No event has been delivered for {{ $value | humanizeDuration }}: notifications, webhooks and projections are stopped."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#outboxlaghigh"
+
+      - alert: OutboxMetricsBroken
+        expr: outbox_pending_events < 0 or outbox_oldest_pending_age_seconds < 0 or outbox_dead_letter_events < 0
+        for: 5m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "Outbox metrics cannot be read"
+          description: "The outbox gauges report -1: the metrics query against Postgres is failing."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#outboxmetricsbroken"
+
+      - alert: OutboxDeadLetters
+        expr: outbox_dead_letter_events > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "{{ $value }} outbox events were dead-lettered"
+          description: "Events exhausted their retries; each is a notification/webhook/projection that did not happen. Replay after fixing the cause."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#outboxdeadletters"
+
+      - alert: AiCircuitOpen
+        expr: ai_circuit_state{state="open"} == 1
+        for: 2m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "AI provider circuit breaker is open ({{ $labels.provider }})"
+          description: "UI generation is failing fast; the provider is erroring or timing out."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#aicircuitopen"
+
+      - alert: AiErrorRateHigh
+        expr: sum(rate(ai_call_duration_seconds_count{outcome!="ok"}[10m])) / sum(rate(ai_call_duration_seconds_count[10m])) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: 'gui-lop-backend'
+        annotations:
+          summary: "More than 20% of AI calls are failing"
+          description: "{{ $value | humanizePercentage }} of AI provider calls failed over 10 minutes."
+          runbook_url: "https://github.com/adventurewave-labs/GUI-LOP/blob/main/docs/RUNBOOK.md#aicircuitopen"
+
   # Service availability alerts
   - name: gui-lop-service-availability
     rules:
@@ -16,26 +178,6 @@ groups:
         annotations:
           summary: "Service {{ $labels.job }} is down"
           description: "Service {{ $labels.job }} has been down for more than 1 minute."
-
-      - alert: BackendHighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-          service: 'gui-lop-backend'
-        annotations:
-          summary: "Backend error rate is high"
-          description: "Backend error rate is {{ $value }} errors per second."
-
-      - alert: FrontendHighResponseTime
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
-        for: 5m
-        labels:
-          severity: warning
-          service: 'gui-lop-frontend'
-        annotations:
-          summary: "Frontend response time is high"
-          description: "95th percentile response time is {{ $value }} seconds."
 
   # Database alerts
   - name: gui-lop-database
@@ -103,39 +245,6 @@ groups:
           summary: "Redis hit rate is low"
           description: "Redis cache hit rate is {{ $value | humanizePercentage }}."
 
-  # Application-specific alerts
-  - name: gui-lop-application
-    rules:
-      - alert: WorkflowProcessingDelay
-        expr: workflow_processing_duration_seconds > 300
-        for: 5m
-        labels:
-          severity: warning
-          service: 'gui-lop-workflows'
-        annotations:
-          summary: "Workflow processing is delayed"
-          description: "Workflow {{ $labels.workflow_id }} has been processing for {{ $value }} seconds."
-
-      - alert: HighActiveWorkflows
-        expr: active_workflows_total > 50
-        for: 10m
-        labels:
-          severity: warning
-          service: 'gui-lop-workflows'
-        annotations:
-          summary: "High number of active workflows"
-          description: "There are {{ $value }} active workflows."
-
-      - alert: AuthenticationFailureRate
-        expr: rate(auth_failures_total[5m]) > 10
-        for: 5m
-        labels:
-          severity: warning
-          service: 'gui-lop-auth'
-        annotations:
-          summary: "High authentication failure rate"
-          description: "Authentication failure rate is {{ $value }} failures per second."
-
   # System alerts
   - name: gui-lop-system
     rules:
@@ -191,13 +300,3 @@ groups:
         annotations:
           summary: "High network traffic"
           description: "Network traffic is {{ $value | humanizeBytes }}/second."
-
-      - alert: HighErrorRate
-        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
-        for: 5m
-        labels:
-          severity: critical
-          service: 'gui-lop-backend'
-        annotations:
-          summary: "High error rate"
-          description: "Error rate is {{ $value | humanizePercentage }}."

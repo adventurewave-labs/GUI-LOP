@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * TokenBlacklist — port. Backed by Redis SETEX in production; an
  * in-memory map in tests.

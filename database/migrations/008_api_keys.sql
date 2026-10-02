@@ -17,6 +17,10 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_active_user_created
   ON api_keys (user_id, created_at DESC)
   WHERE is_active = true;
 
+-- Partial-index predicates must be IMMUTABLE, so `expires_at > NOW()` is
+-- rejected by Postgres (42P17) and this index was never created. Index the
+-- active keys with expires_at as a column; the expiry check stays in the
+-- query and is served by the same index.
 CREATE INDEX IF NOT EXISTS idx_api_keys_active_not_expired
-  ON api_keys (api_key_hash)
-  WHERE is_active = true AND (expires_at IS NULL OR expires_at > NOW());
+  ON api_keys (api_key_hash, expires_at)
+  WHERE is_active = true;

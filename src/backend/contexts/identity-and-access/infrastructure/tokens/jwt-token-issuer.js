@@ -5,6 +5,7 @@ import { UnauthorisedError } from '../../../../shared-kernel/domain/errors.js';
  * JwtTokenIssuer — HS256, configurable secret.
  */
 export class JwtTokenIssuer {
+  /** @param {{ secret?: string, issuer?: string, audience?: string }} [opts]  `secret` is required at runtime */
   constructor({ secret, issuer = 'gui-lop', audience = 'gui-lop-api' } = {}) {
     if (!secret) throw new Error('JwtTokenIssuer requires a secret');
     this.secret = secret;
