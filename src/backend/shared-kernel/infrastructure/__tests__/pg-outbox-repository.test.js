@@ -13,6 +13,16 @@ describe('createPgOutboxRepository', () => {
     expect(() => createPgOutboxRepository({})).toThrow(TypeError);
   });
 
+  test('enqueue refuses the pool passed as the client', async () => {
+    const pool = makePool();
+    const repo = createPgOutboxRepository(pool);
+    // A pool has .query (so a shape check alone passes) and .connect but no
+    // .release — enqueueing on it would commit events outside the caller's
+    // transaction, the invariant the guard exists to protect.
+    await expect(repo.enqueue([], { client: pool })).rejects.toThrow(/pool/);
+    await expect(repo.enqueue([], pool)).rejects.toThrow(/transaction client/);
+  });
+
   test('enqueue writes events through the uow client', async () => {
     const pool = makePool();
     const repo = createPgOutboxRepository(pool);

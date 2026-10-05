@@ -32,7 +32,21 @@ describeIfDocker('Outbox delivery contract (Postgres)', () => {
     await pg.truncate();
     outbox = createPgOutboxRepository(pg.pool);
   });
-  const enqueue = (...evs) => outbox.enqueue(evs, { client: pg.pool });
+  // Enqueue must share a transaction client — passing the pool (as this
+  // helper once did via `{ client: pg.pool }`) is now refused by the guard.
+  const enqueue = async (...evs) => {
+    const client = await pg.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await outbox.enqueue(evs, { client });
+      await client.query('COMMIT');
+    } catch (err) {
+      try { await client.query('ROLLBACK'); } catch { /* connection gone; release below */ }
+      throw err;
+    } finally {
+      client.release();
+    }
+  };
   const rows = async () => (await pg.pool.query('SELECT event_id, status, retry_count, last_error, next_attempt_at, locked_until FROM outbox ORDER BY occurred_at')).rows;
 
   test('the consumer drains the Pg outbox (regression: fetchPending was missing)', async () => {

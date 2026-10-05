@@ -30,11 +30,25 @@ export function createNotificationRouter({
   // The query returns EVERY active subscription unless both kind and ref are
   // given, so ownership is enforced here rather than trusted to the filter.
   const refOf = (sub) => String(sub.subscriberRef ?? sub.toJSON?.().subscriberRef ?? '');
+  const isActive = (sub) => sub.isActive ?? sub.toJSON?.().isActive ?? true;
   const ownedSubscriptions = async (req, requestedRef, kind) => {
     const subject = subjectOf(req, requestedRef);
-    const all = await listSubscriptionsQuery.execute({ subscriberKind: kind, subscriberRef: subject });
-    if (isAdmin(req) && !requestedRef) return all;
-    return all.filter((sub) => subject != null && refOf(sub) === String(subject));
+    if (isAdmin(req) && !requestedRef) {
+      return listSubscriptionsQuery.execute({ subscriberKind: kind, subscriberRef: subject });
+    }
+    if (subject == null) return [];
+    // Without a kind the query materialises every active subscription and
+    // leaves the owner filter to JS — an unbounded read on a route any
+    // authenticated user can call. The repository only filters in SQL when
+    // kind AND ref are both present, so enumerate the domain's subscriber
+    // kinds ({user, webhook}) and keep each query scoped to the caller.
+    // findBySubscriber does not check is_active; the active-only filter
+    // preserves the previous findActive()-based semantics.
+    const kinds = kind ? [String(kind)] : ['user', 'webhook'];
+    const lists = await Promise.all(
+      kinds.map((k) => listSubscriptionsQuery.execute({ subscriberKind: k, subscriberRef: subject })),
+    );
+    return lists.flat().filter((sub) => refOf(sub) === String(subject) && isActive(sub));
   };
 
   router.get('/subscriptions', async (req, res, next) => {

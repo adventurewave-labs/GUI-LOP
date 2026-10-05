@@ -100,24 +100,31 @@ export function createPgOutboxRepository(pool) {
     /**
      * Persist events transactionally with the aggregate write.
      * @param {Array<{ toJSON?: () => any }>} events
-     * @param {{ client: { query: Function } } | { query: Function }} uowCtx
-     *   The transaction the aggregate is being written in: `{ client }` (unit
-     *   of work) or the checked-out client itself. Required — enqueueing on
-     *   the pool would commit events even if the aggregate write rolls back.
-     *   (Production bug: the workflow repository passed the bare client and
-     *   the template repository passed nothing, so with Postgres every
-     *   workflow create/execute/cancel and every template publish 500'd.)
+     * @param {{ client: { query: Function, release?: Function } }} uowCtx
+     *   The transaction the aggregate is being written in: the checked-out
+     *   client from `pool.connect()`, wrapped as `{ client }`. Required —
+     *   enqueueing on the pool would commit events even if the aggregate
+     *   write rolls back. (Production bug: the workflow repository passed
+     *   the bare client and the template repository passed nothing, so with
+     *   Postgres every workflow create/execute/cancel and every template
+     *   publish 500'd.)
      */
     async enqueue(events, uowCtx) {
       if (!Array.isArray(events)) {
         throw new TypeError('Outbox.enqueue: events must be an array');
       }
-      const ctx = /** @type {any} */ (uowCtx);
-      const client = typeof ctx?.client?.query === 'function'
-        ? ctx.client
-        : typeof ctx?.query === 'function' ? ctx : null;
-      if (!client) {
+      const client = /** @type {any} */ (uowCtx)?.client;
+      if (!client || typeof client.query !== 'function') {
         throw new TypeError('Outbox.enqueue: a transaction client ({ client }) is required');
+      }
+      // A pg Pool also has .query, so a shape check alone would let the pool
+      // through and silently enqueue outside the caller's transaction — the
+      // exact invariant this guard exists to protect. A checked-out client
+      // carries .release (the pool attaches it); the pool itself does not.
+      if (typeof client.connect === 'function' && typeof client.release !== 'function') {
+        throw new TypeError(
+          'Outbox.enqueue: received the pool, not a transaction client — pass the checked-out client from pool.connect() so events commit with the aggregate write',
+        );
       }
       for (const ev of events) {
         const e = typeof ev.toJSON === 'function' ? ev.toJSON() : ev;

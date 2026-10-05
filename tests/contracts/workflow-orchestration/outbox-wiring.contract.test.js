@@ -119,5 +119,9 @@ describeIfDocker('workflow repositories × Postgres outbox', () => {
   test('enqueue refuses to run outside a transaction', async () => {
     await expect(outbox.enqueue([], undefined)).rejects.toThrow(/transaction client/);
     await expect(outbox.enqueue([], {})).rejects.toThrow(/transaction client/);
+    // The pool also has .query, so a shape check alone would let it through;
+    // enqueueing on it commits events even when the aggregate rolls back.
+    await expect(outbox.enqueue([], pg.pool)).rejects.toThrow(/transaction client/);
+    await expect(outbox.enqueue([], { client: pg.pool })).rejects.toThrow(/pool/);
   });
 });
