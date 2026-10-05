@@ -121,7 +121,12 @@ export function createPgOutboxRepository(pool) {
       // through and silently enqueue outside the caller's transaction — the
       // exact invariant this guard exists to protect. A checked-out client
       // carries .release (the pool attaches it); the pool itself does not.
-      if (typeof client.connect === 'function' && typeof client.release !== 'function') {
+      // Pool-only counters catch pool-shaped wrappers even when they also
+      // expose .release.
+      const exposesPoolCounters = typeof client.totalCount === 'number'
+        || typeof client.idleCount === 'number'
+        || typeof client.waitingCount === 'number';
+      if (exposesPoolCounters || (typeof client.connect === 'function' && typeof client.release !== 'function')) {
         throw new TypeError(
           'Outbox.enqueue: received the pool, not a transaction client — pass the checked-out client from pool.connect() so events commit with the aggregate write',
         );

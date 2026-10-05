@@ -21,6 +21,10 @@ describe('createPgOutboxRepository', () => {
     // transaction, the invariant the guard exists to protect.
     await expect(repo.enqueue([], { client: pool })).rejects.toThrow(/pool/);
     await expect(repo.enqueue([], pool)).rejects.toThrow(/transaction client/);
+    // A pool-shaped wrapper (carrying the pool-only counters) is still
+    // refused even when it also exposes .release.
+    const wrapper = { ...pool, release: jest.fn(), totalCount: 1, idleCount: 0, waitingCount: 0 };
+    await expect(repo.enqueue([], { client: wrapper })).rejects.toThrow(/pool/);
   });
 
   test('enqueue writes events through the uow client', async () => {

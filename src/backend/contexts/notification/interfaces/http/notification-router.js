@@ -7,6 +7,7 @@
  */
 
 import { webhookUrlProblem } from './webhook-url.js';
+import { SUBSCRIBER_KINDS } from '../../domain/subscription/subscription.js';
 import express from 'express';
 
 export function createNotificationRouter({
@@ -30,7 +31,11 @@ export function createNotificationRouter({
   // The query returns EVERY active subscription unless both kind and ref are
   // given, so ownership is enforced here rather than trusted to the filter.
   const refOf = (sub) => String(sub.subscriberRef ?? sub.toJSON?.().subscriberRef ?? '');
-  const isActive = (sub) => sub.isActive ?? sub.toJSON?.().isActive ?? true;
+  // Fail closed: a row is listed only when it is provably active. The
+  // aggregate always sets isActive (directly or via toJSON), so the strict
+  // comparison never drops a real active row — but an unexpected shape that
+  // carries no flag is excluded, not included.
+  const isActive = (sub) => (sub.isActive ?? sub.toJSON?.().isActive) === true;
   const ownedSubscriptions = async (req, requestedRef, kind) => {
     const subject = subjectOf(req, requestedRef);
     if (isAdmin(req) && !requestedRef) {
@@ -41,10 +46,10 @@ export function createNotificationRouter({
     // leaves the owner filter to JS — an unbounded read on a route any
     // authenticated user can call. The repository only filters in SQL when
     // kind AND ref are both present, so enumerate the domain's subscriber
-    // kinds ({user, webhook}) and keep each query scoped to the caller.
-    // findBySubscriber does not check is_active; the active-only filter
-    // preserves the previous findActive()-based semantics.
-    const kinds = kind ? [String(kind)] : ['user', 'webhook'];
+    // kinds and keep each query scoped to the caller. findBySubscriber does
+    // not check is_active; the active-only filter preserves the previous
+    // findActive()-based semantics.
+    const kinds = kind ? [String(kind)] : [...SUBSCRIBER_KINDS];
     const lists = await Promise.all(
       kinds.map((k) => listSubscriptionsQuery.execute({ subscriberKind: k, subscriberRef: subject })),
     );
