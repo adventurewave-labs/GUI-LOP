@@ -104,13 +104,16 @@ describe('notification HTTP router — owner-scoped subscription listing', () =>
   // Wraps the real query to record every execute() argument: the regression
   // this pins is the router issuing an UNFILTERED query (no kind+ref) and
   // filtering in JS, which materialised every active subscription per call.
-  const buildSpiedApp = (userId) => {
+  const buildSpiedApp = (userId, role) => {
     const subs = new InMemorySubscriptionRepository();
     const dlq = new InMemoryDeadLetterRepository();
     const inner = new ListSubscriptionsQuery({ subscriptionRepository: subs });
     const calls = [];
     const app = express();
-    app.use((req, _res, next) => { req.user = userId == null ? {} : { id: userId }; next(); });
+    app.use((req, _res, next) => {
+      req.user = userId == null ? {} : { id: userId, ...(role ? { role } : {}) };
+      next();
+    });
     app.use('/api/v1', createNotificationRouter({
       listSubscriptionsQuery: { execute: async (q) => { calls.push(q); return inner.execute(q); } },
       unsubscribeCommand: new UnsubscribeCommand({ subscriptionRepository: subs }),
@@ -170,7 +173,40 @@ describe('notification HTTP router — owner-scoped subscription listing', () =>
     const otherId = idOf(created.value);
     const res = await request(app).delete(`/api/v1/subscriptions/${otherId}`);
     expect(res.status).toBe(404);
+    expect(calls.length).toBeGreaterThan(0); // the check below is meaningful, not vacuously true
     expect(everyCallFiltered(calls)).toBe(true);
     expect((await subs.findBySubscriber('user', 'user-2'))).toHaveLength(1); // untouched
+  });
+
+  it('admin listing without ref returns every ACTIVE subscription across subjects (unchanged findActive semantics)', async () => {
+    const { app, subs, calls } = buildSpiedApp('admin-1', 'admin');
+    await subscribeUser(subs, 'user-1', 'conn-1');
+    await subscribeUser(subs, 'user-2', 'conn-2');
+    const deactivated = (await subscribeUser(subs, 'user-1', 'conn-9')).value;
+    await subs.save(deactivated.deactivate());
+
+    const res = await request(app).get('/api/v1/subscriptions');
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(2); // both subjects' active rows; the inactive one is excluded
+    expect(res.body.items.map((i) => i.subscriberRef).sort()).toEqual(['user-1', 'user-2']);
+    // One query, kind undefined → the query's findActive() path (not a kind enumeration).
+    expect(calls).toEqual([{ subscriberKind: undefined, subscriberRef: 'admin-1' }]);
+  });
+
+  it('admin acting for a subject (?ref=) is subject-scoped, active-only and kind-enumerated', async () => {
+    const { app, subs, calls } = buildSpiedApp('admin-1', 'admin');
+    await subscribeUser(subs, 'user-1', 'conn-1');
+    await new RegisterWebhookCommand({ subscriptionRepository: subs })
+      .execute({ subscriberRef: 'user-1', url: 'https://hooks.example.com/own' });
+    await subscribeUser(subs, 'user-2', 'conn-2');
+    const deactivated = (await subscribeUser(subs, 'user-1', 'conn-9')).value;
+    await subs.save(deactivated.deactivate());
+
+    const res = await request(app).get('/api/v1/subscriptions?ref=user-1');
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(2); // user-1's active rows only: websocket + webhook
+    expect(res.body.items.map((i) => i.subscriberRef).every((r) => r === 'user-1')).toBe(true);
+    expect(everyCallFiltered(calls)).toBe(true);
+    expect(calls.length).toBeGreaterThan(0);
   });
 });

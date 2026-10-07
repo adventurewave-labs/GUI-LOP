@@ -16,9 +16,11 @@ describe('createPgOutboxRepository', () => {
   test('enqueue refuses the pool passed as the client', async () => {
     const pool = makePool();
     const repo = createPgOutboxRepository(pool);
-    // A pool has .query (so a shape check alone passes) and .connect but no
-    // .release — enqueueing on it would commit events outside the caller's
-    // transaction, the invariant the guard exists to protect.
+    // { client: pool } is the case the pool-detection guard exists for: the
+    // pool has .query (so the shape check passes), .connect and no .release.
+    // The bare-pool line below is refused by the pre-existing { client }
+    // requirement (pool.client is undefined) — documented here so the two
+    // refusals are not read as one mechanism.
     await expect(repo.enqueue([], { client: pool })).rejects.toThrow(/pool/);
     await expect(repo.enqueue([], pool)).rejects.toThrow(/transaction client/);
     // A pool-shaped wrapper (carrying the pool-only counters) is still
