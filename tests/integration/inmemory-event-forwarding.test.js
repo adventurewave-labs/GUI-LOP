@@ -66,7 +66,8 @@ describe('in-memory event forwarder (DDD bootstrap, no Postgres)', () => {
     // Register a fake WebSocket connection on the in-memory broadcaster.
     booted.ctx.notification.transports.websocketBroadcaster.register(
       'conn-observer',
-      async (envelope) => { received.push(envelope); },
+      // WsBroadcaster takes a socket-like object (send(string)), not a callback.
+      { send: (payload) => received.push(JSON.parse(payload)), bufferedAmount: 0 },
       { subscriberRef: userId },
     );
   });

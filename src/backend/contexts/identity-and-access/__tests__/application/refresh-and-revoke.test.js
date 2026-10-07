@@ -12,9 +12,9 @@ import { makeFixtures } from './test-fixtures.js';
 
 async function login(f) {
   const reg = new RegisterUserUseCase(f);
-  await reg.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+  await reg.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
   const auth = new AuthenticateUserUseCase(f);
-  return auth.execute({ identifier: 'alice', password: 'longenuf1' });
+  return auth.execute({ identifier: 'alice', password: 'long-enough-passphrase-1' });
 }
 
 describe('RefreshSessionUseCase', () => {

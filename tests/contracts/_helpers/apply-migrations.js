@@ -33,6 +33,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { splitSqlStatements } from '../../../database/utils/sql-splitter.js';
 
 // `__dirname` is provided by babel's CJS transform when Jest runs;
 // pure-ESM execution would not have it, but every contract suite runs
@@ -88,37 +89,9 @@ async function readMigration(filename) {
  * dollar-quoted strings (used for PL/pgSQL function bodies).
  */
 export function splitStatements(sql) {
-  const noComments = sql
-    .split(/\r?\n/)
-    .map((l) => (l.replace(/--.*$/, '')))
-    .join('\n');
-
-  const out = [];
-  let buf = '';
-  let inDollar = false;
-  let i = 0;
-  while (i < noComments.length) {
-    const ch = noComments[i];
-    const two = noComments.slice(i, i + 2);
-    if (two === '$$') {
-      inDollar = !inDollar;
-      buf += '$$';
-      i += 2;
-      continue;
-    }
-    if (ch === ';' && !inDollar) {
-      const trimmed = buf.trim();
-      if (trimmed.length > 0) out.push(trimmed);
-      buf = '';
-      i += 1;
-      continue;
-    }
-    buf += ch;
-    i += 1;
-  }
-  const tail = buf.trim();
-  if (tail.length > 0) out.push(tail);
-  return out;
+  // Single lexer shared with the production runner (database/migrations/
+  // migrate.js) — quote-, identifier-, dollar-quote- and comment-aware.
+  return splitSqlStatements(sql);
 }
 
 /**

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ui-router.js — Express router for UI Generation endpoints.
  */

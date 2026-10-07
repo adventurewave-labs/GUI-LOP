@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Port to the Identity & Access AuthorisationService.
  *

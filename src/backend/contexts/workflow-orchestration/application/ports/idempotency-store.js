@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Idempotency store (ADR 0024).
  *

@@ -1,3 +1,4 @@
+// @ts-check
 export class GetUserActivityQuery {
   constructor({ pool }) {
     this._pool = pool;

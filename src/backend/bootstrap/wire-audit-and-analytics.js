@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * wire-audit-and-analytics.js — composition for the Audit & Analytics context.
  */
@@ -56,6 +57,7 @@ export function wireAuditAndAnalytics({
       getWorkflowTrailQuery: useCases.getWorkflowTrail,
       getAuditTrailQuery: useCases.getAuditTrail,
       exportComplianceDataCommand: useCases.exportComplianceData,
+      eventStore,
     }),
     analytics: createAnalyticsRouter({
       getWorkflowAnalyticsQuery: useCases.getWorkflowAnalytics,

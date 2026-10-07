@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * InMemoryOutbox — in-process implementation of the Outbox port for tests
  * and dev mode where there is no Postgres pool.
@@ -172,6 +173,13 @@ export class InMemoryOutbox {
   async getPendingCount() {
     let n = 0;
     for (const r of this._records) if (r.status === 'pending') n += 1;
+    return n;
+  }
+
+  /** Number of dead-lettered records (retries exhausted). */
+  async getDeadLetterCount() {
+    let n = 0;
+    for (const r of this._records) if (r.status === 'dead_letter') n += 1;
     return n;
   }
 

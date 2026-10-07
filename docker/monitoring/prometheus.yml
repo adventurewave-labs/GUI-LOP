@@ -31,12 +31,17 @@ scrape_configs:
     metrics_path: '/metrics'
 
   # Backend application
+  # /metrics requires `Authorization: Bearer $METRICS_TOKEN` (and answers 404
+  # in production when no token is configured). Mount the token as a file.
   - job_name: 'gui-lop-backend'
     static_configs:
       - targets: ['backend:3001']
     metrics_path: '/metrics'
     scrape_interval: 15s
     scrape_timeout: 10s
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/metrics_token
 
   # Frontend (Nginx)
   - job_name: 'gui-lop-frontend'
@@ -75,23 +80,6 @@ scrape_configs:
     static_configs:
       - targets: ['docker-exporter:9323']
     scrape_interval: 30s
-
-  # Custom application metrics
-  - job_name: 'gui-lop-app-metrics'
-    static_configs:
-      - targets: ['backend:3001']
-    metrics_path: '/api/metrics'
-    scrape_interval: 15s
-    scrape_timeout: 10s
-    metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: 'http_.*'
-        target_label: service
-        replacement: 'gui-lop-backend'
-      - source_labels: [__name__]
-        regex: 'workflow_.*'
-        target_label: service
-        replacement: 'gui-lop-workflows'
 
 # Remote write configuration (optional)
 # remote_write:

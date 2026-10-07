@@ -109,8 +109,8 @@ describeIfDocker('WorkflowTemplateRepository contract', () => {
     });
 
     test('list({ activeOnly: true }) excludes deprecated templates', async () => {
-      const a = publish(makeDraft({ key: 'a', version: 1, name: 'A' }));
-      const b = publish(makeDraft({ key: 'b', version: 1, name: 'B' }));
+      const a = publish(makeDraft({ key: 'tpl-a', version: 1, name: 'A' }));
+      const b = publish(makeDraft({ key: 'tpl-b', version: 1, name: 'B' }));
       b.deprecate({ now: FIXED_NOW, actor: { type: 'system' } });
       b.pullEvents();
       await repo.save(a);
@@ -118,7 +118,7 @@ describeIfDocker('WorkflowTemplateRepository contract', () => {
       const all = await repo.list();
       const active = await repo.list({ activeOnly: true });
       expect(all.length).toBeGreaterThanOrEqual(2);
-      expect(active.map((t) => t.key.value).sort()).toEqual(['a']);
+      expect(active.map((t) => t.key.value).sort()).toEqual(['tpl-a']); // TemplateKey is 2-100 chars
     });
 
     test('published template rejects further addStep mutations', () => {

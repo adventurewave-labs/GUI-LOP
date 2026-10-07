@@ -1,0 +1,53 @@
+name: mutation
+
+# Mutation testing of the bounded-context domain layers (Stryker, roadmap #15).
+# A full run takes ~30 min, so it is not a per-PR check: it runs weekly, on
+# demand, and on PRs labelled `mutation`. Fails if the score drops below the
+# `break` ratchet in stryker.config.mjs. The HTML report is uploaded.
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stryker:
+    name: stryker (domain layers)
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'mutation')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Mutation test
+        env:
+          NODE_ENV: test
+          JWT_SECRET: ci-mutation-secret-not-used-in-prod
+        run: npm run test:mutation -- --concurrency 4
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 30
+          if-no-files-found: ignore

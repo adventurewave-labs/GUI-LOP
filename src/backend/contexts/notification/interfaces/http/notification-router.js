@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * notification-router.js — Express router for notification & realtime endpoints.
  *
@@ -5,6 +6,8 @@
  *   app.use('/api/v1', createNotificationRouter({ ...deps }));
  */
 
+import { webhookUrlProblem } from './webhook-url.js';
+import { SUBSCRIBER_KINDS } from '../../domain/subscription/subscription.js';
 import express from 'express';
 
 export function createNotificationRouter({
@@ -12,18 +15,50 @@ export function createNotificationRouter({
   unsubscribeCommand,
   registerWebhookCommand,
   listDeadLettersQuery,
-  retryDeadLetterCommand
+  retryDeadLetterCommand,
+  allowInsecureWebhooks = false
 }) {
   const router = express.Router();
   router.use(express.json());
 
+  // Subscriptions belong to the caller. `?ref=` used to be honoured for
+  // everyone, so any user could list (and below, delete) anyone's
+  // subscriptions, and register webhooks under someone else's name. Only
+  // admins using a full (unscoped) credential may act for another subject.
+  const isAdmin = (req) => req.user?.role === 'admin' && !req.user?.apiKeyPermissions;
+  const subjectOf = (req, requested) => (isAdmin(req) && requested ? String(requested) : req.user?.id ?? null);
+
+  // The query returns EVERY active subscription unless both kind and ref are
+  // given, so ownership is enforced here rather than trusted to the filter.
+  const refOf = (sub) => String(sub.subscriberRef ?? sub.toJSON?.().subscriberRef ?? '');
+  // Fail closed: a row is listed only when it is provably active. The
+  // aggregate always sets isActive (directly or via toJSON), so the strict
+  // comparison never drops a real active row — but an unexpected shape that
+  // carries no flag is excluded, not included.
+  const isActive = (sub) => (sub.isActive ?? sub.toJSON?.().isActive) === true;
+  const ownedSubscriptions = async (req, requestedRef, kind) => {
+    const subject = subjectOf(req, requestedRef);
+    if (isAdmin(req) && !requestedRef) {
+      return listSubscriptionsQuery.execute({ subscriberKind: kind, subscriberRef: subject });
+    }
+    if (subject == null) return [];
+    // Without a kind the query materialises every active subscription and
+    // leaves the owner filter to JS — an unbounded read on a route any
+    // authenticated user can call. The repository only filters in SQL when
+    // kind AND ref are both present, so enumerate the domain's subscriber
+    // kinds and keep each query scoped to the caller. findBySubscriber does
+    // not check is_active; the active-only filter preserves the previous
+    // findActive()-based semantics.
+    const kinds = kind ? [String(kind)] : [...SUBSCRIBER_KINDS];
+    const lists = await Promise.all(
+      kinds.map((k) => listSubscriptionsQuery.execute({ subscriberKind: k, subscriberRef: subject })),
+    );
+    return lists.flat().filter((sub) => refOf(sub) === String(subject) && isActive(sub));
+  };
+
   router.get('/subscriptions', async (req, res, next) => {
     try {
-      const principal = req.user ?? null;
-      const subs = await listSubscriptionsQuery.execute({
-        subscriberKind: req.query.kind,
-        subscriberRef: req.query.ref ?? principal?.id ?? null
-      });
+      const subs = await ownedSubscriptions(req, req.query.ref, req.query.kind);
       res.json({ items: subs.map((s) => s.toJSON?.() ?? s) });
     } catch (err) {
       next(err);
@@ -32,6 +67,12 @@ export function createNotificationRouter({
 
   router.delete('/subscriptions/:id', async (req, res, next) => {
     try {
+      if (!isAdmin(req)) {
+        const mine = await ownedSubscriptions(req, null, undefined);
+        const owns = mine.some((sub) => String(sub.id?.value ?? sub.id ?? sub.toJSON?.().id) === String(req.params.id));
+        // 404 (not 403): do not confirm that someone else's subscription exists.
+        if (!owns) return res.status(404).json({ error: 'Subscription not found', code: 'SUBSCRIPTION_NOT_FOUND' });
+      }
       const out = await unsubscribeCommand.execute({ id: req.params.id });
       if (out.isFail()) {
         return res
@@ -46,9 +87,10 @@ export function createNotificationRouter({
 
   router.post('/webhooks', async (req, res, next) => {
     try {
-      const principal = req.user ?? null;
+      const unsafe = webhookUrlProblem(req.body.url, { allowInsecure: allowInsecureWebhooks });
+      if (unsafe) return res.status(400).json({ error: unsafe, code: 'INVALID_WEBHOOK_URL' });
       const out = await registerWebhookCommand.execute({
-        subscriberRef: req.body.subscriberRef ?? principal?.id ?? 'anonymous',
+        subscriberRef: subjectOf(req, req.body.subscriberRef),
         url: req.body.url,
         filter: req.body.filter
       });

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * UnitOfWork port — runs a callback inside a single transaction so
  * aggregate writes and outbox enqueues commit atomically (ADR 0014).

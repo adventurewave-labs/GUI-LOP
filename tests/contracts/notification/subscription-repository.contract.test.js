@@ -28,7 +28,7 @@ function buildWebhookSub({ id = '88888888-8888-8888-8888-888888888888' } = {}) {
     address: 'https://hooks.example.com/incoming',
     filter: {
       eventTypes: ['workflow.completed', 'workflow.failed'],
-      workflowIds: ['wf-1', 'wf-2'],
+      workflowIds: ['0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */, 'f685a170-5aea-41d1-84e8-d8b52959de4a' /* wf-2 */],
     },
     now: NOW,
   });
@@ -86,7 +86,7 @@ describeIfDocker('SubscriptionRepository contract', () => {
       expect(found.address.value).toBe('https://hooks.example.com/incoming');
       expect(found.filter.toJSON()).toEqual({
         eventTypes: ['workflow.completed', 'workflow.failed'],
-        workflowIds: ['wf-1', 'wf-2'],
+        workflowIds: ['0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */, 'f685a170-5aea-41d1-84e8-d8b52959de4a' /* wf-2 */],
       });
       expect(found.isActive).toBe(true);
     });

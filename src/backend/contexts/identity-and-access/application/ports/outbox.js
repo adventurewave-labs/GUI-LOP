@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Outbox — port. The canonical implementation lives in
  * `src/backend/shared-kernel/infrastructure/inmemory-outbox.js`

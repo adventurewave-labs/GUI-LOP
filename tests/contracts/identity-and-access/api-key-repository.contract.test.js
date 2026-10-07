@@ -29,9 +29,12 @@ const USER_A = '77777777-7777-7777-7777-777777777777';
 
 const fakeIdGen = (() => {
   let n = 0;
+  let r = 0;
   return {
     newId: () => `${String(++n).padStart(8, '0')}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`,
-    randomBytes: () => Buffer.from('0'.repeat(64), 'hex'),
+    // Distinct secret per mint — identical bytes hash identically and the
+    // second save trips the api_keys.api_key_hash UNIQUE constraint.
+    randomBytes: () => Buffer.from(String(++r).padStart(64, '0'), 'hex'),
   };
 })();
 const fakeClock = { now: () => FIXED_NOW };

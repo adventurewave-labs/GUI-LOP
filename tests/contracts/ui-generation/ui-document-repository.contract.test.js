@@ -61,23 +61,23 @@ describeIfDocker('UIDocumentRepository contract', () => {
     beforeEach(() => { repo = make[label](); });
 
     test('save then findById round-trips a UIDocument', async () => {
-      const d = doc({ id: 'ui-1', version: 1 });
+      const d = doc({ id: 'abe2f6bc-0564-4950-8b24-82a9bcedc580' /* ui-1 */, version: 1 });
       await repo.save(d);
-      const found = await repo.findById('ui-1');
+      const found = await repo.findById('abe2f6bc-0564-4950-8b24-82a9bcedc580' /* ui-1 */);
       expect(found).not.toBeNull();
       expect(found.workflowId).toBe(WORKFLOW);
       expect(found.stepId).toBe(STEP);
       expect(found.url).toBe('https://app/ui/1');
-      expect(found.contentRef).toBe('s3://bucket/ui-1');
+      expect(found.contentRef).toBe('s3://bucket/abe2f6bc-0564-4950-8b24-82a9bcedc580');
       expect(found.strategy).toBe('stub');
       expect(found.version).toBe(1);
     });
 
     test('findByStep returns docs for that (workflowId, stepId)', async () => {
-      const d1 = doc({ id: 'ui-1', version: 1, when: '2026-05-10T10:00:00.000Z' });
-      const d2 = doc({ id: 'ui-2', version: 2, when: '2026-05-10T11:00:00.000Z' });
+      const d1 = doc({ id: 'abe2f6bc-0564-4950-8b24-82a9bcedc580' /* ui-1 */, version: 1, when: '2026-05-10T10:00:00.000Z' });
+      const d2 = doc({ id: '3893ac2d-633e-41f8-8f79-59c812b09ac2' /* ui-2 */, version: 2, when: '2026-05-10T11:00:00.000Z' });
       const dOther = new UIDocument({
-        id: 'ui-3',
+        id: '8ceb0d44-1231-4fc7-805c-73238ed70f70' /* ui-3 */,
         workflowId: WORKFLOW,
         stepId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
         url: 'https://app/ui/3',
@@ -91,11 +91,11 @@ describeIfDocker('UIDocumentRepository contract', () => {
       await repo.save(dOther);
       const list = await repo.findByStep(WORKFLOW, STEP);
       const ids = list.map((x) => x.id).sort();
-      expect(ids).toEqual(['ui-1', 'ui-2']);
+      expect(ids).toEqual(['abe2f6bc-0564-4950-8b24-82a9bcedc580' /* ui-1 */, '3893ac2d-633e-41f8-8f79-59c812b09ac2' /* ui-2 */].sort());
     });
 
     test('UIDocument aggregate is immutable (frozen)', () => {
-      const d = doc({ id: 'ui-frozen' });
+      const d = doc({ id: '7eb4a27b-107c-4047-8d54-7e7ab3628c29' /* ui-frozen */ });
       expect(Object.isFrozen(d)).toBe(true);
       // Direct mutation must throw in strict mode (Jest runs strict).
       expect(() => { d.url = 'tampered'; }).toThrow(TypeError);

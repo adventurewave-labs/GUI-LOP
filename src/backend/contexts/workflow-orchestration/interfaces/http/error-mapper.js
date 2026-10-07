@@ -1,4 +1,6 @@
-import { ConflictError, DomainError, ForbiddenError, NotFoundError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
+// @ts-check
+import { isTransientDbError } from '../../../../shared-kernel/infrastructure/transient-errors.js';
+import { ConflictError, DomainError, ForbiddenError, NotFoundError, PreconditionFailedError, UnauthorisedError, ValidationError } from '../../../../shared-kernel/domain/errors.js';
 /**
  * Map a domain or unknown error to an HTTP `(status, body)` pair.
  * Body shape mirrors the legacy server's envelope so existing
@@ -34,6 +36,12 @@ export function mapError(err) {
       body: { success: false, message: err.message, code: err.code ?? 'NOT_FOUND' },
     };
   }
+  if (err instanceof PreconditionFailedError) {
+    return {
+      status: 412,
+      body: { success: false, message: err.message, code: 'PRECONDITION_FAILED', current_version: err.details?.currentVersion },
+    };
+  }
   if (err instanceof ConflictError) {
     return {
       status: 409,
@@ -45,6 +53,9 @@ export function mapError(err) {
       status: 422,
       body: { success: false, message: err.message, code: err.code },
     };
+  }
+  if (isTransientDbError(err)) {
+    return { status: 503, body: { success: false, message: 'Temporarily unavailable; retry shortly', code: 'SERVICE_UNAVAILABLE' } };
   }
   return {
     status: 500,

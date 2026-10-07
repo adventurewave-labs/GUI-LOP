@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Domain error hierarchy. All domain-layer errors derive from DomainError so
  * application/interface layers can map them to transport-specific responses.
@@ -52,6 +53,16 @@ export class NotFoundError extends DomainError {
 export class ConflictError extends DomainError {
   constructor(message = 'Conflict with current state', details = {}) {
     super('CONFLICT', message, details);
+  }
+}
+
+/**
+ * A conditional request's precondition (If-Match) did not hold: the client
+ * acted on a stale version. HTTP 412.
+ */
+export class PreconditionFailedError extends DomainError {
+  constructor(message = 'Resource has changed; re-read and retry', details = {}) {
+    super('PRECONDITION_FAILED', message, details);
   }
 }
 

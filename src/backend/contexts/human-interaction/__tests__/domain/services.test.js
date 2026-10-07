@@ -47,6 +47,42 @@ describe('EligibilityService', () => {
     const user = { id: 'u-1', role: 'reviewer', permissions: ['workflow:respond'], scopes: ['wf-1'] };
     expect(EligibilityService.eligibleFor(user, step, { id: 'wf-1' })).toBe(false);
   });
+
+  describe('admins (decision 14b-2: consistent with identity policy)', () => {
+    const permStep = () => PendingStep.open({
+      workflowId: 'wf-1', stepId: 's', onTimeout: 'escalate', now: new Date(),
+      eligibility: { requiredPermissions: ['finance:approve'], scope: 'wf-1' },
+    });
+    const admin = (extra = {}) => ({ id: 'a', role: 'admin', permissions: [], scopes: [], ...extra });
+
+    it('satisfy required permissions and scope implicitly', () => {
+      expect(EligibilityService.eligibleFor(admin(), permStep(), { id: 'wf-1' })).toBe(true);
+      expect(EligibilityService.eligibleFor(admin({ permissionCeiling: [] }), permStep(), { id: 'wf-1' })).toBe(true);
+    });
+
+    it('do not bypass an explicit requiredRole', () => {
+      expect(EligibilityService.eligibleFor(admin(), baseStep(), { id: 'wf-1' })).toBe(false);
+    });
+
+    it('are bounded by a scoped API key', () => {
+      const step = PendingStep.open({
+        workflowId: 'wf-1', stepId: 's', onTimeout: 'escalate', now: new Date(),
+        eligibility: { requiredPermissions: ['finance:approve'] },
+      });
+      expect(EligibilityService.eligibleFor(admin({ permissionCeiling: ['workflow:read'] }), step, { id: 'wf-1' })).toBe(false);
+      expect(EligibilityService.eligibleFor(admin({ permissionCeiling: ['finance:approve'] }), step, { id: 'wf-1' })).toBe(true);
+    });
+
+    it('non-admins under a ceiling only keep permissions inside it', () => {
+      const step = PendingStep.open({
+        workflowId: 'wf-1', stepId: 's', onTimeout: 'escalate', now: new Date(),
+        eligibility: { requiredPermissions: ['finance:approve'] },
+      });
+      const u = { id: 'u', role: 'user', permissions: ['finance:approve'], scopes: [] };
+      expect(EligibilityService.eligibleFor(u, step, {})).toBe(true);
+      expect(EligibilityService.eligibleFor({ ...u, permissionCeiling: ['workflow:read'] }, step, {})).toBe(false);
+    });
+  });
 });
 
 describe('EscalationPolicyService', () => {

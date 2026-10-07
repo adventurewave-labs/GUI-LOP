@@ -327,4 +327,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 export { SeedRunner };
-export default seedRunner;
+export default SeedRunner; // was `seedRunner` (undefined): `npm run db:seed` crashed at import

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * ComponentCatalogueRepository — exposes the available UI components and their
  * versions. Methods are sync where possible because the catalogue is small and

@@ -1,37 +1,35 @@
+// @ts-check
 /**
  * ListPendingStepsForUser query — drives the inbox UI.
  *
- * Returns every open pending step the supplied user is currently eligible
- * to respond to. Eligibility is computed at read time (not cached) so
- * a user whose role changed sees the inbox change immediately.
+ * Returns every open pending step the caller can act on: they may respond to
+ * the workflow (`workflow:respond`, API-key ceiling honoured) and meet the
+ * step's eligibility rule. Computed at read time (not cached) so a user whose
+ * role changed sees the inbox change immediately.
  */
-import { EligibilityService } from '../../domain/services/eligibility-service.js';
+import { StepVisibility } from './step-visibility.js';
 
 export class ListPendingStepsForUser {
-  constructor({ pendingStepRepository, userDirectory, workflowReader }) {
+  /**
+   * @param {{ pendingStepRepository: any, userDirectory: any, workflowReader?: any, authorisation?: import('./step-visibility.js').Authorisation|null }} deps
+   */
+  constructor({ pendingStepRepository, userDirectory, workflowReader, authorisation }) {
     this.pendingStepRepository = pendingStepRepository;
-    this.userDirectory = userDirectory;
-    this.workflowReader = workflowReader;
+    this.visibility = new StepVisibility({ userDirectory, workflowReader, authorisation });
   }
 
   /**
-   * @param {{ userId: string, filter?: object }} args
+   * @param {{ userId?: string, actor?: import('./step-visibility.js').Actor, filter?: object }} args
    */
-  async execute({ userId, filter = {} }) {
-    if (!userId) return [];
-    const user = await this.userDirectory.getUser(userId);
-    if (!user) return [];
+  async execute({ userId, actor, filter = {} }) {
+    const who = actor ?? (userId ? { userId } : null);
+    if (!who?.userId) return [];
+    const view = await this.visibility.forActor(who);
     const candidates = await this.pendingStepRepository.list(filter);
-    const eligible = [];
+    const visible = [];
     for (const step of candidates) {
-      if (step.isClosed()) continue;
-      const workflow = this.workflowReader && typeof this.workflowReader.getSummary === 'function'
-        ? await this.workflowReader.getSummary(step.workflowId)
-        : { id: step.workflowId };
-      if (EligibilityService.eligibleFor(user, step, workflow ?? { id: step.workflowId })) {
-        eligible.push(step);
-      }
+      if (await view.canRespond(step)) visible.push(step);
     }
-    return eligible;
+    return visible;
   }
 }

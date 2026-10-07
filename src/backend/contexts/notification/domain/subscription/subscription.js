@@ -15,7 +15,10 @@ import { Channel } from './channel.js';
 import { Filter } from './filter.js';
 import { EndpointAddress } from './endpoint-address.js';
 
-const SUBSCRIBER_KINDS = new Set(['user', 'webhook']);
+// Exported so interfaces that must enumerate every subscriber kind (the
+// HTTP router's owner-scoped listing) share this single source of truth
+// instead of restating the literal.
+export const SUBSCRIBER_KINDS = new Set(['user', 'webhook']);
 
 export class Subscription {
   constructor({
@@ -62,6 +65,10 @@ export class Subscription {
     Object.freeze(this);
   }
 
+  /**
+   * @param {{ subscriberKind: string, subscriberRef: string, channel: any, address: any,
+   *   filter?: any, id?: string, now?: Date|string }} args  id/now default to a fresh UUID / now
+   */
   static create({
     subscriberKind,
     subscriberRef,

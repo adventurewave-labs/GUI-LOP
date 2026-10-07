@@ -19,7 +19,10 @@ const NOOP_LOGGER = Object.freeze({
  * @template T
  * @param {() => Promise<T>} fn
  * @param {{ provider: string, model: string, op: string }} meta
- * @param {{ logger?: object, now?: () => number, tokenUsage?: (out: T) => object }} [opts]
+ * @param {{ logger?: object, now?: () => number, tokenUsage?: (out: T) => object,
+ *           onCall?: (rec: { provider: string, model: string, op: string, durationMs: number,
+ *                            ok: boolean, errorName?: string, tokenUsage?: object }) => void }} [opts]
+ *   `onCall` is a metrics sink (e.g. Prometheus); failures in it are swallowed.
  * @returns {Promise<T>}
  */
 export async function withTelemetry(fn, meta, opts = {}) {
@@ -30,6 +33,7 @@ export async function withTelemetry(fn, meta, opts = {}) {
     const out = await fn();
     const durationMs = now() - start;
     const tokenUsage = opts.tokenUsage ? safe(opts.tokenUsage, out) : extractUsage(out);
+    notify(opts.onCall, { ...meta, durationMs, ok: true, tokenUsage });
     logger.info?.('ai.call', {
       provider: meta.provider,
       model: meta.model,
@@ -41,6 +45,7 @@ export async function withTelemetry(fn, meta, opts = {}) {
     return out;
   } catch (err) {
     const durationMs = now() - start;
+    notify(opts.onCall, { ...meta, durationMs, ok: false, errorName: err?.name ?? 'Error' });
     logger.error?.('ai.call', {
       provider: meta.provider,
       model: meta.model,
@@ -51,6 +56,11 @@ export async function withTelemetry(fn, meta, opts = {}) {
     });
     throw err;
   }
+}
+
+function notify(sink, rec) {
+  if (typeof sink !== 'function') return;
+  try { sink(rec); } catch { /* metrics must never break the call path */ }
 }
 
 function safe(fn, x) {

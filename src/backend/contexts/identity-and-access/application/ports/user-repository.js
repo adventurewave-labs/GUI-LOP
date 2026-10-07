@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('../../domain/user/user.js').User} User
  * @typedef {import('../../domain/user/email-address.js').EmailAddress} EmailAddress

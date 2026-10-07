@@ -1,3 +1,4 @@
+// @ts-check
 import { NotFoundError } from '../../../../shared-kernel/domain/errors.js';
 export class RevokeSessionUseCase {
   constructor({ sessionRepository, tokenBlacklist, outbox, clock }) {

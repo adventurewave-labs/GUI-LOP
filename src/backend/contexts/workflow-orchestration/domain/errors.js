@@ -68,3 +68,17 @@ export class TemplateImmutableError extends DomainError {
     this.version = version;
   }
 }
+
+/**
+ * A (key, version) that is already published cannot be published again with
+ * different content: published versions are immutable, and workflows record
+ * the version they were created from.
+ */
+export class TemplateVersionExistsError extends ConflictError {
+  constructor(key, version) {
+    super(`Template ${key}@${version} is already published; publish a new version instead`);
+    this.code = 'TEMPLATE_VERSION_EXISTS';
+    this.templateKey = key;
+    this.version = version;
+  }
+}

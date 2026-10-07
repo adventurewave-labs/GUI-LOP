@@ -14,6 +14,7 @@
  */
 import { HumanResponseRepository } from '../../application/ports/human-response-repository.js';
 import { HumanResponse } from '../../domain/human-response/human-response.js';
+import { isUuid, idValue } from '../../../../shared-kernel/infrastructure/ids.js';
 
 export class PgHumanResponseRepository extends HumanResponseRepository {
   /**
@@ -25,6 +26,8 @@ export class PgHumanResponseRepository extends HumanResponseRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
+    id = idValue(id); // accept id value objects as well as strings
     const { rows } = await this.db.query(
       'SELECT * FROM human_responses WHERE id = $1 LIMIT 1',
       [id],

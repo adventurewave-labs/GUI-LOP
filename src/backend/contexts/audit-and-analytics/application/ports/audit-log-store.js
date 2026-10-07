@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * AuditLogStore — read-only port over the platform's `audit_logs` table.
  */

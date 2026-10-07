@@ -68,14 +68,14 @@ describeIfDocker('DeadLetterRepository contract', () => {
       await repo.save(record({
         id: DL_1,
         when: '2026-05-10T10:00:00.000Z',
-        env: { type: 'workflow.completed', payload: { wf: 'wf-1' } },
+        env: { type: 'workflow.completed', payload: { wf: '0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */ } },
       }));
       const found = await repo.findById(DL_1);
       expect(found).not.toBeNull();
       expect(found.envelope).toEqual({
         kind: 'workflow.event',
         type: 'workflow.completed',
-        payload: { wf: 'wf-1' },
+        payload: { wf: '0ec19ee3-8bce-4128-8c13-1103caed6c40' /* wf-1 */ },
       });
       expect(found.attempts).toBe(3);
       expect(found.error).toBe('all retries exhausted');

@@ -18,6 +18,34 @@ export class RedisEventPublisher extends EventPublisher {
     this._factory = factory ?? null;
     this._handlers = new Map();
     this._initialized = !!(pubClient && subClient);
+    this._onMessage = null;
+  }
+
+  /**
+   * Attach the subscriber-side `message` listener exactly once. This used to
+   * live inside `_ensureClients()`, which returns early when clients are
+   * injected — the production wiring — so no listener was ever attached and
+   * cross-instance fan-out silently delivered nothing.
+   * @private
+   */
+  _ensureListener() {
+    if (this._onMessage || !this._sub?.on) return;
+    this._onMessage = (channel, message) => {
+      const set = this._handlers.get(channel);
+      if (!set) return;
+      let envelope;
+      try {
+        envelope = JSON.parse(message);
+      } catch {
+        envelope = message;
+      }
+      for (const h of set) {
+        Promise.resolve()
+          .then(() => h(envelope))
+          .catch(() => {});
+      }
+    };
+    this._sub.on('message', this._onMessage);
   }
 
   async _ensureClients() {
@@ -36,19 +64,6 @@ export class RedisEventPublisher extends EventPublisher {
       this._pub = this._pub ?? this._factory();
       this._sub = this._sub ?? this._factory();
     }
-    this._sub.on?.('message', (channel, message) => {
-      const set = this._handlers.get(channel);
-      if (!set) return;
-      let envelope;
-      try {
-        envelope = JSON.parse(message);
-      } catch {
-        envelope = message;
-      }
-      for (const h of set) {
-        Promise.resolve(h(envelope)).catch(() => {});
-      }
-    });
     this._initialized = true;
   }
 
@@ -59,6 +74,7 @@ export class RedisEventPublisher extends EventPublisher {
 
   async subscribe(channel, handler) {
     await this._ensureClients();
+    this._ensureListener();
     if (!this._handlers.has(channel)) {
       this._handlers.set(channel, new Set());
       await this._sub.subscribe(channel);
@@ -76,6 +92,10 @@ export class RedisEventPublisher extends EventPublisher {
   }
 
   async close() {
+    if (this._onMessage) {
+      this._sub?.off?.('message', this._onMessage);
+      this._onMessage = null;
+    }
     if (this._pub?.quit) await this._pub.quit();
     if (this._sub?.quit) await this._sub.quit();
     this._handlers.clear();

@@ -1,5 +1,6 @@
 import { UIDocumentRepository } from '../../application/ports/ui-document-repository.js';
 import { UIDocument } from '../../domain/ui-document.js';
+import { isUuid, idValue } from '../../../../shared-kernel/infrastructure/ids.js';
 
 function rowToDoc(r) {
   if (!r) return null;
@@ -46,6 +47,8 @@ export class PgUIDocumentRepository extends UIDocumentRepository {
   }
 
   async findById(id) {
+    if (!isUuid(id)) return null; // malformed id → not found, not a 22P02/500
+    id = idValue(id); // accept id value objects as well as strings
     const { rows } = await this._pool.query(
       `SELECT id, workflow_id, step_id, url, content_ref, strategy, version, generated_at
          FROM ui_documents WHERE id = $1`,

@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * EventPublisher — abstracts the underlying transport for cross-instance fan-out
  * (Redis pub/sub). The contract is fire-and-forget; ordering is best-effort.

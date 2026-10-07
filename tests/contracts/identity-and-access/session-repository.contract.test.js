@@ -25,6 +25,7 @@ import { EmailAddress } from '../../../src/backend/contexts/identity-and-access/
 import { Username } from '../../../src/backend/contexts/identity-and-access/domain/user/username.js';
 import { PasswordHash } from '../../../src/backend/contexts/identity-and-access/domain/user/password-hash.js';
 import { RoleName } from '../../../src/backend/contexts/identity-and-access/domain/user/role-name.js';
+import { RefreshConflictError } from '../../../src/backend/contexts/identity-and-access/domain/errors.js';
 import { PgUserRepository } from '../../../src/backend/contexts/identity-and-access/infrastructure/persistence/pg-user-repository.js';
 
 const FIXED_NOW = new Date('2026-05-10T10:00:00.000Z');
@@ -79,6 +80,34 @@ describeIfDocker('SessionRepository contract', () => {
     }
   });
 
+  test('postgres: concurrent rotations of the same token — exactly one wins (compare-and-set)', async () => {
+    const repo = make.postgres();
+    await repo.save(buildSession({ hash: 'cas_1' }));
+    // Two requests load the same session independently (separate aggregates).
+    const a = await repo.findByRefreshTokenHash('cas_1');
+    const b = await repo.findByRefreshTokenHash('cas_1');
+    a.refresh('cas_a', FIXED_NOW);
+    b.refresh('cas_b', FIXED_NOW);
+    await repo.save(a);
+    await expect(repo.save(b)).rejects.toThrow(RefreshConflictError);
+    // The winner's token is current; the loser's never landed; history is clean.
+    expect((await repo.findByRefreshTokenHash('cas_a'))?.id).toBe(SESSION_A);
+    expect(await repo.findByRefreshTokenHash('cas_b')).toBeNull();
+    const { rows } = await pg.pool.query('SELECT token_hash FROM refresh_token_history WHERE session_id = $1', [SESSION_A]);
+    expect(rows.map((r) => r.token_hash)).toEqual(['cas_1']);
+  });
+
+  test('postgres: superseded history is deleted with the session', async () => {
+    const repo = make.postgres();
+    await repo.save(buildSession({ hash: 'del_1' }));
+    const s = await repo.findByRefreshTokenHash('del_1');
+    s.refresh('del_2', FIXED_NOW);
+    await repo.save(s);
+    await pg.pool.query('DELETE FROM user_sessions WHERE id = $1', [SESSION_A]);
+    const { rows } = await pg.pool.query('SELECT count(*)::int AS n FROM refresh_token_history');
+    expect(rows[0].n).toBe(0);
+  });
+
   describe.each([
     ['in-memory'],
     ['postgres'],
@@ -108,6 +137,35 @@ describeIfDocker('SessionRepository contract', () => {
       expect(found).not.toBeNull();
       expect(found.id).toBe(SESSION_A);
       expect(await repo.findByRefreshTokenHash('nope')).toBeNull();
+    });
+
+    test('rotation: new hash is current, old hash is findable as superseded (reuse detection)', async () => {
+      const s = buildSession({ hash: 'rot_1' });
+      await repo.save(s);
+      const loaded = await repo.findByRefreshTokenHash('rot_1');
+      loaded.refresh('rot_2', FIXED_NOW);
+      await repo.save(loaded);
+      const again = await repo.findByRefreshTokenHash('rot_2');
+      again.refresh('rot_3', FIXED_NOW);
+      await repo.save(again);
+
+      expect((await repo.findByRefreshTokenHash('rot_3'))?.id).toBe(SESSION_A);
+      expect(await repo.findByRefreshTokenHash('rot_1')).toBeNull();
+      expect((await repo.findBySupersededRefreshTokenHash('rot_1'))?.id).toBe(SESSION_A);
+      expect((await repo.findBySupersededRefreshTokenHash('rot_2'))?.id).toBe(SESSION_A);
+      expect(await repo.findBySupersededRefreshTokenHash('rot_3')).toBeNull();
+      expect(await repo.findBySupersededRefreshTokenHash('never')).toBeNull();
+    });
+
+    test('revokeForReuse persists the revocation', async () => {
+      const issued = buildSession({ hash: 'r_1' });
+      issued.pullEvents(); // drain session.created (in-memory returns this same instance)
+      await repo.save(issued);
+      const loaded = await repo.findByRefreshTokenHash('r_1');
+      loaded.revokeForReuse(FIXED_NOW);
+      expect(loaded.pullEvents().map((e) => e.eventType)).toEqual(['session.revoked', 'session.refresh_token_reused']);
+      await repo.save(loaded);
+      expect((await repo.findById(SESSION_A)).isActive).toBe(false);
     });
 
     test('findByUserId returns the user\'s sessions', async () => {

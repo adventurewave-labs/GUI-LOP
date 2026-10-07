@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * EventPublisher port — dispatches domain events. Implementations may write
  * to the outbox table, publish to Redis, or do both.

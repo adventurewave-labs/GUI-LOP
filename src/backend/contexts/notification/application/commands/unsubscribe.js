@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Unsubscribe — deletes a subscription by id.
  */

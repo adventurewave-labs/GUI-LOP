@@ -53,6 +53,14 @@ function detect() {
     return { available: _cachedAvailable, reason: _cachedReason };
   }
 
+  // External infrastructure supplied (CI service containers / local
+  // servers): the fixtures connect directly, no Docker needed.
+  if (process.env.CONTRACTS_DATABASE_URL || process.env.CONTRACTS_REDIS_URL) {
+    _cachedAvailable = true;
+    _cachedReason = 'CONTRACTS_DATABASE_URL / CONTRACTS_REDIS_URL';
+    return { available: true, reason: _cachedReason };
+  }
+
   if (process.env.DOCKER_HOST && process.env.DOCKER_HOST.trim() !== '') {
     _cachedAvailable = true;
     _cachedReason = `DOCKER_HOST=${process.env.DOCKER_HOST}`;

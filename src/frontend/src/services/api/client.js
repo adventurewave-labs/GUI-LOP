@@ -105,6 +105,15 @@ export class ApiError extends Error {
   get isRateLimited() {
     return this.status === 429;
   }
+  /** 412: the resource changed since the caller loaded it (If-Match). */
+  get isPreconditionFailed() {
+    return this.status === 412;
+  }
+  /** Version the server holds now, when a 412 reports it. */
+  get currentVersion() {
+    const v = this.body && typeof this.body === 'object' ? this.body.current_version : null;
+    return Number.isInteger(v) ? v : null;
+  }
 }
 
 /* -------------------- uuid v4 (no extra dependency) -------------------- */
@@ -189,6 +198,18 @@ async function performRefresh() {
     }
   })();
   return inFlightRefresh;
+}
+
+/**
+ * The one way to refresh the access token. Single-flight: concurrent callers
+ * (parallel 401s, the WebSocket client's 4001 handler, AuthContext's expiry
+ * timer) share one POST /auth/refresh. This matters once refresh tokens
+ * rotate: two parallel refreshes would spend the same token twice and the
+ * loser would log the user out.
+ * @returns {Promise<{ ok: boolean, data?: any }>}
+ */
+export function refreshAccessToken() {
+  return performRefresh();
 }
 
 function redirectToLogin() {

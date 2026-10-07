@@ -60,7 +60,10 @@ export const DEFAULT_TEMPLATES = Object.freeze([
  *
  * @param {object} target Either a pg-style pool (with `.query`) or a
  *                        WorkflowTemplateRepository (with `.save`).
- * @param {{ mode?: 'pg'|'repository', clock?: { now(): Date } }} [options]
+ * @param {{ mode?: 'pg'|'repository', clock?: { now(): Date }, onConflict?: 'update'|'keep' }} [options]
+ *   `onConflict: 'keep'` (used at boot) only inserts missing templates and
+ *   never overwrites one an operator has edited; `'update'` (default, the
+ *   explicit `db:seed`) resets them to the shipped definition.
  */
 export async function seedDefaultTemplates(target, options = {}) {
   const mode = options.mode ?? (typeof target?.save === 'function' ? 'repository' : 'pg');
@@ -73,12 +76,12 @@ export async function seedDefaultTemplates(target, options = {}) {
         `INSERT INTO workflow_templates
             (template_key, name, description, steps, default_config, is_active, created_at, updated_at)
          VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, TRUE, $6, $6)
-         ON CONFLICT (template_key) DO UPDATE
+         ${options.onConflict === 'keep' ? 'ON CONFLICT (template_key) DO NOTHING' : `ON CONFLICT (template_key) DO UPDATE
            SET name = EXCLUDED.name,
                description = EXCLUDED.description,
                steps = EXCLUDED.steps,
                default_config = EXCLUDED.default_config,
-               updated_at = EXCLUDED.updated_at`,
+               updated_at = EXCLUDED.updated_at`}`,
         [
           tmpl.template_key,
           tmpl.name,
@@ -97,6 +100,12 @@ export async function seedDefaultTemplates(target, options = {}) {
   const { StepDefinition } = await import('../../src/backend/contexts/workflow-orchestration/domain/template/step-definition.js');
   const nowDate = options.clock?.now?.() ?? new Date();
   for (const tmpl of DEFAULT_TEMPLATES) {
+    if (options.onConflict === 'keep' && typeof target.findCurrent === 'function') {
+      // Boot-time seeding: an existing template (possibly edited, published
+      // at a later version, or deprecated by an operator) is left untouched.
+      const existing = await target.findCurrent(tmpl.template_key).catch(() => null);
+      if (existing) continue;
+    }
     const t = WorkflowTemplate.draft({
       key: tmpl.template_key,
       version: 1,

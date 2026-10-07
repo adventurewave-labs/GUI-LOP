@@ -1,0 +1,96 @@
+# ==========================================
+# GUI-LOP SPA server — rendered to /etc/nginx/conf.d/default.conf at start.
+#
+# Every SPA location that sets its own header includes security-headers.inc
+# (nginx does not merge add_header across levels). /api/ and /ws are proxied
+# untouched: the API sets its own (stricter) headers via helmet.
+# ==========================================
+
+upstream backend {
+    server backend:3001;
+    keepalive 32;
+}
+
+server {
+    listen 3000;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Liveness for the container healthcheck. No headers needed.
+    location = /health {
+        access_log off;
+        default_type text/plain;
+        return 200 "healthy\n";
+    }
+
+    # API proxy. Connection cleared so upstream keepalive is actually used.
+    location /api/ {
+        limit_req zone=api burst=20 nodelay;
+
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_connect_timeout 5s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # WebSocket. The default 60 s read timeout would drop every idle socket;
+    # the server pings well within an hour.
+    location /ws {
+        proxy_pass http://backend;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # Content-hashed build output: cache forever.
+    location /static/ {
+        limit_req zone=static burst=50 nodelay;
+        gzip_static on;
+        try_files $uri =404;
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    # Un-hashed root assets (favicon, manifest, logos): short cache.
+    location ~* \.(?:ico|png|jpe?g|gif|svg|webp|json|txt|woff2?|ttf)$ {
+        limit_req zone=static burst=50 nodelay;
+        try_files $uri =404;
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "public, max-age=3600" always;
+    }
+
+    # Dotfiles / editor backups are never served.
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+    location ~ ~$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # The SPA shell and every client-side route. index.html must revalidate
+    # on every load so a deploy is picked up immediately (it was cached 1 h,
+    # pinning users to stale chunk names that 404 after a release).
+    location / {
+        try_files $uri $uri/ /index.html;
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "no-cache" always;
+    }
+}

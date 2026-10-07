@@ -1,3 +1,4 @@
+// @ts-check
 export class ListDeadLettersQuery {
   constructor({ deadLetterRepository }) {
     this._repo = deadLetterRepository;

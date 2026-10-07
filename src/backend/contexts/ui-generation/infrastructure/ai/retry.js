@@ -55,7 +55,7 @@ export function backoffDelay({ attempt, baseDelayMs, maxDelayMs, rng = Math.rand
  */
 export async function withRetry(fn, opts = {}) {
   const cfg = { ...DEFAULT_RETRY, ...opts };
-  const sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const sleep = opts.sleep ?? ((ms) => new Promise((r) => { setTimeout(r, ms); }));
   const rng = opts.rng ?? Math.random;
 
   let attempt = 0;

@@ -1,3 +1,4 @@
+// @ts-check
 import { TemplateNotFoundError } from '../../domain/errors.js';
 
 export class GetWorkflowTemplateQuery {

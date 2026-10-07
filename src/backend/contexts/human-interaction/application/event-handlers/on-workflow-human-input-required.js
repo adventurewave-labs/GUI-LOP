@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Event handler: subscribes to Workflow Orchestration's
  * `workflow.human_input_required` event and creates (or refreshes) the

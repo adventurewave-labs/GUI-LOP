@@ -20,9 +20,9 @@ describe('RegisterUserUseCase', () => {
   test('conflict on duplicate email', async () => {
     const f = makeFixtures();
     const uc = new RegisterUserUseCase(f);
-    await uc.execute({ email: 'a@b.com', username: 'alice', password: 'longenuf1' });
+    await uc.execute({ email: 'a@b.com', username: 'alice', password: 'long-enough-passphrase-1' });
     await expect(
-      uc.execute({ email: 'a@b.com', username: 'bob', password: 'longenuf1' }),
+      uc.execute({ email: 'a@b.com', username: 'bob', password: 'long-enough-passphrase-1' }),
     ).rejects.toThrow(ConflictError);
   });
 
@@ -31,6 +31,6 @@ describe('RegisterUserUseCase', () => {
     const uc = new RegisterUserUseCase(f);
     await expect(
       uc.execute({ email: 'x@y.com', username: 'xy-user', password: 'short' }),
-    ).rejects.toThrow(/at least 8 characters/);
+    ).rejects.toThrow(/at least 15 characters/);
   });
 });
