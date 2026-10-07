@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/banner.svg" alt="GUI-LOP — animated banner" width="100%"></p>
+
 # GUI-LOP: Generative UI & Human-in-the-Loop Orchestration Platform
 
 [![ci](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/ci.yml/badge.svg)](https://github.com/adventurewave-labs/GUI-LOP/actions/workflows/ci.yml)
