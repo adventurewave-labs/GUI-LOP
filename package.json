@@ -123,7 +123,7 @@
     "artillery-plugin-expect": "^2.20.0",
     "async": "^3.2.6",
     "autocannon": "^8.0.0",
-    "concurrently": "^9.2.1",
+    "concurrently": "^10.0.5",
     "eslint": "^9.39.5",
     "eslint-plugin-n": "^18.4.0",
     "eslint-plugin-security": "^4.1.0",
