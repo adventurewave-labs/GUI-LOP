@@ -9,7 +9,7 @@
 # Installs the production node_modules tree and copies the source.
 # We deliberately do NOT run a TypeScript build: the runtime is plain
 # ESM JavaScript under src/backend/, and tsconfig is for type-checking only.
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 ENV NODE_ENV=production \
     NPM_CONFIG_LOGLEVEL=warn \
@@ -38,7 +38,7 @@ COPY scripts ./scripts
 # --- Stage 2: runtime ----------------------------------------------------
 # Minimal runtime image. dumb-init reaps zombies and forwards signals so the
 # graceful shutdown handler in bootstrap/index.js receives SIGTERM cleanly.
-FROM node:24-alpine AS runtime
+FROM node:26-alpine AS runtime
 
 # OCI labels — populated for traceability and registry policies (ADR 0020).
 LABEL org.opencontainers.image.title="gui-lop" \
