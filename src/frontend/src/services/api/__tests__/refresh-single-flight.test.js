@@ -1,5 +1,9 @@
 /**
- * @jest-environment jsdom
+ * Unit tests for the single-flight token refresh shared by the HTTP client
+ * and the WebSocket client. Runs in the node environment with a stubbed
+ * `window.location` — jsdom 26+ (jest-environment-jsdom 30) makes Location
+ * unforgeable and `assign` non-writable/non-configurable, so a plain stub
+ * is the only reliable mock.
  */
 /**
  * One token refresh, however many callers (roadmap #16).
@@ -41,13 +45,16 @@ function installFetch() {
 
 describe('single-flight token refresh', () => {
   let originalFetch;
-  let originalLocation;
 
   beforeEach(() => {
     originalFetch = global.fetch;
-    originalLocation = window.location;
-    delete window.location;
-    window.location = { pathname: '/workflows', search: '', assign: jest.fn() };
+    global.window = {
+      location: {
+        pathname: '/workflows',
+        search: '',
+        assign: jest.fn(),
+      },
+    };
     accessTokenStore.set('access-1');
     jest.spyOn(tokenStorage, 'getRefreshToken').mockReturnValue('refresh-1');
     jest.spyOn(tokenStorage, 'setTokens').mockImplementation(() => {});
@@ -57,7 +64,7 @@ describe('single-flight token refresh', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
-    window.location = originalLocation;
+    delete global.window;
     jest.restoreAllMocks();
   });
 

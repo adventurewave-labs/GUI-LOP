@@ -1,10 +1,11 @@
 /**
- * @jest-environment jsdom
- */
-/**
  * Unit tests for the v1 API client. Focuses on the auth-refresh-on-401
  * flow, idempotency-key emission, and ApiError mapping. We use a custom
  * `fetch` mock rather than `msw` so the test runs without a network stack.
+ *
+ * Runs in the node environment with a stubbed `window.location` — jsdom 26+
+ * (jest-environment-jsdom 30) makes Location unforgeable and `assign`
+ * non-writable/non-configurable, so a plain stub is the only reliable mock.
  */
 
 import { request, ApiError, accessTokenStore } from '../client.js';
@@ -24,17 +25,15 @@ function jsonResponse(status, body) {
 
 describe('api client', () => {
   let originalFetch;
-  let originalLocation;
 
   beforeEach(() => {
     originalFetch = global.fetch;
-    originalLocation = window.location;
-    // Replace location so we can intercept `assign()`.
-    delete window.location;
-    window.location = {
-      pathname: '/workflows',
-      search: '',
-      assign: jest.fn(),
+    global.window = {
+      location: {
+        pathname: '/workflows',
+        search: '',
+        assign: jest.fn(),
+      },
     };
     accessTokenStore.set('access-1');
     jest.spyOn(tokenStorage, 'getRefreshToken').mockReturnValue('refresh-1');
@@ -44,7 +43,7 @@ describe('api client', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
-    window.location = originalLocation;
+    delete global.window;
     accessTokenStore.clear();
     jest.restoreAllMocks();
   });
