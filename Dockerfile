@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # ==========================================================================
 # GUI-LOP production image (DDD bootstrap entry point)
-# Per ADR 0020: multi-stage, node:24-alpine, non-root, /health HEALTHCHECK.
+# Per ADR 0020: multi-stage, node:26-alpine, non-root, /health HEALTHCHECK.
 # Entry point: src/backend/bootstrap/index.js
 # ==========================================================================
 
