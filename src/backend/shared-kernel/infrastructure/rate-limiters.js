@@ -95,6 +95,15 @@ export async function createRateLimiterFactory({ redis = null, logger, prefix = 
     message = 'Too many requests',
     skip,
   }) {
+    // limit: 0 disables the limiter (pass-through). The config loader
+    // refuses RATE_LIMIT_MAX=0 in production, so this is a dev/bench-only
+    // escape hatch — benchmarks hammer thousands of requests per minute
+    // and must not measure the limiter's 429 path.
+    if (!Number.isFinite(limit) || limit <= 0) {
+      logger?.info?.(`rate limiter '${name}' disabled (limit=0)`);
+      const disabled = (_req, _res, next) => next();
+      return disabled;
+    }
     const limiter = rateLimit({
       windowMs,
       limit,

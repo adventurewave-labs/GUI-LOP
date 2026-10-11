@@ -62,6 +62,13 @@ export async function bootBenchApp() {
     tokenBlacklist: booted.ctx.identity.tokenBlacklist,
     loginRateLimit: noopLimiter,
     refreshRateLimit: noopLimiter,
+    // Router-wide 300/min baseline would 429 the suite after register +
+    // login + refresh benches together cross it inside a minute.
+    baselineRateLimit: noopLimiter,
+    // register's built-in per-IP cap (5/hour default) would 429 the
+    // register bench after a handful of iterations — measurement-only
+    // pass-through, same as login/refresh above.
+    limiters: { register: noopLimiter, password: noopLimiter, session: noopLimiter },
   });
   const app = express();
   app.use(express.json({ limit: '1mb' }));
