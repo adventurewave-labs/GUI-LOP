@@ -1,6 +1,6 @@
 // @ts-check
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { sendError } from './error-mapper.js';
 import { makeAuthMiddleware } from './auth-middleware.js';
 import { idempotency, InMemoryHttpIdempotencyStore } from '../../../../shared-kernel/infrastructure/http-idempotency.js';
@@ -67,7 +67,7 @@ export function buildAuthRouter({
     limit: 5,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? ipKeyGenerator(String(req.ip ?? ''), 64)}`,
     message: { error: 'rate_limited', message: 'Too many password change attempts' },
   });
   // Generic budget for authenticated, low-cost auth routes (/me, /logout).
@@ -76,7 +76,7 @@ export function buildAuthRouter({
     limit: 120,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator: (req) => `user:${req.principal?.userId ?? req.ip}`,
+    keyGenerator: (req) => `user:${req.principal?.userId ?? ipKeyGenerator(String(req.ip ?? ''), 64)}`,
     message: { error: 'rate_limited', message: 'Too many requests' },
   });
   const refreshLimiter = refreshRateLimit ?? limiters.refresh ?? rateLimit({

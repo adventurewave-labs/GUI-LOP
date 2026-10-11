@@ -18,7 +18,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 
 /** Normalise an IP for bucketing: IPv4 as-is, IPv6 → first 4 hextets (/64). */
 export function ipBucket(ip) {
@@ -104,7 +104,7 @@ export async function createRateLimiterFactory({ redis = null, logger, prefix = 
       // Fail-open limiters let traffic through when the store errors; auth
       // limiters must not (ADR 0015) — we turn the error into a 503 below.
       passOnStoreError: !failClosed,
-      keyGenerator: keyGenerator ?? ((req) => ipBucket(req.ip)),
+      keyGenerator: keyGenerator ?? ((req) => ipBucket(ipKeyGenerator(String(req.ip ?? ''), 64))),
       store: RedisStore
         ? new RedisStore({ prefix: `${prefix}:${name}:`, sendCommand: safeSendCommand(redis, logger) })
         : undefined,

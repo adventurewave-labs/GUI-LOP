@@ -10,6 +10,7 @@
 import { PasswordPolicy } from '../contexts/identity-and-access/domain/user/password-policy.js';
 import { isCommonPassword } from '../contexts/identity-and-access/infrastructure/password-blocklist/common-passwords.js';
 import { identifierKey, ipBucket } from '../shared-kernel/infrastructure/rate-limiters.js';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { InMemoryUserRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-user-repository.js';
 import { InMemorySessionRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-session-repository.js';
 import { InMemoryGrantsRepository } from '../contexts/identity-and-access/infrastructure/persistence/inmemory-grants-repository.js';
@@ -101,7 +102,7 @@ export function buildAuthLimiters(create, { loginIpLimit = 20, registerIpLimit =
       skipSuccessfulRequests: true,
       keyGenerator: (req) => {
         const raw = req.body?.identifier ?? req.body?.email ?? req.body?.username;
-        return `id:${identifierKey(raw) ?? `ip:${ipBucket(req.ip)}`}`;
+        return `id:${identifierKey(raw) ?? `ip:${ipBucket(ipKeyGenerator(String(req.ip ?? ''), 64))}`}`;
       },
       message: 'Too many failed login attempts for this account',
     }),
@@ -115,7 +116,7 @@ export function buildAuthLimiters(create, { loginIpLimit = 20, registerIpLimit =
       windowMs: FIFTEEN_MIN,
       limit: 5,
       failClosed: true,
-      keyGenerator: (req) => `user:${req.principal?.userId ?? ipBucket(req.ip)}`,
+      keyGenerator: (req) => `user:${req.principal?.userId ?? ipBucket(ipKeyGenerator(String(req.ip ?? ''), 64))}`,
       message: 'Too many password change attempts',
     }),
   };
