@@ -40,6 +40,10 @@ export async function bootBenchApp() {
   const booted = await bootstrap({
     JWT_SECRET: 'bench-secret-change-me',
     LOG_LEVEL: 'error',
+    // Bench-registered users + thousands of workflow calls per minute must
+    // not measure the global limiter's 429 path (ADR 0015 limits stay on in
+    // production; the config loader refuses 0 there).
+    RATE_LIMIT_MAX: '0',
     DATABASE_URL: undefined,
     REDIS_URL: undefined,
   });

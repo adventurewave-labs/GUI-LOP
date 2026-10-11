@@ -24,7 +24,7 @@ import { idempotency, InMemoryHttpIdempotencyStore } from '../../../../shared-ke
  *     legacy in-memory per-IP limiters (login/refresh) or pass-through.
  *
  * @param {{ useCases?: any, tokenIssuer?: any, tokenBlacklist?: any, idempotencyStore?: any,
- *   loginRateLimit?: Function, refreshRateLimit?: Function, limiters?: Record<string, Function> }} [deps]
+ *   loginRateLimit?: Function, refreshRateLimit?: Function, baselineRateLimit?: Function, limiters?: Record<string, Function> }} [deps]
  */
 export function buildAuthRouter({
   useCases,
@@ -33,6 +33,7 @@ export function buildAuthRouter({
   idempotencyStore,
   loginRateLimit,
   refreshRateLimit,
+  baselineRateLimit,
   limiters = {},
 } = {}) {
   if (!useCases) throw new Error('useCases required');
@@ -89,8 +90,9 @@ export function buildAuthRouter({
 
   // Router-wide baseline (defence in depth beneath the per-route limits and
   // the global /api/v1 limiter). Direct express-rate-limit instance so
-  // static analysis (CodeQL js/missing-rate-limiting) can see it.
-  router.use(rateLimit({
+  // static analysis (CodeQL js/missing-rate-limiting) can see it; benchmarks
+  // override it via baselineRateLimit (they drive thousands of req/min).
+  router.use(baselineRateLimit ?? rateLimit({
     windowMs: 60 * 1000,
     limit: 300,
     standardHeaders: 'draft-7',
