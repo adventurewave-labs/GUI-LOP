@@ -1,6 +1,6 @@
 {
   "name": "gui-lop",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "The Generative UI & Human-in-the-Loop Orchestration Platform (GUI-LOP)",
   "main": "src/backend/bootstrap/index.js",
   "scripts": {
