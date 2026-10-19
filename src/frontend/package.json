@@ -15,9 +15,9 @@
     "axios": "^1.12.2",
     "date-fns": "^4.1.0",
     "js-cookie": "^3.0.5",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
-    "react-hook-form": "^7.65.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-hook-form": "^7.90.0",
     "react-router-dom": "^7.9.3",
     "react-scripts": "5.0.1",
     "yup": "^1.7.1"
@@ -44,10 +44,10 @@
   },
   "proxy": "http://localhost:3001",
   "devDependencies": {
-    "@playwright/test": "^1.64.0",
+    "@playwright/test": "^1.64.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^14.6.1",
+    "@testing-library/user-event": "^14.6.8",
     "jest": "^30.5.2",
     "playwright": "^1.55.1"
   }
