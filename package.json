@@ -110,7 +110,7 @@
     "@eslint/js": "^10.0.1",
     "@jest/core": "^29.7.0",
     "@jest/reporters": "^29.7.0",
-    "@playwright/test": "^1.64.0",
+    "@playwright/test": "^1.64.1",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/jest-runner": "^9.6.1",
     "@testcontainers/postgresql": "^10.13.2",
@@ -118,7 +118,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^26.6.4",
+    "@types/node": "^26.6.5",
     "@types/supertest": "^7.2.1",
     "ajv": "^8.20.0",
     "artillery-plugin-expect": "^2.20.0",
@@ -141,7 +141,7 @@
     "node-fetch": "^3.3.2",
     "nodemon": "^3.1.10",
     "supertest": "^7.3.1",
-    "testcontainers": "^12.2.0",
+    "testcontainers": "^12.2.1",
     "typescript": "^5.9.3"
   },
   "engines": {
