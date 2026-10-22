@@ -18,6 +18,17 @@ updates:
       # of single-major PRs that regrows every Monday.
       all-major:
         update-types: [major]
+    # Majors held back on purpose (2026-10-22): @babel/preset-env 8 conflicts
+    # with the @babel/core-7 polyfill chain (npm ERESOLVE), and typescript 7
+    # rejects JSDoc inference patterns tsc 5.9 accepts. Revisit when the
+    # ecosystem catches up.
+    ignore:
+      - dependency-name: "@babel/preset-env"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: express
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /src/frontend
