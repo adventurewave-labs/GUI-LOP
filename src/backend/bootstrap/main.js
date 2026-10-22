@@ -424,8 +424,8 @@ export async function bootstrap(envOverride) {
     // Outbox lag: oldest pending event age + total pending count. We
     // surface -1 on lookup failure so monitoring can alert distinctly
     // from "0 lag, all caught up".
-    let lagMs = 0;
-    let pendingCount = 0;
+    let lagMs;
+    let pendingCount;
     try {
       lagMs = await outbox.getOldestPendingAge(new Date());
     } catch (err) {
