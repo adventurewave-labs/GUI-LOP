@@ -1,0 +1,10 @@
+# GUI-LOP
+
+> Human-in-the-loop workflow orchestration — DDD Node.js backend, React SPA, WebSocket realtime, JWT auth, SLO benchmarks.
+
+GUI-LOP is maintained by Adventure Wave Labs (The lab for agentic developer tooling).
+
+## Links
+
+- [Landing page](https://adventurewave-labs.github.io/GUI-LOP/): overview, features, FAQ
+- [Source code](https://github.com/adventurewave-labs/GUI-LOP): README, issues, releases
